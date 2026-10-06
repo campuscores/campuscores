@@ -7,28 +7,40 @@
 - Project folder/repository: `score_manager`; remote project cloned from `Kush-Saharan/t-lympics`.
 - Event label: **Thaparlympics** for now. Product/site name is undecided.
 - Site type: responsive website, not a native app.
-- Primary users: public spectators and admins. No player login/profile in initial release.
-- Public access: anyone can view event scores; admin tools are protected.
+- Primary users: public spectators (anonymous), Super Admins, Tournament Managers, and Match Operators. No player login/profile in initial release.
+- Public access: anyone can view event scores without an account; privileged tools are protected.
 - Primary entity/navigation: tournament index first; each tournament enables a configurable subset of sports at creation; then tournament sport page, multiple matches, and match detail.
 - Initial selectable sports: football, volleyball, basketball, table tennis, lawn tennis, and badminton. Cricket is not in the current scope.
-- Tournament competition: exactly two semifinals and one final per configured tournament sport. Admin assigns semifinal teams; only admin-approved semifinal winners fill final slots. Custom matches are separate and never advance the bracket.
-- Match finalization: scorer-submitted result remains provisional until approved by an admin; approval/rejection is audited. Whether approver must differ from scorer is still open.
+- Tournament competition: exactly two semifinals and one final per configured tournament sport. A Tournament Manager or Super Admin assigns semifinal teams; only approved semifinal winners fill final slots. Custom matches are separate and never advance the bracket.
+- Roles (decided 6 October 2026): four user categories, stored explicitly in `admin_accounts.role` (no `is_admin` flag):
+  - `SUPER_ADMIN`: core platform/event team. Full access, including account administration and audited corrections.
+  - `TOURNAMENT_MANAGER`: trusted organizer. Manages tournaments, sports configuration, teams/players, matches, operator assignments, and result review. Managers are **global** across all tournaments; there is no tournament-scoped manager table.
+  - `MATCH_OPERATOR`: verified person who can score only matches they hold an active assignment for. Cannot create or edit tournaments, matches, sport rules, teams/players, or users, and cannot approve results.
+  - Spectator: anonymous, read-only, no account.
+  - Each account has exactly one role. Super Admin includes every Tournament Manager capability. There is still no sport-scoped admin role.
+- Account creation: only a Super Admin creates/invites Super Admins and Tournament Managers. Managers (and Super Admins) can invite `MATCH_OPERATOR` accounts only. Accounts are invite-only through Supabase Auth; public sign-up is disabled.
+- Match operator assignments: `match_operator_assignments` rows grant `SCORE` permission for one match. Status stores only `ACTIVE` or `REVOKED`; expiry is derived from `valid_from`/`valid_until`, which are both optional. With no `valid_until`, access lasts until the match is locked (submitted/approved) or the assignment is revoked. Ending a match never deletes the user account.
+- Scorer concurrency: at most one active assignment per match (partial unique index). The existing `scorer_leases` record identifies the one active scoring device/session. Reassignment revokes the old row and inserts a new one in one audited transaction. A manager who wants to score assigns themselves first (audited), so there is a single scoring authorization path.
+- Authorization: every scoring HTTP request and Socket.IO command checks token → active account → active assignment → time window (server time) → `SCORE` permission → match accepting scores → scorer lease, against the database on every request. An unassigned match returns 403. UI hiding is never the control.
+- Match finalization: the operator submits the result (`LIVE → PENDING_APPROVAL`); a Tournament Manager or Super Admin approves (`APPROVED/FINAL`) or rejects (`REJECTED/CORRECTION`). The submitter can never approve their own result, whatever their role, except through a Super Admin override that requires a reason and is audited. On rejection the reviewer chooses the correction route: `OPERATOR` reopens the assigned operator's scoring access, or `MANAGER` keeps the operator locked out while a manager corrects. Approved results are locked; post-approval corrections create a new audited result version and need another approval.
 - Teams: separate team/roster per sport, identified by branch + year.
-- Team/roster fields: organizer-configurable; include name, branch, year, captain marker, optional jersey number. Tile-based admin flow to add players and move them between active and substitute states.
+- Team/roster fields: organizer-configurable; include name, branch, year, captain marker, optional jersey number. Tile-based manager flow to add players and move them between active and substitute states.
 - Player statistics: visible as contributions on match/sport views, without an individual profile or login in first release.
 - Scoring: detailed sport-specific scoring in the first release; scoring, match outcomes, and sport standings update as dependent data.
-- Admins: accounts are invite-only; active admins can operate across every enabled sport. There is no sport-specific admin role/assignment. Account administration can be organizer-only.
-- Scoring: admin can correct an entered score; public sees a correction marker; admin history records changes.
-- Exceptional match outcomes: an admin records the decision and reason; result still follows approval before finalization.
-- Match creation: both from a schedule and on the spot.
-- Offline behavior: a match can continue being scored locally; actions sync to the public site after connectivity returns.
-- Scorer concurrency: one active scorer per match, with admin handoff.
+- Live undo: while a match is `LIVE`, the assigned operator can undo/correct as many times as needed without extra permission or a reason prompt. Each undo is stored as a linked reversal action with actor and server time; spectators see no correction marker for live undos. Corrections after submission or approval require a reason and show the public correction marker; detailed history is visible to managers/Super Admins.
+- Exceptional match outcomes: a Tournament Manager or Super Admin records the decision and reason; result still follows approval before finalization.
+- Match creation: both from a schedule and on the spot, by Tournament Managers/Super Admins only.
+- Offline behavior: an operator can keep scoring locally; actions sync in order with the same action ID on retry. The server validates each action against the operator's assignment by server receipt time (device clock untrusted). If actions arrive after `valid_until` or after revocation, sync pauses until a manager extends the window or resolves the conflict. One primary scoring device per match.
 - Sport formats: each tournament sport has its own configurable format and point/scoring values. Format defaults/limits remain to be confirmed. The bracket itself is fixed to semifinal-semifinal-final in this release.
 - Sport standings: in scope. Combined overall branch standings deferred until scoring/placement points are decided.
 - Past edition archive: public archive with organizer-only edits is a future option; exclude from initial implementation.
 - Branding: official Thapar logo is required site-wide. No confirmed standalone official asset has been added; use an institute-controlled asset and record the exact source/path when supplied/approved. No verified official public color guide found; keep colors configurable.
 - Stack language: JavaScript (not TypeScript).
-- Final recommended stack: React + Vite (JavaScript) frontend, Node.js + Express API, Socket.IO live delivery, managed PostgreSQL (Supabase Postgres is the current preference), Supabase Auth for invitation-only admin identities, and Redis + Socket.IO adapter when running multiple Node instances. Serve static frontend assets through a CDN. Do not use Supabase Realtime as the score broadcast layer in the selected architecture.
+- Final recommended stack: React + Vite (JavaScript) frontend, Node.js + Express API, Socket.IO live delivery, hosted Supabase Postgres, Supabase Auth for invitation-only privileged accounts, and Redis + Socket.IO adapter when running multiple Node instances. Serve static frontend assets through a CDN. Do not use Supabase Realtime as the score broadcast layer in the selected architecture.
+- Database hosting (decided 6 October 2026): no Postgres runs on any team device, including for schema changes. Separate hosted Supabase projects for staging and production. Migrations live in `supabase/migrations/`, are created with `supabase migration new`, and are applied by GitHub Actions with `supabase db push` (develop → staging, main → production). CI applies migrations and runs integration tests against a throwaway Postgres on the runner; no local Docker/Postgres required. Never edit the remote schema through the Supabase Dashboard.
+- Database access: the Node backend connects through the Supabase shared pooler in session mode (port 5432, IPv4) with SSL; not transaction mode. All data access goes through Express; every public table has RLS enabled with no policies (deny-all for the Data API). The Supabase secret key stays backend-only.
+- Auth setup: custom SMTP provider required for invite emails (built-in SMTP only reaches project team members at ~2 messages/hour). Use asymmetric JWT signing keys so Express verifies tokens locally; account and assignment state is still checked in the database on every request.
+- Backend hosting: Express + Socket.IO needs a long-running host while events run; it can be stopped between events. Host is not yet chosen.
 - Actual event audience estimate: 50–100 simultaneous viewers.
 - Capacity demonstration target: 3,000 simulated concurrent Socket.IO clients. This is not actual attendance and not a verified capacity claim until the benchmark is run and documented.
 - Normal operation can start with one Node instance; scale demonstration should run multiple Node replicas behind a WebSocket-capable load balancer with Redis adapter. Configure sticky sessions if Socket.IO polling fallback is enabled.
@@ -46,14 +58,14 @@
 - Playinga inspiration: multisport management, granular roles, scoring permissions, and results feeding standings.
 - CricHeroes published an AWS overview naming RDS/Aurora Serverless, EC2/ALB, S3/CloudFront, WAF/SES and operational figures. Its “users per hour” number is not concurrent viewers; do not misstate it. Cricbuzz's public job listings reveal some backend skill requirements, not a verified production architecture.
 - Capacity evidence rule: presentation wording must distinguish expected real users, simulated load-test clients, and measured tested capacity. Record test build, topology, workload, metrics, failures, and limits in a load-test report before saying “load-tested for 3,000.”
+- Supabase (checked 6 October 2026): Free plan pauses after 1 week of inactivity, has no automatic backups, 500 MB database, 1-day logs; Pro never pauses, keeps 7-day backups, 8 GB disk. Direct DB connections are IPv6-only without the paid IPv4 add-on; the shared pooler is IPv4 (session mode 5432, transaction mode 6543 without prepared statements or LISTEN/NOTIFY). `auth.admin.inviteUserByEmail` is an admin API requiring the secret key. Custom SMTP starts at 30 messages/hour (adjustable). JWKS signing keys may be cached up to ~20 minutes. Sources: Supabase docs on database migrations, managing environments, connecting to Postgres, pricing, custom SMTP, and JWT signing keys.
 
 ## Open questions to resolve
 
 ### Competition and rules
 
 - What dates, match schedule, timezone, venue/court labels, and tournament lifecycle apply?
-- Must the result approver be a different admin than the scorer, or can one admin score and approve?
-- Should custom matches be public, count toward player statistics, count toward standings, or be admin-only?
+- Should custom matches be public, count toward player statistics, count toward standings, or be manager-only?
 - Are divisions needed (for example men's/women's/mixed), or only branch-year teams?
 - What are the exact branch/team names and branch-year category values?
 - Football: player count, half duration, substitutions, and knockout tie/shootout rules?
@@ -63,18 +75,19 @@
 - Lawn tennis: singles/doubles, advantage/no-ad, best-of sets, tiebreak and final-set format?
 - Badminton: singles/doubles categories, standard or alternate scoring, best-of format, and match-to-tie structure?
 - What sport-table columns, win/draw/loss points, bonuses/penalties, and tie-break sequence apply?
-- If a match is tied, abandoned, forfeited, or disputed, what exact statuses and data are required from the admin?
+- If a match is tied, abandoned, forfeited, or disputed, what exact statuses and data are required from the manager?
 - What are the roster/team limits, eligibility rules, match-day squad selection, and permitted roster changes after a match starts?
 - Should match pages show ball/rally/clock timestamps, commentary text, and scorer notes, or just structured score events?
 
-### Admin operation and offline reliability
+### Access and offline reliability
 
-- Supabase Auth is the selected admin identity provider. What exact invite delivery, password reset/account recovery, and Thapar-email restriction policy should be configured?
-- Should only an organizer invite/disable admin accounts, while every admin has the same scoring/review rights across sports?
-- What is the handoff workflow for the accepted one-scorer-per-match policy?
-- How should an admin resolve a queued action if match state changed elsewhere before reconnection?
+- Which custom SMTP provider and sender domain will send invites (for example Resend, AWS SES, Postmark, Brevo), and who owns SPF/DKIM/DMARC setup?
+- Must operator (and manager) emails be Thapar addresses, or can any verified email be invited?
+- What password reset/account recovery policy applies to privileged accounts?
+- Should the Assign Scorer form suggest a default time window (for example 30 minutes before to 2 hours after the scheduled start), or leave it empty by default?
+- How should a manager resolve a queued action if match state changed elsewhere before reconnection?
 - What should happen if the scoring device is closed, loses storage, or cannot recover its offline queue?
-- Should offline queued scoring survive browser restarts and multiple tabs/devices? Which browsers need support?
+- Should offline queued scoring survive browser restarts? Which browsers need support?
 
 ### Public data and presentation
 
@@ -87,11 +100,12 @@
 
 ### Delivery and operations
 
-- Which hosting/domain/accounts should own production? What budget and operating constraints apply?
-- What region should host the database and app?
-- Is the existing GitHub repository the intended long-term project repository and should a development branch/workflow be used?
-- What expected number of matches, teams, concurrent viewers, and scorers should sizing/monitoring target?
-- Who owns production backups, admin account recovery, and event-day support?
+- Which Supabase plan for the event period: Pro (no pausing, daily backups), or Free with the project unpaused before the event plus scheduled `pg_dump` backups from CI?
+- Which host runs the long-running Express + Socket.IO backend, and in which region relative to the Supabase project?
+- Which domain/accounts should own production? What budget and operating constraints apply?
+- Is the existing GitHub repository the intended long-term project repository; confirm the develop → staging, main → production branch workflow.
+- What expected number of matches, teams, concurrent viewers, and operators should sizing/monitoring target?
+- Who owns production backups, privileged account recovery, and event-day support?
 - What are acceptable public update latency and availability targets?
 - What precise synthetic load profile and pass thresholds define the 3,000-client demonstration (ramp, duration, room distribution, score event rate, reconnect burst, p95/p99 latency, and tolerated errors)?
 - Which persistent-WebSocket host/load balancer supports multiple Node replicas and the required session affinity, and what instance sizes will be benchmarked?
@@ -105,9 +119,12 @@
 - Historical edition archive in the first release.
 - Additional sports beyond the six current selectable sports.
 - Livestreaming, media uploads, registrations/payments, notifications, or social features.
+- Tournament-scoped managers and permissions other than `SCORE` for operators.
 
 ## Change-control note
 
 Treat the open questions above as unknown. Before implementing a sport engine or standings calculation, update `rules.md`, `prd.md`, and `tasks.md` with the user's confirmed playing conditions. When decisions change, update this log and note the date/context of the change.
 
 The stack recommendation supersedes the earlier Next.js + Supabase Realtime proposal. If an agent proposes a stack change, it must explain the trade-off and update `architecture.md`, `tasks.md`, and this decision log together before implementation.
+
+**6 October 2026:** The role model above supersedes the earlier decision that all active admins were equal and that no assignment tables should exist. Sport-scoped admin roles remain excluded; match-scoped operator assignments are now required. The same change resolved the approver question (submitter ≠ approver, with Super Admin override), replaced the "admin handoff" rule with revoke-and-reassign, and replaced the local `database/migrations/` assumption with CI-applied migrations to hosted Supabase projects.

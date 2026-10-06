@@ -8,6 +8,7 @@
 ## 1. Design principles
 
 - Put live match state and scores first; keep event administration easy to find but separate from public navigation.
+- Show each signed-in role only what it can do: operators see their assigned matches, not tournament administration.
 - Use clear sport-specific hierarchy while retaining a shared event identity.
 - Make numbers readable at a glance on a laptop from a distance and on a phone outdoors.
 - Give immediate, unambiguous feedback for score input, connectivity, queued updates, and corrections.
@@ -54,15 +55,49 @@
 - Public correction marker when relevant.
 - Realtime connection indicator that distinguishes live-updating from stale/offline public data.
 
-## 4. Admin experience
+## 4. Manager and operator experience
 
-### Admin overview and tournament builder
+Navigation and dashboards follow the user's role. Hiding controls is a convenience only; the server enforces every permission.
 
-- Tournaments, assigned tournament sports, and active matches.
-- Tournament creation selects enabled sports and their individual format/point configuration; bracket creation and semifinal assignments occur within a tournament sport. Any admin can operate across sports.
-- Provide a result-review queue and clear provisional → submitted → approved/final or rejected states. Keep approve/reject actions and reasons auditable.
-- Quick access to team/roster management, match setup, scoring, and corrections.
-- Warnings for unconfigured rules, unscheduled matches, or failed sync actions.
+### Manager / Super Admin dashboard
+
+- Primary actions: Create Tournament, Manage Sports, Manage Teams, Manage Matches, Assign Scorers, Revoke/Reassign Scorers, Review Results.
+- Account administration (invite/disable managers and Super Admins) appears for Super Admins only.
+- Tournaments, enabled tournament sports, and active matches with each match's current scorer and assignment status.
+- Tournament creation selects enabled sports and their individual format/point configuration; bracket creation and semifinal assignments occur within a tournament sport.
+- Quick access to team/roster management, match setup, scorer assignment, reviews, and corrections.
+- Warnings for unconfigured rules, unscheduled matches, matches without an assigned scorer, and failed or paused sync actions.
+
+### Assign Scorer dialog
+
+- Opened from a match. Fields: operator email, optional `valid_from` and `valid_until`.
+- Shows the current assignee, status (active, not yet active, expired, revoked), and time window.
+- Revoke requires a reason. Reassign revokes the current operator and assigns a new one in one confirmed step.
+- Includes "Assign myself" for a manager who will score personally; label it as audited.
+- Explain that a new email receives an invite and gets match-only scoring access.
+
+### Review queue
+
+- Lists submitted results with tournament/sport/match, teams, final scorecard, event summary, submitter, and corrections.
+- Clear provisional → submitted → approved/final or rejected states.
+- Approve is disabled on the reviewer's own submissions, with a short explanation. Super Admins see an override that requires a reason and warns that it is audited.
+- Reject requires a reason and a choice of correction route: "Reopen to operator" or "Manager will correct".
+
+### Match Operator dashboard
+
+- "My Matches" shows only matches with an active assignment, as cards:
+
+  ```text
+  Football — Semi Final 1
+  Team A vs Team B
+  Ground 1
+  10:00 AM
+  [ SCORE MATCH ]
+  ```
+
+- Each card shows the assignment window when set, and its state (upcoming, active, locked, returned for correction).
+- No tournament, team, match, user, or rules administration appears for operators.
+- Empty state: "No matches assigned to you right now."
 
 ### Team and roster management
 
@@ -77,7 +112,8 @@
 
 - Laptop-first layout: large current score/state, primary scoring controls, event timeline/recent actions, and team/player selection.
 - Sport-specific controls with the most common actions reachable in one or two interactions.
-- Clear undo/correction affordance; never silently remove a prior accepted event.
+- Clear undo affordance during live play with no reason prompt and no limit; each undo is recorded, never silently removing a prior accepted event. Corrections after submission ask for a reason.
+- Finish match and submit result actions with a confirmation; after submission the console shows scoring as locked.
 - Persistent connection state: online, offline, pending count, syncing, synced, failed.
 - Mobile layout rearranges controls vertically and keeps the score/status visible while scoring.
 - When offline, make it visually explicit that new actions are queued locally and not yet visible to spectators.
@@ -86,7 +122,7 @@
 ## 5. Responsive behavior
 
 - Spectator viewing must work from a phone without horizontal scrolling for standard content.
-- Admin workflows must remain usable on mobile, although detailed scoring is optimized for laptop.
+- Manager and operator workflows must remain usable on mobile, although detailed scoring is optimized for laptop.
 - Keep touch targets generously sized; prevent accidental duplicate scoring taps with clear acknowledgement and idempotent action handling.
 - Tables may collapse to cards on narrow viewports; preserve key information and explain hidden columns.
 - Do not require hover to reveal scoring or status controls.
@@ -99,9 +135,18 @@
 - Online and realtime connected.
 - Public page stale/reconnecting.
 - Scorer offline with queued actions.
-- Syncing, action synced, action rejected, conflict requiring admin attention.
-- Corrected score with public correction marker.
-- Unauthorized admin access and expired session.
+- Syncing, action synced, action rejected, conflict requiring manager attention.
+- Corrected score with public correction marker (post-submission corrections only; live undos show none).
+- Unauthorized access and expired session.
+- "You're not assigned to this match" (403).
+- Assignment not yet active (before `valid_from`).
+- Assignment expired (after `valid_until`).
+- Assignment revoked.
+- Scoring locked: result submitted or approved (409).
+- Scoring active on another device (scorer lease held elsewhere).
+- Sync paused because the assignment window ended or was revoked; waiting for a manager.
+- Result returned for correction (reopened to operator, or manager correcting).
+- Approve disabled on own submission; Super Admin override with reason.
 - Empty standings/player stats with honest setup guidance.
 
 ## 7. Capacity demo and truthful status display

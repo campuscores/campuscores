@@ -1,32 +1,37 @@
 # Implementation Tasks: Thaparlympics Score Website
 
 **Status:** Detailed implementation backlog; sport formats and selected operating policies remain open inputs.  
-**Stack:** React/Vite + JavaScript; Node/Express + Socket.IO; PostgreSQL; Redis Socket.IO adapter for multi-instance mode; Supabase Auth for invited admins.  
+**Stack:** React/Vite + JavaScript; Node/Express + Socket.IO; hosted Supabase Postgres + Supabase Auth (invite-only); migrations in `supabase/migrations/` applied by GitHub Actions; Redis Socket.IO adapter for multi-instance mode. No Postgres runs on any team device.  
 **Expected audience:** 50–100 actual viewers. **Capacity demonstration:** 3,000 simulated clients only, pending a measured load test.
 
 ## 0. Product decisions agents must preserve
 
 - The top-level public entity is a tournament: tournament index → tournament → enabled sport → matches → match detail.
-- On tournament creation, the organizer selects a subset of football, volleyball, basketball, table tennis, lawn tennis, and badminton.
+- On tournament creation, a manager selects a subset of football, volleyball, basketball, table tennis, lawn tennis, and badminton.
 - A tournament sport has its own validated, configurable scoring format and point values. Do not treat unlike sports as a single generic score counter; share configuration/versioning infrastructure but retain sport-specific domain engines.
-- Each tournament sport's bracket is exactly two semifinals feeding one final. Admin assigns teams to the two semifinal matches; approved semifinal winners fill the final slots. Do not add other bracket rounds in this release.
+- Each tournament sport's bracket is exactly two semifinals feeding one final. A manager assigns teams to the two semifinal matches; approved semifinal winners fill the final slots. Do not add other bracket rounds in this release.
 - Custom matches are separate from the bracket and do not affect bracket progression.
-- A completed score is provisional until an admin approves it. Only an approved result is final. Keep live score updates visible while the match is in progress.
-- Admins are not scoped by sport. Any active admin can manage any enabled sport. Do not implement sport-admin assignment tables or filters. Account administration may remain limited to the organizer role if confirmed by the auth requirements.
+- Roles are explicit in `admin_accounts.role`: `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`; spectators are anonymous. One role per account; Super Admin includes every manager capability. Tournament Managers are global (no tournament-scoped manager table). No `is_admin` flag and still **no sport-scoped admin roles**.
+- Only Super Admins create Tournament Managers and Super Admins. Managers can invite `MATCH_OPERATOR` accounts only.
+- Match-scoped operator assignments (`match_operator_assignments`) are required. Operators score only matches with an effectively valid assignment; managers who score assign themselves first. One active assignment per match; `scorer_leases` picks the one active device.
+- Every scoring HTTP/socket command runs the authorization chain against the database (token → active account → active assignment → time window by server time → `SCORE` → match accepting scores → lease). Unassigned match = 403; locked match = 409.
+- A completed score is provisional until approved. Only an approved result is final. The submitter can never approve their own result, except via an audited Super Admin override with a reason. Rejection chooses `correction_route` `OPERATOR` or `MANAGER`. Keep live score updates visible while the match is in progress.
+- Live undo by the assigned operator is unlimited, needs no reason, is stored as reversal actions, and shows no public marker. Corrections after submission/approval need a reason and show a public marker.
 - Use the Thapar logo site-wide when the user supplies the official asset. Do not fabricate or substitute an unofficial mark. Build a replaceable logo asset slot; logo file is intentionally pending.
 - Implement in JavaScript, not TypeScript. PostgreSQL is the durable source of truth; Socket.IO/Redis are transport only.
+- Never change the remote database schema through the Supabase Dashboard; every schema change is a migration deployed by CI.
 - Never describe the 3,000 simulated-client goal as actual attendance or tested capacity until the load test is run and reported.
 
 ## Agent workflow and implementation conventions
 
 1. Before coding, read `prd.md`, `architecture.md`, `rules.md`, `design.md`, and `memory.md`.
 2. Start with the earliest incomplete phase. Record assumptions/questions in `memory.md`; do not resolve an open sports rule by guessing.
-3. Keep changes cohesive and reviewable. Every schema change is a migration; every new scoring format gets domain tests before UI work depends on it.
+3. Keep changes cohesive and reviewable. Every schema change is a migration in `supabase/migrations/`; every new scoring format gets domain tests before UI work depends on it.
 4. Use runtime validation for every API/socket payload. Use JSDoc and linting; never add TypeScript unless the product decision changes.
 5. Enforce permissions server-side. Anonymous spectator APIs are read-only and return only approved public fields.
 6. Persist an accepted score action, projection update, audit record, and outbox event in a transaction. Broadcast only committed data.
-7. Keep all admin sport permissions global. Test that an authenticated active admin can operate across all tournament sports and a spectator cannot mutate anything.
-8. Maintain clear states: live/provisional, submitted for approval, approved/final, rejected/requires correction. Rejected or pending results must not be reported as final.
+7. Test every protected path per role: Super Admin, Tournament Manager, Match Operator (assigned, unassigned, not yet valid, expired, revoked, locked match), and anonymous Spectator.
+8. Maintain clear states: `LIVE` (provisional), `PENDING_APPROVAL`, `APPROVED/FINAL`, `REJECTED/CORRECTION`. Rejected or pending results must not be reported as final.
 9. Update affected docs and this task list when requirements change; don't silently fork behavior between PRD, architecture, and rules.
 
 ## Phase 0 — Resolve implementation-blocking inputs
@@ -35,8 +40,11 @@
 
 - [ ] Confirm tournament name, dates/timezone, lifecycle/status labels, venue metadata, and whether multiple tournaments can be active concurrently.
 - [ ] Confirm branch/year/division categories and team naming conventions.
-- [ ] Confirm the invitation/account recovery process and whether only an organizer can create/disable admins. Do not add sport-specific admin scope.
-- [ ] Confirm whether result approver must be a different admin from the scorer. Approval must be required either way; prevent self-approval only if that policy is confirmed.
+- [x] Role model and invite rules decided: Super Admin creates managers/Super Admins; managers invite operators only; no sport-scoped roles.
+- [x] Approver policy decided: submitter ≠ approver, with audited Super Admin override.
+- [ ] Choose the custom SMTP provider and sender domain; set up SPF/DKIM/DMARC.
+- [ ] Decide whether invited emails must be Thapar addresses, and the account recovery policy.
+- [ ] Decide whether the Assign Scorer form suggests a default time window.
 
 ### Sport formats and score configuration
 
@@ -47,7 +55,7 @@
   - Table tennis: singles/doubles, points per game, win-by rule, games per match, service/end tracking, and optional team-tie format.
   - Lawn tennis: singles/doubles, advantage/no-ad, set count/format, tiebreak and final-set format.
   - Badminton: singles/doubles, games per match, target points, win-by/cap, and any alternate scoring.
-- [ ] Specify which point/rule values an organizer can change at tournament creation and which must remain fixed by the sport engine. Validate configurations so impossible combinations cannot be saved.
+- [ ] Specify which point/rule values a manager can change at tournament creation and which must remain fixed by the sport engine. Validate configurations so impossible combinations cannot be saved.
 - [ ] Decide which match statistics and player contributions must be captured for each sport; avoid collecting unused events.
 - [ ] Decide result rules for ties, abandonments, forfeits, walkovers, and official correction after approval.
 - [ ] Decide whether custom-match results are public and whether they count toward player statistics or standings. They never fill bracket slots.
@@ -57,25 +65,30 @@
 ### Branding and delivery
 
 - [ ] Keep the site-wide Thapar logo component/slot ready, but leave the real image unset until supplied. Then add the approved asset, source/usage note, responsive variants if needed, and verify aspect ratio/contrast on every layout.
-- [ ] Confirm host, region, domain, budget, account owner, supported browsers, and event-day support contact.
+- [ ] Choose the Supabase plan for the event period: Pro, or Free with the project unpaused before the event plus scheduled `pg_dump` backups from CI.
+- [ ] Choose the long-running backend host and region (near the Supabase project), domain, budget, account owner, supported browsers, and event-day support contact.
 - [ ] Agree load-test pass thresholds: connection ramp/soak duration, message/update frequency, p95/p99 latency, reconnect profile, and acceptable errors.
 
 ## Phase 1 — Repository foundation and shared contracts
 
 - [ ] Inspect repository structure and existing README before adding packages; preserve existing files and user changes.
-- [ ] Add `web/` React + Vite JavaScript/JSX app and `server/` Node.js + Express JavaScript service using one documented package-manager/workspace convention.
-- [ ] Add scripts for install, dev, lint, test, build, migration, seed, and local service startup; document exact prerequisites and commands in README.
-- [ ] Add `.env.example` containing variable names only; validate required variables at server startup and never expose server secrets to Vite/browser code.
+- [ ] Add `frontend/` React + Vite JavaScript/JSX app and `backend/` Node.js + Express JavaScript service using one documented package-manager/workspace convention.
+- [ ] Initialize the Supabase CLI project (`supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`). Do not require `supabase start`, Docker, or a local Postgres for development.
+- [ ] Create staging and production Supabase projects. Store `SUPABASE_ACCESS_TOKEN` and each environment's project ID and DB password as GitHub Actions secrets.
+- [ ] Add a GitHub Actions CI workflow: start a throwaway Postgres on the runner, apply all migrations, run lint/tests, then discard it.
+- [ ] Add a release workflow: `supabase db push` to staging on merge to `develop`, and to production on merge to `main`. No one runs `db push` from a laptop.
+- [ ] Add scripts for install, dev, lint, test, build, and new migration; document exact prerequisites and commands in README (no local database prerequisite).
+- [ ] Add `.env.example` containing variable names only (session-pooler connection string, Supabase URL, publishable and secret key; SMTP credentials live in Supabase Auth settings, not the app); validate required variables at server startup and never expose server secrets to Vite/browser code.
 - [ ] Add formatting/lint conventions, JSDoc expectations, test runner, and runtime schema validation library.
-- [ ] Add API contract conventions: JSON errors, request correlation ID, pagination/filter syntax, date/time handling, and public/private DTO separation.
+- [ ] Add API contract conventions: JSON errors (401/403/409 shapes), request correlation ID, pagination/filter syntax, date/time handling, and public/private DTO separation.
 - [ ] Add `/health` and `/ready` endpoints; readiness must detect required DB connectivity without exposing secrets or internal diagnostics publicly.
-- [ ] Add a small smoke test proving web build, API boot, health response, and test database connection.
+- [ ] Add a small smoke test proving web build, API boot, health response, and test database connection in CI.
 
-**Exit criteria:** a clean checkout can install, run, lint, test, and build using documented commands; no secrets or TypeScript have been introduced.
+**Exit criteria:** a clean checkout can install, run, lint, test, and build using documented commands; CI applies migrations to a throwaway database; no secrets or TypeScript have been introduced and no local Postgres is required.
 
 ## Phase 2 — Database schema and migration foundation
 
-- [ ] Add migration runner and documented forward/rollback policy. Migrations must be repeatable in CI against an empty database.
+- [ ] Document the migration policy: forward-only migrations in `supabase/migrations/`, created with `supabase migration new`; never edit the remote schema via the Dashboard; use `supabase migration repair` / `db pull` only to recover drift. Migrations must apply cleanly in CI against an empty database.
 - [ ] Create core tables and indexes:
   - `tournaments`: name, slug, dates/timezone, status, venue/description, created/updated metadata.
   - `sports`: stable keys and display labels for the six supported sports.
@@ -85,32 +98,44 @@
   - `matches`: tournament sport, two sides, schedule/venue, `bracket` or `custom` origin, status, score/result projection, format-config snapshot/version.
   - `match_roster`: selected players and active/substitute state for a match.
   - `tournament_brackets` and `bracket_slots`: exactly two semifinal matches and one final per tournament sport; final participant slots reference the approved semifinal winner.
-  - `admin_accounts`: Supabase Auth identity, enabled state, global role. No sport assignment relation.
-  - `score_actions`, `match_snapshots`, `player_match_stats`, `sport_standings`, `scorer_leases`, `match_result_reviews`, `admin_audit_log`, and `outbox_events`.
-- [ ] Add foreign keys, check constraints, uniqueness rules, timestamps, status constraints, and indexes for tournament/sport/match public reads.
+  - `admin_accounts`: Supabase Auth user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No sport or tournament scope column.
+  - `match_operator_assignments`: `id`, `match_id`, `user_id`, `assigned_by`, `permission` (`'SCORE'` default, only value), nullable `valid_from`/`valid_until`, `status` (`ACTIVE` | `REVOKED`), `created_at`, `revoked_at`, `revoked_by`, `revoke_reason`.
+  - `match_result_reviews`: result version, `submitted_by`, `reviewed_by`, `decision`, `reason`, `correction_route` (`OPERATOR` | `MANAGER`), `self_approval_override`, `override_reason`.
+  - `score_actions` (including linked reversal actions), `match_snapshots`, `player_match_stats`, `sport_standings`, `scorer_leases`, `admin_audit_log`, and `outbox_events`.
+- [ ] Add foreign keys, check constraints, uniqueness rules, timestamps, status constraints, and indexes for tournament/sport/match public reads and for assignment lookups by `(match_id, user_id, status)`.
+- [ ] Assignment constraints: check `valid_until > valid_from` when both are set; partial unique index on `match_id` where `status = 'ACTIVE'`; revoked rows require `revoked_at` and `revoked_by`.
+- [ ] Review constraint: `reviewed_by <> submitted_by` unless `self_approval_override` is true with a non-empty `override_reason`; rejection requires `reason` and `correction_route`.
+- [ ] Enable RLS on every `public` table with no policies (deny-all for the Data API); add a CI test asserting no table lacks RLS.
 - [ ] Add constraints/tests preventing a custom match from occupying a bracket slot and preventing the bracket from having extra semifinal/final slots.
 - [ ] Ensure one team cannot be assigned to both sides of the same semifinal unless an explicitly approved special rule supports it.
 - [ ] Store immutable-at-match-start format config snapshots so changing tournament defaults cannot reinterpret an in-progress match.
-- [ ] Seed synthetic tournament data only in development/test. Clearly mark seeded users, teams, and scores as fake.
+- [ ] Seed synthetic data in `supabase/seed.sql` for CI and staging only. Clearly mark seeded users, teams, and scores as fake; never seed production.
 
-**Exit criteria:** migrations build the schema from scratch, constraints reject invalid bracket/match relationships, and seeds create a tournament with multiple enabled sports and pending/approved sample results.
+**Exit criteria:** migrations build the schema from scratch in CI, constraints reject invalid bracket/match/assignment/review rows, RLS is enabled everywhere, and seeds create a tournament with multiple enabled sports, assigned operators, and pending/approved sample results.
 
-## Phase 3 — Authentication, global admin authorization, and audit
+## Phase 3 — Authentication, roles, match assignment authorization, and audit
 
-- [ ] Configure invite-only Supabase Auth; disable public admin sign-up.
-- [ ] Implement identity verification middleware for HTTP and Socket.IO, account enabled-state check, secure session handling, and logout/expiry behavior.
-- [ ] Define global roles: spectator (anonymous/read-only), active admin (all tournament sports), and optional organizer capability (admin account management). Do not create sport-specific permission or assignment tables.
-- [ ] Implement organizer-only invite/disable/reset flows if confirmed; audit account changes.
-- [ ] Protect every mutation route and socket command with admin checks; never rely only on hidden UI buttons or room membership.
-- [ ] Add authorization tests: anonymous public GET allowed; anonymous mutation denied; active admin can manage every configured sport; disabled admin denied; invalid tournament/match scope denied.
-- [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason for consequential decisions.
+- [ ] Configure invite-only Supabase Auth: disable public sign-up, configure custom SMTP and invite redirect URLs, raise the email rate limit as needed.
+- [ ] Use asymmetric JWT signing keys; verify tokens in Express (`supabase.auth.getClaims()` or JWKS) for HTTP and at the Socket.IO handshake. Keep the secret key backend-only.
+- [ ] Load the `admin_accounts` row on every protected request; reject disabled or missing accounts with 403. Do not trust role or assignment data from token claims.
+- [ ] Implement role middleware for non-scoring routes: manager-or-above for tournaments, sports, teams, matches, assignments, and reviews; Super Admin only for manager/Super Admin account administration.
+- [ ] Implement invite flows: Super Admin invites managers/Super Admins; managers invite operators only (server rejects any other role). Use `auth.admin.inviteUserByEmail` server-side; audit every account change.
+- [ ] Implement the scoring authorization chain for every scoring HTTP route and every socket command: token → active account → `ACTIVE` assignment for match and user → server-time window → `SCORE` → match accepting scores (`LIVE`, or `REJECTED` with `correction_route = 'OPERATOR'`) → scorer lease. Return 401/403/409 as defined in `architecture.md`.
+- [ ] Never rely only on hidden UI buttons or room membership.
+- [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason. Audit assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
+- [ ] Add authorization tests (HTTP and sockets):
+  - anonymous public GET allowed; anonymous mutation denied;
+  - operator scoring an unassigned match → 403; before `valid_from` → 403; after `valid_until` → 403; revoked → 403 on the next command; submitted/approved match → 409; no lease → 409;
+  - operator cannot reach tournament, team, match, user, or review routes;
+  - manager cannot invite managers or Super Admins; manager can manage every tournament and sport;
+  - disabled account denied.
 - [ ] Redact tokens, credentials, and unnecessary player personal data from logs.
 
-**Exit criteria:** permission tests cover both HTTP and sockets; no sport-admin assignment logic exists; every admin mutation produces an auditable record.
+**Exit criteria:** permission tests cover every role on HTTP and sockets; revocation takes effect on the next request; no sport-scoped admin logic exists; every privileged mutation produces an auditable record.
 
 ## Phase 4 — Tournament creation and sports configuration
 
-- [ ] Implement organizer/admin tournament create, edit, publish/archive, and status transitions with validation.
+- [ ] Implement manager tournament create, edit, publish/archive, and status transitions with validation.
 - [ ] At tournament creation, require selection of one or more supported sports; reject unknown/duplicate sports.
 - [ ] Build a configuration wizard that opens a sport-specific settings form for every selected sport.
 - [ ] Make configurable values explicit, typed, bounded, and versioned (for example points per scoring action, periods/sets/games, target score, win-by margin, cap, and tie resolution as appropriate to that sport).
@@ -119,9 +144,9 @@
 - [ ] Build tournament index/detail pages and sport sub-navigation based on the enabled-sport list; hide disabled sports.
 - [ ] Add empty, draft, published, ongoing, completed, and archived states only where the lifecycle decision supports them.
 
-**Exit criteria:** an admin can create a tournament, enable a subset of sports, set distinct sport formats/points, and see only those sports publicly; invalid configuration cannot be published.
+**Exit criteria:** a manager can create a tournament, enable a subset of sports, set distinct sport formats/points, and see only those sports publicly; invalid configuration cannot be published; operators cannot reach these actions.
 
-## Phase 5 — Teams, roster and match setup
+## Phase 5 — Teams, roster, match setup, and scorer assignment
 
 - [ ] Implement teams per tournament sport, including branch/year/division values and duplicate detection.
 - [ ] Implement roster create/edit/archive with display name, captain marker, optional jersey number, and agreed eligibility fields.
@@ -130,22 +155,25 @@
 - [ ] Prevent destructive deletion of a player/team referenced by match history; use archived/inactive state instead.
 - [ ] Implement scheduled match creation and custom match creation outside the bracket. Require sport, teams/sides, format snapshot, match label/type, date/time/venue as applicable.
 - [ ] Clearly mark custom matches in admin and public UI; guarantee no custom match triggers bracket progression.
-- [ ] Add match lifecycle transitions (scheduled → live → submitted/pending review → approved/final, or rejected/correction) with server-side validation.
+- [ ] Add match lifecycle transitions (`SCHEDULED → LIVE → PENDING_APPROVAL → APPROVED/FINAL`, or `REJECTED/CORRECTION`) with server-side validation.
 - [ ] Add duplicate fixture warnings, unavailable-team validation, missing roster warnings, and schedule overlap warnings without blocking intentional overlaps across sports.
+- [ ] Implement assignment API and Assign Scorer UI: assign by email (inviting new operators), optional window, revoke with reason, reassign as revoke + insert in one transaction, and "assign myself" for managers. Audit each action.
+- [ ] Implement scorer lease acquisition/release/takeover for the assigned user's device; a second device sees "scoring active on another device".
+- [ ] Implement the operator "My Matches" page listing only matches with an active assignment, and the operator scoring route.
 
-**Exit criteria:** admin can set up teams/rosters, select match squads, create scheduled and custom matches, and invalid lifecycle transitions are rejected.
+**Exit criteria:** managers can set up teams/rosters, create matches, and assign/revoke/reassign scorers; operators see only their matches; invalid lifecycle transitions are rejected.
 
 ## Phase 6 — Fixed semifinal/final bracket
 
 - [ ] Implement bracket setup per tournament sport with exactly semifinal A, semifinal B, and final.
-- [ ] Allow admin to assign four eligible teams to semifinal sides and preview the full bracket before publishing.
+- [ ] Allow a manager to assign four eligible teams to semifinal sides and preview the full bracket before publishing.
 - [ ] Prevent duplicate/missing team assignments; support an explicit TBD slot only if organizer confirms byes/late assignment are needed.
 - [ ] Create the two semifinal match records and the final with participant slots linked to semifinal winners.
 - [ ] Keep final slots unresolved until the corresponding semifinal result is approved; a merely live or submitted result must not advance a team.
 - [ ] On semifinal approval, transactionally set the corresponding final participant and write an audit/outbox event.
 - [ ] On rejection, keep the bracket unchanged and return the semifinal result to correction workflow.
-- [ ] On correction/reversal of an already approved semifinal, mark downstream final slot/match as requiring admin review; never silently swap participants in a live or finalized final.
-- [ ] Lock bracket team assignment once a semifinal starts. Provide audited admin correction/reopen flow for exceptional cases.
+- [ ] On correction/reversal of an already approved semifinal, mark downstream final slot/match as requiring manager review; never silently swap participants in a live or finalized final.
+- [ ] Lock bracket team assignment once a semifinal starts. Provide audited manager correction/reopen flow for exceptional cases.
 - [ ] Build accessible bracket UI for public and admin, including empty, pending, approved, rejected, live, and final states.
 
 **Exit criteria:** only the approved winner of each semifinal fills the final; the bracket contains no other rounds and custom matches remain separate.
@@ -155,10 +183,12 @@
 ### Shared score-command infrastructure
 
 - [ ] Define a common versioned score-action envelope: action ID, match ID, sport key, rules/config version, client sequence, action type/payload, actor/device metadata, and server acceptance metadata.
+- [ ] Run the scoring authorization chain before validation of every action.
 - [ ] Validate action payload against the specific sport's runtime schema and the match's frozen configuration.
 - [ ] Enforce idempotency, monotonic server sequence per match, legal state transitions, and atomic action/projection/audit/outbox persistence.
 - [ ] Implement deterministic rebuild of score snapshot and player-match contributions from accepted actions.
-- [ ] Implement correction as linked compensating/replacement actions with reason and actor; never erase accepted history.
+- [ ] Implement live undo: the assigned operator can reverse any number of prior actions while `LIVE`, with no reason and no extra permission. Store each as a linked reversal action with actor and server time; do not set the public correction marker.
+- [ ] Implement post-submission/post-approval correction as linked compensating/replacement actions that require a reason, set the public correction marker, and never erase accepted history.
 
 ### Sport-specific engines (build only after rules are confirmed)
 
@@ -169,63 +199,65 @@
 - [ ] Lawn tennis: point → game → set → match progression; configurable advantage/no-ad, set and tiebreak/final-set variants; singles/doubles participants.
 - [ ] Badminton: rally scoring; configured game target, win-by/cap, games-to-win; singles/doubles and alternative scoring when explicitly selected.
 - [ ] For each configured scoring value, validate allowed values and derive results from actions; do not allow manual total edits to bypass the event log.
-- [ ] Add boundary tests for deuce/win-by/cap, period/set transitions, tiebreaks, tied outcomes, invalid player/team/action, correction/replay, and config-version mismatch.
-- [ ] Build sport-specific scorer consoles with laptop-first controls and responsive mobile fallback; make rapid input touch-safe and keyboard-operable.
+- [ ] Add boundary tests for deuce/win-by/cap, period/set transitions, tiebreaks, tied outcomes, invalid player/team/action, undo/replay, correction, and config-version mismatch.
+- [ ] Build sport-specific scorer consoles with laptop-first controls and responsive mobile fallback; make rapid input touch-safe and keyboard-operable; undo has no reason prompt while live.
 - [ ] Show local pending/offline score separately from server-accepted live score.
 
-**Exit criteria:** each enabled sport has a tested scoring engine for the organizer-confirmed format; score totals, match result, and match-only player stats are reproducible from action history.
+**Exit criteria:** each enabled sport has a tested scoring engine for the organizer-confirmed format; score totals, match result, and match-only player stats are reproducible from action history including undos.
 
-## Phase 8 — Result submission and admin approval
+## Phase 8 — Result submission and approval
 
-- [ ] Add “submit result for approval” action after the scorer marks the match complete; persist the result version and freeze ordinary scoring edits while pending.
-- [ ] Build admin review queue with tournament/sport/match, teams, final scorecard, event summary, corrections, and relevant match metadata.
-- [ ] Implement approve and reject actions. Require a reason for rejection; approval records reviewer and timestamp.
-- [ ] Ensure only approval moves a result to `final` and enables final-result-dependent standings/bracket progression.
+- [ ] Add "finish and submit result" for the assigned operator; persist the result version with `submitted_by`, move the match to `PENDING_APPROVAL`, and lock ordinary scoring.
+- [ ] Build the review queue with tournament/sport/match, teams, final scorecard, event summary, submitter, corrections, and relevant match metadata.
+- [ ] Implement approve and reject for managers and Super Admins. Approval records reviewer and timestamp; rejection requires a reason and a `correction_route`.
+- [ ] Enforce submitter ≠ reviewer in the service and the database check. Allow a Super Admin override only with `self_approval_override = true` and a non-empty `override_reason`; audit it.
+- [ ] On rejection with `OPERATOR`, reopen scoring for the still-active assignment until resubmission; with `MANAGER`, keep the operator locked out and let a manager (self-assigned) correct.
+- [ ] Ensure only approval moves a result to `APPROVED/FINAL` and enables final-result-dependent standings/bracket progression.
 - [ ] Ensure pending/rejected results remain visibly non-final to spectators and do not populate final bracket outcomes.
-- [ ] On rejection, reopen the score for correction or require a correction submission; retain previous submission and review decision in history.
-- [ ] On changes after approval, require explicit reopen/correction and a new approval; display a public corrected/reviewed indicator as appropriate.
+- [ ] On changes after approval, require an explicit correction that creates a new result version and a new approval; display the public correction marker.
 - [ ] Make approval idempotent and transaction-safe; concurrent approve/reject attempts must not both succeed.
-- [ ] Add tests for approved advancement, rejected no-advancement, pending visibility, duplicate review requests, correction after approval, and reviewer audit data.
+- [ ] Add tests: approved advancement, rejected no-advancement, pending visibility, self-approval blocked for every role, Super Admin override with and without reason, both correction routes, duplicate review requests, correction after approval, and reviewer audit data.
 
-**Exit criteria:** no result becomes final, advances the bracket, or enters confirmed standings before approval.
+**Exit criteria:** no result becomes final, advances the bracket, or enters confirmed standings before approval by someone other than the submitter (or an audited override).
 
 ## Phase 9 — Public spectator experience
 
 - [ ] Build public tournament index with status/date and live/upcoming/recent match summaries.
 - [ ] Build tournament detail with enabled sports, bracket summary, and tournament matches.
 - [ ] Build one page per enabled sport with match filters, custom-match labeling, bracket, and configured standings.
-- [ ] Build match detail with sport-specific scorecard, provisional/final/review status, timeline, approved player contributions, and correction marker.
+- [ ] Build match detail with sport-specific scorecard, provisional/final/review status, timeline, approved player contributions, and correction marker (post-submission corrections only).
 - [ ] Ensure pending/rejected result states are unambiguous and never styled as final.
-- [ ] Keep player data to approved display fields; no personal profiles or login in this release.
+- [ ] Keep player data to approved display fields; no personal profiles or login in this release. Never expose operator identities or assignments publicly.
 - [ ] Add responsive mobile viewing, keyboard navigation, accessible labels, contrast, loading/empty/error states, and freshness/reconnecting indicator.
 - [ ] Add site-wide brand header/footer/logo component with a replaceable official-logo asset path; before the file is supplied, use a neutral text placeholder and do not invent a Thapar mark.
 - [ ] Serve immutable built assets from CDN where hosting permits; set correct cache/revalidation policy for live snapshots.
 
-**Exit criteria:** a spectator can navigate tournament-first on desktop/mobile and distinguish live provisional scores from admin-approved finals.
+**Exit criteria:** a spectator can navigate tournament-first on desktop/mobile and distinguish live provisional scores from approved finals.
 
 ## Phase 10 — Realtime delivery and offline scoring
 
 - [ ] Fetch authoritative public snapshot before joining relevant tournament/sport/match Socket.IO rooms.
-- [ ] Keep room subscriptions narrow and public payloads free of admin identity/audit detail.
+- [ ] Keep room subscriptions narrow and public payloads free of account, assignment, and audit detail.
 - [ ] Publish committed changes from PostgreSQL outbox only; include event ID, sequence, schema version, and timestamp.
 - [ ] Make clients deduplicate old events, detect sequence gaps, fetch a fresh snapshot, and recover after reconnect.
 - [ ] Add visible realtime connected/stale/reconnecting states and low-frequency snapshot fallback.
-- [ ] Persist scorer actions to IndexedDB before showing local queued acknowledgement; distinguish local queue from published score.
-- [ ] Sync actions sequentially per match with same idempotency key on retry; pause on sequence/config/review conflicts and require admin resolution.
-- [ ] Test network loss, browser refresh/restart, duplicate delivery, stale client, and action rejection; document storage quota/device-loss limitations.
+- [ ] Let the operator download the assigned match snapshot; persist scorer actions to IndexedDB before showing local queued acknowledgement; distinguish local queue from published score.
+- [ ] Sync actions sequentially per match with same idempotency key on retry; validate each against the assignment by server receipt time.
+- [ ] Pause sync on expiry, revocation, sequence/config/review conflicts; surface the paused state to the operator and the conflict to managers, who can extend the window or resolve.
+- [ ] Test network loss, browser refresh/restart, duplicate delivery, stale client, action rejection, sync after `valid_until`, and sync after revocation; document storage quota/device-loss limitations.
 - [ ] Verify score updates, result submissions, approvals, bracket advancement, and standings all propagate consistently to active spectators.
 
-**Exit criteria:** connected clients converge on the authoritative approved state; offline retries do not duplicate score actions or falsely mark results finalized.
+**Exit criteria:** connected clients converge on the authoritative approved state; offline retries do not duplicate score actions, bypass assignment checks, or falsely mark results finalized.
 
 ## Phase 11 — Quality, security, and operational readiness
 
 - [ ] Add unit tests for all six configured score engines and bracket/result state transitions.
-- [ ] Add integration tests for DB constraints, transactions, authorization, review workflow, idempotency, outbox retries, and projection rebuild.
-- [ ] Add browser tests for tournament create, sport config, roster/match setup, scoring, approval/rejection, public updates, mobile layouts, and offline recovery.
-- [ ] Add security checks for public data minimization, admin route protection, input validation, CORS/origin, rate limits, secret handling, and log redaction.
-- [ ] Add backup/restore rehearsal, health checks, structured logs, error reporting, and an event-day runbook.
+- [ ] Add integration tests (in CI against the throwaway Postgres) for DB constraints, transactions, per-role authorization, assignment validity, review workflow, idempotency, outbox retries, and projection rebuild.
+- [ ] Add browser tests for tournament create, sport config, roster/match setup, scorer assignment/revocation, operator My Matches, scoring and undo, approval/rejection, public updates, mobile layouts, and offline recovery.
+- [ ] Add security checks for public data minimization, RLS deny-all coverage, admin/operator route protection, input validation, CORS/origin, rate limits, secret handling, and log redaction.
+- [ ] Add backup/restore rehearsal (Supabase backups on Pro, or scheduled `pg_dump` from CI on Free), health checks, structured logs, error reporting, and an event-day runbook (unpause project if on Free, verify SMTP, verify migrations deployed).
 - [ ] Confirm all domain statuses have accessible text/icon labels and do not depend on color alone.
-- [ ] Confirm logo integration once asset arrives: header, tournament, sport, match, admin, mobile; no distortion and appropriate contrast.
+- [ ] Confirm logo integration once asset arrives: header, tournament, sport, match, admin, operator, mobile; no distortion and appropriate contrast.
 
 ## Phase 12 — Multi-instance capacity demo and honest reporting
 
@@ -242,15 +274,17 @@
 ## Cross-feature acceptance checklist
 
 - [ ] Requirement traces to PRD/rules and the user decision log.
-- [ ] No TypeScript, sport-specific admin access, or extra bracket rounds have been introduced.
+- [ ] No TypeScript, sport-scoped admin roles, or extra bracket rounds have been introduced; operator access is match-scoped and checked against the database on every request.
+- [ ] Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); managers cannot create managers or Super Admins.
 - [ ] Match sport config is validated, versioned, and frozen into the match at start.
 - [ ] Bracket contains exactly two semifinals and one final; only approved semifinal results advance.
 - [ ] Custom matches never affect bracket progression.
-- [ ] Final result requires admin approval; pending/rejected results are not final standings inputs.
-- [ ] HTTP/socket inputs are runtime-validated and authorized; audit records identify actors and transitions.
+- [ ] Final result requires approval by someone other than the submitter (or an audited Super Admin override); pending/rejected results are not final standings inputs.
+- [ ] HTTP/socket inputs are runtime-validated and authorized; audit records identify actors and transitions, including assignments and overrides.
 - [ ] Score event, projections, audit, and outbox are consistent and recoverable.
-- [ ] UI covers loading, empty, error, pending review, rejected, approved, stale, and responsive states.
-- [ ] Tests cover scoring boundaries, approvals, bracket progression, reconnects, and idempotent retries.
+- [ ] All schema changes are migrations deployed by CI; RLS is enabled on every public table.
+- [ ] UI covers loading, empty, error, pending review, rejected, approved, stale, assignment, and responsive states.
+- [ ] Tests cover scoring boundaries, undo, approvals, bracket progression, reconnects, idempotent retries, and per-role authorization.
 - [ ] Documentation and `memory.md` match implemented behavior.
 
 ## Deferred scope
@@ -260,8 +294,9 @@
 - Historical tournament archive UX unless separately prioritized.
 - Sports beyond the six initially selectable choices.
 - Livestreaming, media uploads, registration/payments, chat, social feeds, or notifications.
+- Tournament-scoped managers and operator permissions beyond `SCORE`.
 - Thapar logo asset integration until the user supplies the official file/source.
 
 ## Current blockers
 
-The shared foundation, tournament configuration UI, teams/rosters, generic result-approval workflow, and bracket scaffolding can proceed. Do not finish a sport's production scoring engine, standings policy, or custom-match aggregate behavior until `rules.md` records the event-specific format and data policy.
+The shared foundation, CI/migration pipeline, roles and assignment authorization, tournament configuration UI, teams/rosters, result-approval workflow, and bracket scaffolding can proceed. Do not finish a sport's production scoring engine, standings policy, or custom-match aggregate behavior until `rules.md` records the event-specific format and data policy. Choose the SMTP provider before operator invites can be tested end to end.

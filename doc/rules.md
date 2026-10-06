@@ -6,10 +6,10 @@
 ## 1. Rule governance
 
 - Use the governing sport body's current rules as the baseline, then apply only explicitly configured competition rules for the relevant tournament and enabled sport.
-- An admin must choose the applicable tournament/sport format and local playing conditions before matches are scored. Admin access is global across enabled sports, not sport-scoped.
+- A Tournament Manager or Super Admin must choose the applicable tournament/sport format and local playing conditions before matches are scored. Managers are global across tournaments and sports (not sport-scoped). Match Operators cannot change sport rules; their access is scoped to the matches they are assigned to.
 - Store the governing source URL, edition/version/date checked, and any local overrides with each tournament/sport configuration and match snapshot.
 - Do not silently change a live match's ruleset. A rule configuration change must be recorded and must not reinterpret already accepted actions without a deliberate migration/correction.
-- An admin's decision on a tie, abandonment, forfeit, or unusual circumstance is an official result input; record actor, time, and explanation.
+- A Tournament Manager's or Super Admin's decision on a tie, abandonment, forfeit, or unusual circumstance is an official result input; record actor, time, and explanation.
 - This document specifies scorekeeping concepts, not a substitute for referees/umpires or an official event rulebook.
 
 ## 2. Authoritative references checked (5 October 2026)
@@ -32,7 +32,7 @@ Each tournament/sport should configure, as applicable:
 - team size, roster size, active squad and substitutes;
 - draw/tie rules, extra time, tiebreaks, walkovers, forfeits, abandonment, and result-awarding authority;
 - standings columns, win/draw/loss points, bonuses/penalties, and tie-break order;
-- configurable score/point values, correction permissions, and required admin approval before result finalization;
+- configurable score/point values, correction permissions, and required manager approval before result finalization;
 - any local rule variation, its authority, and effective dates.
 
 No competition format, global standings points, or cross-sport champion formula has yet been chosen. The initial site will show configured sport standings only.
@@ -76,10 +76,12 @@ Combined branch standings are explicitly deferred. Before implementation of such
 ## 6. Score corrections and audit
 
 - An accepted scoring action is never silently erased.
-- A correction creates a linked reversal/replacement or correction record, with actor, server timestamp, reason, and affected action.
+- **Live undo:** while a match is `LIVE`, the assigned Match Operator can undo or correct any number of actions without extra permission or a reason. Each undo is stored as a linked reversal action with actor, server timestamp, and affected action. Live undos show no public correction marker.
+- **Corrections after submission or approval:** create a linked reversal/replacement or correction record with actor, server timestamp, **reason**, and affected action. Public match pages show that a correction occurred; detailed change history is visible to Tournament Managers and Super Admins only.
 - Derived scorecards, results, and standings are recalculated from the corrected action set.
-- Public match pages show that a correction occurred; detailed change history is admin-only.
-- Match closure requires submission and admin approval before finalization. Whether the approver must differ from the scorer remains open. Post-approval corrections require a new audited review/approval.
+- **Result approval:** the operator submits the result (`LIVE → PENDING_APPROVAL`); a Tournament Manager or Super Admin approves (`APPROVED/FINAL`) or rejects (`REJECTED/CORRECTION`). The reviewer must differ from the submitter, whatever their role. A Super Admin may override this only with a recorded reason; the override is audited.
+- **Rejection:** requires a reason and a correction route. `OPERATOR` reopens the assigned operator's scoring access for that match until resubmission; `MANAGER` keeps the operator locked out and a manager corrects.
+- Approved results are locked. Post-approval corrections create a new audited result version and require another approval.
 
 ## 7. Scoring event integrity requirements
 
@@ -91,20 +93,21 @@ These implementation rules apply to all six sports; they do not decide sport-spe
 - Persist the score action and the corresponding match snapshot/projection and outbox record in a single database transaction.
 - Publish only committed actions. A public client that sees a sequence gap must reload the match snapshot before continuing.
 - Treat a socket broadcast as notification/delivery, not the official scoring record. On reconnect, clients reconcile with the authoritative action sequence and match state.
-- If an offline action cannot be accepted because the match/ruleset/scorer sequence conflicts, pause and request admin resolution; never silently apply “last write wins.”
+- Validate every synced offline action against the operator's match assignment using server receipt time; the device clock is untrusted. If the assignment window has ended or the assignment was revoked, pause sync until a Tournament Manager extends the window or resolves the conflict.
+- If an offline action cannot be accepted because the match/ruleset/scorer sequence conflicts, pause and request manager resolution; never silently apply “last write wins.”
 - Corrections are linked compensating actions with actor, timestamp, reason, and referenced event. Recalculate dependent stats and sport standings from the corrected history.
 
 The 3,000-client capacity demonstration is a delivery/load target only. It does not modify sport laws, result rules, or final score authority.
 
 ## 8. Rules decisions required before scoring implementation
 
-1. Result approval detail: must the approving admin differ from the scorer? The result approval itself is mandatory before finalization. Bracket structure is fixed to two semifinals and one final; the admin assigns semifinal teams and only approved winners advance.
+1. ~~Result approval detail~~ — **Resolved 6 October 2026:** the approver must differ from the submitter, with an audited Super Admin override that requires a reason (see section 6). Bracket structure is fixed to two semifinals and one final; a manager assigns semifinal teams and only approved winners advance.
 2. Badminton singles/doubles and match format; basketball 5v5/3x3, periods/clock/overtime; football team size/duration/substitutions/tie resolution.
 3. Volleyball set/point/rotation/lineup settings; table tennis singles/doubles, game format and optional team-tie structure; lawn tennis singles/doubles, advantage/no-ad, set and tiebreak formats.
 4. Custom match visibility and whether its result contributes to standings, player match statistics, or neither. Custom matches never advance the bracket.
 5. Team/roster limits, player eligibility, match squads, and substitute movement rules.
 6. Sport standings columns, win/draw/loss points, tie-breaks, and whether knockout-only tournaments need a table.
-7. Team-specific format exceptions, if any, and which point/scoring values admins can configure per tournament sport.
+7. Team-specific format exceptions, if any, and which point/scoring values managers can configure per tournament sport.
 
 ## 9. Thapar context
 
