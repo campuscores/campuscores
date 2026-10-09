@@ -1,4 +1,4 @@
-import '../../matches/LiveMatchCard.css';
+import '../matches/LiveMatchCard.css';
 
 /** Side name with winner emphasis once a result exists. */
 function SideName({ match, index }) {
@@ -7,9 +7,9 @@ function SideName({ match, index }) {
   return <span className={won ? 'is-winner' : 'is-loser'}>{match.sides[index].name}{won && <span className="sr-only"> (winner)</span>}</span>;
 }
 
-/** Side names around the games won, or VS before a match starts. */
+/** Side names around the header score, or VS before a match starts. */
 export function Overview({ match }) {
-  return <><SideName match={match} index={0} /><strong>{match.gamesWon ? match.gamesWon.join('–') : 'VS'}</strong><SideName match={match} index={1} /></>;
+  return <><SideName match={match} index={0} /><strong>{match.score ? match.score.join('–') : 'VS'}</strong><SideName match={match} index={1} /></>;
 }
 
 function stateLine(match) {
@@ -20,15 +20,15 @@ function stateLine(match) {
 }
 
 /** Header-only scorecard; activating it opens the full match details. */
-export default function BadmintonMatchCard({ match, onOpen }) {
-  const headingId = `badminton-${match.id}`;
+export default function SportMatchCard({ sport, match, onOpen }) {
+  const headingId = `${sport.id}-${match.id}`;
   return (
-    <article className="match-card badminton-card" data-status={match.status} data-date={match.date} data-match-id={match.id} aria-labelledby={headingId}>
+    <article className="match-card sport-card" data-status={match.status} data-date={match.date} data-match-id={match.id} aria-labelledby={headingId}>
       <div className="match-surface">
         <h3 id={headingId}>
-          <button type="button" className="badminton-card-open" aria-haspopup="dialog" onClick={event => onOpen(match, event.currentTarget)}>
+          <button type="button" className="sport-card-open" aria-haspopup="dialog" onClick={event => onOpen(match, event.currentTarget)}>
             <span className="match-header">
-              <span className="match-meta"><span>Badminton</span><span>{match.category}</span></span>
+              <span className="match-meta"><span>{sport.label}</span><span>{match.category}</span></span>
               <span className="match-overview"><Overview match={match} /></span>
               <span className="match-clock">{stateLine(match)}</span>
             </span>

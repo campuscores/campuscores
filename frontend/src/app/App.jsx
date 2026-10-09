@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
-import BadmintonPage from '../features/sports/badminton/BadmintonPage.jsx';
+import SportPage from '../features/sports/SportPage.jsx';
+import { sportFixtures } from '../features/sports/sportFixtures.js';
 import { sports } from '../data/sports.js';
 
 function ReservedPage() { return null; }
@@ -24,8 +25,8 @@ export default function App() {
           ? `/tournaments/${encodeURIComponent(new URLSearchParams(search).get('event'))}`
           : '/#tournaments'
       } replace />} />
-      {/* Replace reserved route elements as each team integrates its page. */}
-      {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={sport.id === 'badminton' ? <BadmintonPage /> : <ReservedPage />} />)}
+      {/* Every sport gets the shared sport page with its display fixtures; key resets its state between sports. */}
+      {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={<SportPage key={sport.id} sport={sport} fixtures={sportFixtures[sport.id]} />} />)}
       <Route path="/tournaments/:tournament" element={<ReservedPage />} />
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>

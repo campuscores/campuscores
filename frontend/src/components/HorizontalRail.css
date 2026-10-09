@@ -26,6 +26,8 @@
       flex: 0 0 clamp(290px, 30vw, 360px);
       scroll-snap-align: start;
     }
+    /* WebKit snapped the last card to its start, under the end fade; snap its end to the rail's end padding instead. */
+    .match-card:last-child, .tournament-card:last-child { scroll-snap-align: end; scroll-margin-inline-end: 56px; }
     .match-surface, .tournament-surface {
       position: relative;
       isolation: isolate;

@@ -37,12 +37,12 @@
 
 ## Current frontend work — publication pending
 
-The frontend and doc changes are uncommitted in the original checkout on `main`. Its base, `c40d3aa`, matches `origin/main` fetched on 9 October 2026. No remote commit/PR is recorded for these changes. Local verification does not establish a published or merged feature. Requirements and unchecked tasks below remain planned.
+The homepage and frontend CI commits are on `origin/main` (`dac54a0` per the local remote-tracking ref). The badminton page commit `9a22720` is local on `main` and unpushed. The all-sports change is uncommitted on `main`. No remote commit/PR is recorded for the sport pages. Local verification does not establish a published or merged feature. Requirements and unchecked tasks below remain planned.
 
 | Area | Final implementation | Current status |
 | --- | --- | --- |
 | Homepage | React/Vite JavaScript, approved responsive UI, local artwork, filters, native card rails and reserved detail routes. Use [handoff.md](handoff.md) for integration and [design.md](design.md) for visual contracts. Card content remains temporary. | Locally verified, unpublished. |
-| Frontend CI | Same install, lint, build and Chromium suite on Ubuntu, Windows and macOS; each OS reports independently. | Configuration checked locally; remote execution and publication pending. |
+| Frontend CI | Same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects; Windows runs `chromium`, `firefox` and `pixel`. Each OS reports independently. | Configuration checked locally; remote execution and publication pending. |
 | Shared docs | Existing canonical docs describe final contracts, durable decisions and current task state. Follow [AGENTS.md](../AGENTS.md) for documentation and completion rules. | Document checks passed; unpublished. |
 
 ### Latest verification
@@ -63,9 +63,29 @@ Use one row per active task: owner, scope/files, dependencies, state and branch/
 
 | Owner | Scope / files | Dependencies | State | Branch / PR |
 | --- | --- | --- | --- | --- |
-| Kiro agent (for the user) | Badminton sport page: `frontend/src/features/sports/badminton/*`, `App.jsx` (badminton route only), `global.css` (section container), `tests/badminton.spec.js`, `tests/homepage.spec.js` (badminton route now has a page), README and docs | None. Badminton format stays open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified, unpublished | `main`, uncommitted; no PR |
+| Kiro agent (for the user) | Cross-browser, phone-emulation and edge-case tests: `frontend/playwright.config.js` (six projects), `tests/sport-edge-cases.spec.js`, `tests/mobile.spec.js`, `tests/helpers.js`, small edits to `tests/homepage.spec.js`, `.github/workflows/frontend.yml`, two CSS fixes (`SportPage.css`, `HorizontalRail.css`) and docs | The uncommitted sport-pages change | Locally verified, unpublished (all six projects; WebKit needed side-loaded libraries, see below) | `main`, uncommitted; no PR |
+| Kiro agent (for the user) | Sport pages for all six sports: `frontend/src/features/sports/*`, `App.jsx` (sport routes), `global.css` (section container selector), `tests/sport-pages.spec.js` (replaces `badminton.spec.js`), `tests/homepage.spec.js` (sport routes built), README and docs | None. Formats stay open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified, unpublished | `main`, uncommitted; no PR |
 
-Badminton page checks, 9 October 2026, Linux, Node 22.21.1, installed Chrome 146: `npm run lint`, `npm run build` and `PLAYWRIGHT_CHANNEL=chrome npm test` passed, 18 tests (8 homepage, 10 badminton). Coverage: three sections, header-only cards, pointer/Enter/Space open, Close/Escape/backdrop close with focus return, players, per-game points, bold game winner, red current game, serving dot, ended match winner, past/upcoming chip filtering and empty day, direct load/refresh/back, the five other sport routes blank, no body overflow and 44px targets from 320 to 2560px, doubles dialog fits at 320px, phone texture and reduced motion. Final re-run on the same date and machine: `npm run lint` passed, `npm run build` passed and `PLAYWRIGHT_CHANNEL=chrome npm test` passed all 18 tests. The bundled Playwright Chromium is not installed on this machine, so plain `npm test` cannot launch a browser; [local-development.md](local-development.md) documents both options. A fresh production preview was checked with `playwright-cli` at phone 390×844 and desktop 1440×900: Live, Upcoming and Past sections; header-only cards; live, just-ended, past and upcoming details; bold game winners, red current game, serving dot; date chip filtering and the empty 12 Oct day; no body overflow; no console errors. Captures stay local and are not committed. Limits: Chromium only; no Safari/Firefox, physical-device or screen-reader check; Back does not close the dialog.
+Sport page checks, 9 October 2026, Linux, Node 22.21.1, installed Chrome 146: `npm run lint` and `npm run build` passed; `PLAYWRIGHT_CHANNEL=chrome npm test` passed all 73 tests (8 in `homepage.spec.js`, 65 in `sport-pages.spec.js`). Coverage: all six sport routes; three sections; header-only cards; fixture validity against the official baselines and the registry; one dialog per scoring model (badminton, tennis, table tennis, volleyball, football, basketball) with bold winners, red current period, serving dot, Pts and tiebreak, scorers and lineups; ended-match winner; date chips and the empty 12 Oct day; keyboard open, Escape and focus return; desktop backdrop close; no body overflow and 44px targets from 320 to 2560px; textures and icon colour; route entry, refresh and back; chip reset between sports; tournament routes stay blank. A production preview was checked with `playwright-cli` at phone 390×844 and desktop 1440×900: all six pages and one open live dialog for badminton, tennis, volleyball, football and basketball; no body, dialog or table overflow; sport textures loaded; no console errors. Captures stay local and are not committed. Limits: Chromium only; no Safari/Firefox, physical-device or screen-reader check; Back does not close the dialog; plain `npm test` needs the bundled Playwright Chromium, which is not installed on this machine ([local-development.md](local-development.md)).
+
+Cross-browser checks, 9 October 2026, Linux, Node 22.21.1, base `9a22720` plus uncommitted changes. `npm run lint` and `npm run build` passed. `PLAYWRIGHT_CHANNEL=chrome npm test` ran 417 tests: 413 passed, 4 skipped, 0 failed.
+
+| Project | Browser | Passed | Skipped |
+| --- | --- | --- | --- |
+| `chromium` | Installed Chrome 146 | 124 | 0 |
+| `firefox` | Playwright Firefox | 123 | 1 |
+| `webkit` | Playwright WebKit | 123 | 1 |
+| `pixel` | Installed Chrome 146, Pixel 7 emulation | 15 | 0 |
+| `iphone` | Playwright WebKit, iPhone 15 emulation | 14 | 1 |
+| `ipad` | Playwright WebKit, iPad (gen 11) emulation | 14 | 1 |
+
+The four skips are touch-swipe tests. Playwright has touch-drag input only through Chromium CDP. WebKit did not launch on this machine at first: the host lacks `libavif16`. The fix is `sudo npx playwright install-deps webkit`. For this run, the library and its dependencies were unpacked outside the checkout without sudo and preloaded. CI installs them with `--with-deps`. Coverage added: empty Live section; single-match, empty and rapid date chips; chip state across dialog close by button, Escape and backdrop; 320px long names; one dialog, focus trap, focus return, scroll lock and restore; Back with the dialog open (pinned); trailing slashes, unknown sports, blank tournaments, refresh and history; reduced motion, console errors, failed and external requests; 200% and 400% zoom reflow; keyboard-only flow; tap, fullscreen and fitted landscape dialogs, 44px targets, native scroll containers, swipe on Pixel and the phone menu.
+
+Fixes found by these tests: long side names overflowed 320px cards (`overflow-wrap: anywhere` on card side names in `SportPage.css`). WebKit snapped the last rail card under the end fade (`HorizontalRail.css` snaps the last card's end to the end padding; Chromium and Firefox positions are unchanged). The homepage rail test is marked slow on WebKit, because headless WebKit renders the 3840px rails about 3× slower.
+
+CI matrix: Windows runs `chromium`, `firefox` and `pixel` only. Safari does not exist on Windows, and Playwright's Windows WebKit port is the least representative; Ubuntu and macOS cover WebKit. CI results are pending until the change is pushed.
+
+Limits: emulated devices only. No physical phone, branded Safari or screen-reader check. Use the manual checklist in [local-development.md](local-development.md#check-on-a-real-phone). Firefox has no phone emulation. WebKit touch swipe and system text size are manual checks only. On emulated iPhone and iPad, one ArrowRight press on a rail snaps back to the start; three presses scroll it. The homepage cards have no long-name test. The empty-cell `—` marks in the dialog keep their pending screen-reader fix. The LAN preview command was not started in this run.
 
 ## Phase 0 — Resolve implementation-blocking inputs
 

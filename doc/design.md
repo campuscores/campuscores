@@ -186,13 +186,19 @@ Use the existing `LiveMatchCard` shell: sport texture/dark overlay above white d
 
 The detail area uses ink names/numbers, muted column labels, red current-period values and blue totals. The first column is 30% and left-aligned; numeric columns are centered with tabular figures. Keep the layout readable when sport teams replace columns; the sample table does not fix any sport's final scoring format.
 
-### Badminton page patterns
+### Sport page patterns
 
-Source: [BadmintonPage.css](../frontend/src/features/sports/badminton/BadmintonPage.css). Page `h1` is 40px (32px on phones), weight 800, with the 32px sport icon in its sport colour. Sections reuse the section container and `.live-heading`.
+Source: [SportPage.css](../frontend/src/features/sports/SportPage.css). All six sport pages share these patterns. Page `h1` is 40px (32px on phones), weight 800, with the 32px sport icon. The icon colour is the sport `color` in `sports.js`, set as `--sport-color`. Sections reuse the section container and `.live-heading`.
+
+- Texture: each page sets `--match-background` to `/assets/<sport>-background.webp` and `--match-background-phone` to `/assets/<sport>-background-640.webp` (section 4). Cards and the dialog header use it.
 
 - Header-only match card: the live-match texture covers the whole card; no white detail area. The whole header is one button (44px+) with an inset focus outline.
 - Date chips: a horizontally scrollable row above a rail. Same colours, 14px radius and selected states as sport filters; 44px tall; `aria-pressed`.
 - Match detail dialog: native modal. Full viewport on phones; from 768px a centered `min(760px, 100% - 64px)` panel with 22px radius and a 56% dark backdrop. Textured header with a visible Close button, then the white detail panel. Completed-game winner scores are weight 800, others 500; current-game cells use `#d5203e`; the serving player has an 8px blue dot. A text legend explains bold, red and the dot. Winners get a small blue Winner tag.
+- Period sports (football, basketball): the higher score of each completed half, quarter or overtime is bold; a tied period has no bold score. The current period is red while live. No serving dot.
+- Volleyball puts the serving dot on the team label. Live tennis adds a red `Pts` column before the total. A 7–6 set shows the loser's tiebreak points as a small 9px number after the games.
+- Team sports show a `Lineups` block below the score table. Football adds `Goals` (scorer and minute) and basketball adds `Top scorers` (points). Block headings match the info labels (11px, 600, `#607697`).
+- Total columns use short labels (`Games`, `Sets`, `Goals` or `T`) with a full accessible name, so six numeric columns fit at 320px.
 
 ### Tournament cards
 

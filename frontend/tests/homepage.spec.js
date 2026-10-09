@@ -1,4 +1,6 @@
 import { test, expect, devices } from '@playwright/test';
+import { sports } from '../src/data/sports.js';
+import { swipe } from './helpers.js';
 
 async function settleScroll(rail) {
   await rail.evaluate(el => new Promise(resolve => {
@@ -138,7 +140,8 @@ test('cold phone loads use smaller local portraits and textures at DPR 1, 2 and 
   }
 });
 
-test('both rails spotlight visible cards and scroll without arrow controls', async ({ page }) => {
+test('both rails spotlight visible cards and scroll without arrow controls', async ({ page, browserName }) => {
+  test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
   await page.goto('/');
   for (const width of [390, 820, 1440, 2560, 3840]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -182,9 +185,11 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
     if (destination.startsWith('/sports/')) await page.locator('.desktop-nav .sports-dropdown summary').click();
     await page.locator(`a[href="${destination}"]`).first().click();
     await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    // Badminton has its page; the other destinations stay reserved and blank.
-    const built = destination === '/sports/badminton/';
-    const ready = () => built ? expect(page.getByRole('heading', { level: 1, name: 'Badminton' })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    // Every sport destination has its page; tournament destinations stay reserved and blank.
+    const sport = sports.find(item => destination === `/sports/${item.id}/`);
+    const built = Boolean(sport);
+    if (destination.startsWith('/sports/')) expect(sport, destination).toBeTruthy();
+    const ready = () => built ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
     await ready();
     expect((await page.reload()).status()).toBe(200);
     await ready();
@@ -293,23 +298,15 @@ test('hero motion stops offscreen, with reduced motion, and on route unmount', a
   await expect.poll(() => page.evaluate(() => window.pendingAnimationFrames.size)).toBe(1);
 });
 
-test('phone touch can swipe both card rows', async ({ browser }) => {
+test('phone touch can swipe both card rows', async ({ browser, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Touch-drag input exists only through Chromium CDP; WebKit phones are checked in mobile.spec.js and by hand');
   const context = await browser.newContext(devices['iPhone 13']);
   const page = await context.newPage();
   try {
     await page.goto('http://127.0.0.1:4175/');
-    const session = await context.newCDPSession(page);
     for (const selector of ['.match-scroll', '.tournament-scroll']) {
       const rail = page.locator(selector);
-      await rail.scrollIntoViewIfNeeded();
-      const box = await rail.boundingBox();
-      const y = box.y + box.height / 2;
-      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width - 40, y }] });
-      for (let step = 1; step <= 8; step++) {
-        await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: box.x + box.width - 40 - step * 28, y }] });
-        await page.waitForTimeout(16);
-      }
-      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await swipe(page, rail);
       await expect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
     }
   } finally { await context.close(); }

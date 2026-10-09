@@ -63,15 +63,36 @@ Vite uses a strict port. An occupied port causes an error instead of silently sw
 ```sh
 npm run lint
 npm run build
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 npm test
 ```
 
-Install Chromium once per machine. Re-run the browser install when a Playwright update requires it. Linux CI uses `npx playwright install --with-deps chromium`.
+Install the browsers once per machine. Re-run the browser install when a Playwright update requires it. Linux also needs system libraries: use `npx playwright install --with-deps chromium firefox webkit`, or run `sudo npx playwright install-deps webkit` when WebKit reports missing libraries. CI uses `--with-deps`.
+
+`npm test` runs six Playwright projects:
+
+| Project | Engine and device descriptor | Specs |
+| --- | --- | --- |
+| `chromium` | Chromium, `Desktop Chrome` | All specs except `mobile.spec.js` |
+| `firefox` | Firefox, `Desktop Firefox` | All specs except `mobile.spec.js` |
+| `webkit` | WebKit, `Desktop Safari` | All specs except `mobile.spec.js` |
+| `pixel` | Chromium, `Pixel 7` (touch, mobile) | `mobile.spec.js` only |
+| `iphone` | WebKit, `iPhone 15` (touch, mobile) | `mobile.spec.js` only |
+| `ipad` | WebKit, `iPad (gen 11)` (touch, mobile) | `mobile.spec.js` only |
+
+WebKit is the engine behind Safari. It is not branded Safari. Emulated devices are not real phones. Firefox has no phone project, because Playwright does not support mobile emulation in Firefox. Some tests skip on an engine that lacks the needed input; each skip states its reason.
+
+Select projects or files with arguments after `--`:
+
+```sh
+npm test -- --project=firefox
+npm test -- --project=pixel --project=iphone --project=ipad
+npm test -- tests/mobile.spec.js
+```
 
 Tests start the current production preview on **4175**. Keep that port free. Tests deliberately refuse an existing server so they cannot pass against another checkout. Build before testing.
 
-Installed Google Chrome can be used instead of downloading Chromium:
+Installed Google Chrome can be used instead of downloading Chromium. `PLAYWRIGHT_CHANNEL` applies only to the `chromium` and `pixel` projects; Firefox and WebKit always use Playwright's own builds:
 
 ```powershell
 $env:PLAYWRIGHT_CHANNEL = 'chrome'
@@ -107,9 +128,10 @@ Add feature and regression specs to `frontend/tests/` in the same change as the 
 | `npm ci` fails with `EPERM` on a native `.node` file | Stop this checkout's dev, preview and test servers with Ctrl+C in their terminals, then retry `npm ci`. Stop after a failed install; later tool errors can come from incomplete dependencies. Do not kill unrelated processes or delete the lockfile. |
 | Port 4174 or 4175 is occupied | Stop your existing preview/test server. Check the terminal that started it. |
 | PowerShell blocks `npm.ps1` | Use `npm.cmd` and `npx.cmd` for the same commands. Do not change the machine's execution policy for this app. |
-| Browser executable missing | Install Chromium as above, or select installed Chrome. |
+| Browser executable missing | Install the browsers as above, or select installed Chrome for the Chromium projects. |
+| WebKit fails with "Host system is missing dependencies" | Run `sudo npx playwright install-deps webkit`. The message names the missing libraries, for example `libavif16`. Until then, run the other projects: `npm test -- --project=chromium --project=firefox --project=pixel`. |
 | Preview shows old source | Run `npm run build` again, then refresh. |
-| Sport/tournament detail is blank | These routes are reserved; their UI is not implemented yet. |
+| Tournament detail is blank | Tournament routes are reserved; their UI is not implemented yet. |
 | A teammate cannot open your localhost URL | They must pull the same branch and start their own server. The address refers to their machine. |
 
 ## Generated files and deployment
@@ -124,11 +146,37 @@ They solve different problems:
 
 | Tool | Purpose | This project |
 | --- | --- | --- |
-| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the full Chromium suite on Ubuntu, Windows and macOS. It runs on pushes/pull requests affecting `frontend/**`, root package files or the workflow. It does not deploy. |
+| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium`, `firefox` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, root package files or the workflow. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
 An Actions job can run Docker containers. They can work together; neither replaces the other. Planned database CI may use a temporary database on the runner. That workflow is not implemented, and team devices do not need local Postgres.
 
-The OS matrix checks installation, build and browser behavior on three runner systems. It does not test Safari, Firefox or physical phones. Each OS reports its result; a failure on one does not cancel the others. All required jobs must pass before the change is marked Verified.
+The OS matrix checks installation, build and browser behavior on three runner systems. It covers the Chromium, Firefox and WebKit engines and emulated phones. WebKit does not run on Windows: Safari does not exist there, and Playwright's Windows WebKit port is the least representative. Ubuntu and macOS cover WebKit. CI does not test branded Safari or physical phones. Each OS reports its result; a failure on one does not cancel the others. All required jobs must pass before the change is marked Verified.
 
 References: [GitHub Actions overview](https://docs.github.com/en/actions/get-started/understand-github-actions), [Docker overview](https://docs.docker.com/get-started/docker-overview/).
+
+## Check on a real phone
+
+Emulation is not real-device coverage. Run this checklist on a physical iPhone (Safari) and Android phone (Chrome) before a release that changes the sport pages. Last updated 9 October 2026.
+
+1. Run `npm run build`.
+2. From `frontend/`, run `npx vite preview --host 0.0.0.0 --port 4176 --strictPort`. Port 4176 keeps 4174 and 4175 free.
+3. Connect the phone to the same trusted Wi-Fi. Open the Network URL that Vite prints. Allow the port in the computer's firewall if needed.
+4. The preview is visible to the whole local network. Stop it with Ctrl+C when you finish.
+
+On each sport page, check:
+
+- Tap a card. The details open fullscreen, and Close is clear of the notch and safe areas.
+- Close and the area outside the details close them. The page does not scroll behind the open details.
+- Swipe the card rails and the date chips with a finger.
+- Rotate between portrait and landscape.
+- Use the system Back gesture or button with the details open. Record the actual result. Android Chrome can close the details first; the automated tests pin Back as leaving the page.
+- Use large system text and 200% pinch zoom.
+- With VoiceOver (iOS) and TalkBack (Android), check that the details name, the serving and winner text and the empty-section text are announced.
+- Turn on the reduced-motion setting.
+- The page does not scroll sideways.
+- Open and use the phone header menu.
+
+Record the device, OS version, browser version and results in [tasks.md](tasks.md).
+
+Cloud device farms, such as BrowserStack or LambdaTest through Playwright `connect`, are a possible future option. They need an account and CI secrets. They are not set up.

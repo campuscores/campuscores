@@ -2,7 +2,7 @@
 
 A mobile-first sports homepage built with React, Vite and JavaScript. It includes the header, responsive athlete gallery and dot animation, live-match sport filters, native horizontal scorecards and tournament cards. All artwork is local.
 
-Names, scores, clocks, breakdowns and tournament dates are display fixtures. The badminton sport page uses display fixtures; other sport and tournament detail routes are reserved, with no page UI yet. Backend, database, authentication and live score delivery are planned.
+Names, scores, clocks, breakdowns and tournament dates are display fixtures. The six sport pages use display fixtures. Tournament detail routes are reserved, with no page UI yet. Backend, database, authentication and live score delivery are planned.
 
 ## Start locally
 
@@ -41,7 +41,8 @@ frontend/
       home/               homepage, hero, matrix and sport filters
       matches/            match section, card and sample data
       tournaments/        tournament section, card and sample data
-      sports/badminton/   badminton page, cards, detail dialog and sample data
+      sports/             shared sport page, cards and detail dialog
+        <sport>/          display fixtures for one sport
     styles/               shared visual tokens and base styles
   tests/                  browser integration and responsive checks
 doc/                      shared requirements, decisions, tasks and guides

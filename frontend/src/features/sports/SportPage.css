@@ -1,0 +1,176 @@
+.sport-section.sport-title { margin-bottom: 0; }
+.sport-title h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 40px 0 32px;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -.04em;
+}
+.sport-title svg { flex-shrink: 0; width: 32px; height: 32px; color: var(--sport-color); }
+
+/* Default card: textured header only, no white detail area. */
+.sport-card h3 { margin: 0; }
+.sport-card .match-surface::before { inset: 0; }
+.sport-card-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.sport-card-open:focus-visible { outline-offset: -3px; }
+.sport-card .match-header { display: block; padding: 16px; }
+.sport-card .match-clock { display: block; }
+.match-card.sport-card:has(:focus-visible) .match-surface { transform: none; opacity: 1; }
+.match-overview .is-loser { font-weight: 500; opacity: .82; }
+/* Long names wrap inside their column instead of spilling past a 320px card. */
+.sport-page .match-overview > span { overflow-wrap: anywhere; }
+
+/* Date chips reuse the sport-filter colors, shape and selected state. */
+.date-chips {
+  display: flex;
+  gap: 8px;
+  padding: 6px 4px;
+  margin: -6px -4px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.date-chips::-webkit-scrollbar { display: none; }
+.date-chip {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 4px 16px rgb(35 65 110 / 4%);
+  transition: color .16s ease, background .16s ease;
+}
+.date-chip:focus-visible { outline-offset: 2px; }
+.date-chip:hover { color: var(--blue); background: #eaf2ff; }
+.date-chip[aria-pressed="true"] { color: #fff; background: var(--blue); box-shadow: 0 6px 18px rgb(7 85 255 / 18%); }
+.date-chip[aria-pressed="true"]:hover { background: #064ae0; }
+.sport-empty { margin: 0 0 18px; color: #50688c; font-size: 16px; }
+
+/* Match details: native modal, full viewport on phones, centered panel on wider screens. */
+html:has(.sport-dialog[open]) { overflow: hidden; }
+.sport-dialog {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink);
+  background: #f6faff;
+}
+.sport-dialog::backdrop { background: rgb(7 18 39 / 56%); }
+.sport-dialog-hero {
+  padding: 16px 16px 34px;
+  background: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)), var(--match-background) center / cover;
+}
+.sport-dialog-top { display: flex; align-items: center; gap: 12px; }
+.sport-dialog-top .match-meta { flex: 1; min-width: 0; margin: 0; }
+.sport-dialog-close {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 60%);
+  border-radius: 14px;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgb(255 255 255 / 14%);
+  cursor: pointer;
+}
+.sport-dialog-close:hover { background: rgb(255 255 255 / 24%); }
+.sport-dialog-close:focus-visible { outline-color: #fff; outline-offset: 2px; }
+.sport-dialog .match-overview { margin-top: 20px; font-size: 16px; }
+.sport-dialog .match-overview strong { font-size: 40px; }
+.sport-dialog-details { padding: 12px; }
+.sport-dialog-details th:first-child { width: 46%; }
+.sport-dialog-details tbody th { vertical-align: top; }
+.sport-dialog-details td { font-weight: 500; }
+.sport-dialog-details td strong, .sport-legend strong { font-weight: 800; }
+.sport-dialog-details td.match-total { font-weight: 700; }
+/* Word totals such as "Games" need the full column width at 320px. */
+.sport-dialog-details th.match-total { padding-inline: 0; }
+.sport-team { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 13px; font-weight: 700; }
+.sport-player { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; line-height: 1.5; }
+.serve-dot { flex-shrink: 0; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); }
+.winner-tag {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 9px;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+  background: #eaf2ff;
+}
+.sport-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 4px 2px 0;
+  padding-top: 10px;
+  border-top: 1px solid #e9eef6;
+  color: #50688c;
+  font-size: 12px;
+}
+.sport-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sport-legend .is-current { color: #d5203e; font-weight: 700; }
+.sport-participants { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sport-participants > * { margin: 0; padding: 4px 2px; }
+.sport-extra { margin: 12px 2px 4px; padding-top: 12px; border-top: 1px solid #e9eef6; }
+.sport-extra h3 { margin: 0 0 8px; color: #607697; font-size: 11px; font-weight: 600; }
+.sport-scorers { margin: 0; padding: 0; list-style: none; }
+.sport-scorers li { font-size: 13px; font-weight: 500; line-height: 1.5; }
+.sport-scorers li span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tiebreak { margin-left: 1px; font-size: 9px; }
+.sport-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px 16px;
+  margin: 12px 2px 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e9eef6;
+}
+.sport-info dt { color: #607697; font-size: 11px; font-weight: 600; }
+.sport-info dd { margin: 2px 0 0; font-size: 13px; font-weight: 700; }
+
+@media (min-width: 768px) {
+  .sport-dialog {
+    width: min(760px, calc(100% - 64px));
+    height: fit-content;
+    max-height: calc(100dvh - 64px);
+    margin: auto;
+    border-radius: 22px;
+  }
+}
+@media (max-width: 767px) {
+  .sport-title h1 { margin: 36px 0 28px; font-size: 32px; }
+  .sport-dialog-hero { background-image: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)), var(--match-background-phone); }
+}

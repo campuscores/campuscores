@@ -5,6 +5,8 @@
 
 **Homepage boundary (8 October 2026):** the implemented match cards use temporary display fixtures, including score breakdowns and clocks. Those values/columns are not approved playing conditions or a scoring engine. Sport teams must confirm this document's open conditions before implementing production score calculations; UI card shape/color does not decide domain rules.
 
+**Sport page boundary (9 October 2026):** the six sport pages show official-baseline display fixtures (BWF, ITF, ITTF, FIVB, IFAB, FIBA). They do not confirm event formats.
+
 ## 1. Rule governance
 
 - Use the governing sport body's current rules as the baseline, then apply only explicitly configured competition rules for the relevant tournament and enabled sport.

@@ -67,7 +67,7 @@ Node/npm and Git are setup requirements. App/test dependencies are pinned by `pa
 - Reuse the approved colors, typography, shapes, spacing and breakpoints in `doc/design.md`. No pause control, scrolling arrows or View All controls.
 - Homepage sport tiles filter live matches in place. Header Sports links navigate. Register routes in `frontend/src/app/App.jsx`.
 - Keep native horizontal rails and partial-card emphasis. Card detail fields are temporary; approved shells stay fixed.
-- Sport/tournament routes stay intentionally blank until their teams implement them.
+- Sport routes use the shared sport page with display fixtures. Tournament routes stay intentionally blank until their team implements them.
 - Keep portable local assets, originals, responsive variants and license/source records. Never put clipboard or agent-runtime paths in app/test code.
 
 ## Verify before marking complete
@@ -76,7 +76,7 @@ Define acceptance cases first. Cover normal, boundary, invalid and failure cases
 
 For frontend changes, run `npm run lint`, `npm run build` and `npm test`. Use focused checks while debugging, then required integration checks after changes settle. Review phone and desktop captures. Desktop automation does not prove physical-device behavior or every possible case.
 
-Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs the suite on Ubuntu, Windows and macOS with Chromium. This does not add Safari, Firefox or physical-device coverage.
+Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs Chromium, Firefox and an emulated Pixel on Ubuntu, Windows and macOS, plus WebKit and emulated iPhone and iPad on Ubuntu and macOS. WebKit is the engine behind Safari, not branded Safari, and emulation does not replace physical-device checks.
 
 When a new application layer needs other checks, add its test commands, dependencies, CI jobs and path triggers in the same change. Cover implemented behavior; do not add empty jobs for planned services. Record new coverage and remaining gaps in `doc/tasks.md` before marking the feature Verified.
 

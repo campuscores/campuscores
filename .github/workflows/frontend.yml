@@ -1,20 +1,27 @@
 name: Frontend checks
-
 on:
   push:
     paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
   pull_request:
     paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
-
 permissions:
   contents: read
-
 jobs:
   homepage:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Windows skips WebKit: Safari does not exist there. Ubuntu and macOS cover WebKit.
+        include:
+          - os: ubuntu-latest
+            browsers: chromium firefox webkit
+            projects: ''
+          - os: macos-latest
+            browsers: chromium firefox webkit
+            projects: ''
+          - os: windows-latest
+            browsers: chromium firefox
+            projects: --project=chromium --project=firefox --project=pixel
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +32,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm test
+      - run: npx playwright install --with-deps ${{ matrix.browsers }}
+      - run: npm test -- ${{ matrix.projects }}

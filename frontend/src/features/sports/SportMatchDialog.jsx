@@ -1,0 +1,142 @@
+import { useEffect, useRef } from 'react';
+import { Overview } from './SportMatchCard.jsx';
+
+function statusText(match) {
+  const winner = match.winner == null ? '' : `${match.sides[match.winner].name} won ${match.score[match.winner]}–${match.score[1 - match.winner]}`;
+  if (match.status === 'live') return `Live · ${match.clock}`;
+  if (match.status === 'ended') return `Match ended · ${winner} · Provisional result`;
+  if (match.status === 'completed') return `Final · ${winner}`;
+  return `Scheduled · ${match.dateLabel} · ${match.timeLabel}`;
+}
+
+const ServingMark = ({ serving, children }) => <>{serving && <span className="serve-dot" aria-hidden="true" />}{children}{serving && <span className="sr-only">, serving</span>}</>;
+
+function Players({ side }) {
+  return side.players.map(player => <span key={player.name} className="sport-player"><ServingMark serving={player.serving}>{player.name}</ServingMark></span>);
+}
+
+/** Team label and players per side, without scores. */
+function Participants({ match }) {
+  return <div className="sport-participants">{match.sides.map(side => <p key={side.name}><span className="sport-team">{side.team}</span><Players side={side} /></p>)}</div>;
+}
+
+function Side({ scoring, match, index }) {
+  const side = match.sides[index];
+  return <>
+    <span className="sport-team"><ServingMark serving={side.serving}>{side.team}</ServingMark></span>
+    {match.winner === index && <span className="winner-tag">Winner</span>}
+    {!scoring.team && <Players side={side} />}
+  </>;
+}
+
+function Points({ period, side }) {
+  if (!period) return <span aria-label="Not played">—</span>;
+  const points = period.points[side];
+  if (period.winner === side) return <strong>{points}</strong>;
+  if (period.tiebreak) return <>{points}<span className="sr-only">, tiebreak </span><sup className="tiebreak">{period.tiebreak[side]}</sup></>;
+  return points;
+}
+
+function ScoreTable({ sport, scoring, match }) {
+  return (
+    <table aria-label={`${sport.label} score by ${scoring.unit.toLowerCase()}`}>
+      <thead><tr>
+        <th scope="col"><span className="sr-only">Team and players</span></th>
+        {match.periods.map((period, index) => (
+          <th key={index} scope="col" className={period?.current ? 'is-current' : undefined} aria-label={`${period?.name ?? `${scoring.unit} ${index + 1}`}${period?.current ? ', current' : ''}`}>
+            {period?.label ?? `${scoring.short}${index + 1}`}
+          </th>
+        ))}
+        {match.gamePoints && <th scope="col" className="is-current" aria-label="Current game points">Pts</th>}
+        <th scope="col" className="match-total" aria-label={scoring.totalName}>{scoring.total}</th>
+      </tr></thead>
+      <tbody>{match.sides.map((side, sideIndex) => (
+        <tr key={side.name} data-side={sideIndex}>
+          <th scope="row"><Side scoring={scoring} match={match} index={sideIndex} /></th>
+          {match.periods.map((period, index) => <td key={index} className={period?.current ? 'is-current' : undefined}><Points period={period} side={sideIndex} /></td>)}
+          {match.gamePoints && <td className="is-current">{match.gamePoints[sideIndex]}</td>}
+          <td className="match-total">{match.score[sideIndex]}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
+}
+
+function Legend({ scoring, match }) {
+  const set = scoring.model === 'set';
+  const unit = scoring.unit.toLowerCase();
+  const live = match.status === 'live';
+  const serving = match.sides.some(side => side.serving || side.players.some(player => player.serving));
+  return (
+    <p className="sport-legend">
+      <span><strong>Bold</strong> = {set ? `${unit} winner` : 'won the period'}</span>
+      {live && <span><span className="is-current">Red</span> = current {set ? unit : 'period'}</span>}
+      {live && serving && <span><span className="serve-dot" aria-hidden="true" />Serving</span>}
+      {match.gamePoints && <span>Pts = points in the current game</span>}
+      {match.periods.some(period => period?.tiebreak) && <span>Small number = tiebreak points</span>}
+    </p>
+  );
+}
+
+function Scorers({ scoring, match }) {
+  return (
+    <div className="sport-extra">
+      <h3>{scoring.scorers}</h3>
+      <div className="sport-participants">{match.sides.map((side, index) => {
+        const scorers = match.scorers.filter(scorer => scorer.side === index);
+        return (
+          <div key={side.name}>
+            <span className="sport-team">{side.team}</span>
+            <ul className="sport-scorers">
+              {scorers.length
+                ? scorers.map((scorer, item) => <li key={item}>{scorer.player} <span>{scorer.detail}</span></li>)
+                : <li><span aria-label="None">—</span></li>}
+            </ul>
+          </div>
+        );
+      })}</div>
+    </div>
+  );
+}
+
+/** Fullscreen (phone) or centered (wider screens) match details in a native modal dialog. */
+export default function SportMatchDialog({ sport, scoring, match, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => { if (match && !ref.current.open) ref.current.showModal(); }, [match]);
+  function closeOnBackdrop(event) {
+    const box = ref.current.getBoundingClientRect();
+    const outside = event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+    if (event.target === ref.current && outside) ref.current.close();
+  }
+  return (
+    <dialog ref={ref} className="sport-dialog" aria-labelledby="sport-dialog-title" onClose={onClose} onClick={closeOnBackdrop}>
+      {match && <>
+        <header className="match-header sport-dialog-hero">
+          <div className="sport-dialog-top">
+            <p className="match-meta"><span>{sport.label}</span><span>{match.category}</span></p>
+            <button type="button" className="sport-dialog-close" aria-label="Close match details" onClick={() => ref.current.close()}>Close</button>
+          </div>
+          <h2 id="sport-dialog-title" className="match-overview"><Overview match={match} /></h2>
+          <p className="match-clock sport-dialog-status">{statusText(match)}</p>
+        </header>
+        <div className="match-details sport-dialog-details">
+          {match.periods
+            ? <>
+                <ScoreTable sport={sport} scoring={scoring} match={match} />
+                <Legend scoring={scoring} match={match} />
+                {match.scorers && <Scorers scoring={scoring} match={match} />}
+                {scoring.team && <div className="sport-extra"><h3>Lineups</h3><Participants match={match} /></div>}
+              </>
+            : <Participants match={match} />}
+          <dl className="sport-info">
+            <div><dt>Date</dt><dd>{match.dateLabel}</dd></div>
+            <div><dt>Time</dt><dd>{match.timeLabel}</dd></div>
+            <div><dt>Tournament</dt><dd>{match.tournament}</dd></div>
+            <div><dt>Round</dt><dd>{match.round}</dd></div>
+            <div><dt>Venue</dt><dd>{match.venue}</dd></div>
+          </dl>
+        </div>
+      </>}
+    </dialog>
+  );
+}

@@ -7,20 +7,27 @@
 - Canonical docs describe final accepted behavior and contracts. [Requirements](prd.md), [architecture](architecture.md), [design](design.md) and [rules](rules.md) own their contracts. [Handoff](handoff.md) maps current integration points. [Tasks](tasks.md) holds minimal ownership, state and verification evidence.
 - Keep failed attempts, scratch HTML/Markdown, reports and machine paths out of shared docs and source. Retain detail only when it explains a current risk, compatibility constraint or security requirement. Keep durable asset sources and licenses in [asset-sources.md](asset-sources.md).
 - Final feature completion requires applicable verification and a confirmed remote commit or PR. Local unpushed work is not shared complete. Follow [AGENTS.md](../AGENTS.md) for verification policy; record actual results and limits in [tasks.md](tasks.md).
-- Required frontend CI checks run the same install, lint, build and Chromium suite on Ubuntu, Windows and macOS. Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. This does not cover Safari, Firefox or physical devices.
+- Required frontend CI checks run the same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects (Chromium, Firefox, WebKit, emulated Pixel, iPhone and iPad). Windows runs Chromium, Firefox and Pixel; Safari does not exist on Windows. Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. WebKit is not branded Safari, and emulation does not cover physical devices.
 
-## Badminton page decisions — 9 October 2026
+## Sport page decisions — 9 October 2026
 
-- `/sports/badminton/` shows Live, Upcoming and Past matches from frontend display fixtures. Fixtures use a BWF-like best-of-3 shape for display only; the badminton format in [rules.md](rules.md) stays open and no scoring engine exists.
+- Each `/sports/<sport>/` page shows Live, Upcoming and Past matches from frontend display fixtures. Fixtures are official-baseline display fixtures, not confirmed event formats. The formats in [rules.md](rules.md) stay open and no scoring engine exists.
 - Default cards show only the textured match header. Activating a card opens a native modal dialog: full viewport on phones, a centered 760px panel from 768px. Close, Escape and a desktop backdrop click close it and return focus to the card. The dialog does not change the URL.
-- Details bold each completed game's winning score, colour the current game red with a text legend and labelled column, and mark the serving player with a dot plus screen-reader text. Winners also get a visible Winner tag.
-- Upcoming and Past have date chips that filter in place with `aria-pressed`, like homepage sport filters. Chip days come from the fixture calendar, so a day can show an empty message.
+- Details bold each completed set, game or period's winning score, colour the current one red with a text legend and labelled column, and mark the server with a dot plus screen-reader text. Winners also get a visible Winner tag.
+- Upcoming and Past have date chips that filter in place with `aria-pressed`, like homepage sport filters. One shared event calendar supplies the chip days for every sport, so a day can show an empty message (12 Oct has no matches yet).
+- One shared page renders every sport: `SportPage`, `SportSection`, `SportMatchCard`, `SportMatchDialog` and `SportPage.css` in `frontend/src/features/sports/`. Each sport has one fixture module that exports `scoring`, `liveMatches`, `upcomingMatches` and `pastMatches`; `sportFixtures.js` maps sport ids to modules. `App.jsx` registers each sport route with `key={sport.id}`, so chips and the dialog reset between sports.
+- Two scoring models share one score table. Set sports (badminton, lawn tennis, table tennis, volleyball) bold the set or game winner. Period sports (football, basketball) bold the higher score of each completed half, quarter or overtime; a tied period has no bold score. Legends read `Bold = <unit> winner` / `Red = current <unit>` or `Bold = won the period` / `Red = current period`.
+- The header score is games or sets won for set sports and goals or points for period sports; scheduled matches show `VS`. Live state lines are precomputed, for example `Set 3 · 4–3 · 30–15`, `Game 4 · 7–5`, `62′ · Second half` and `Q3 · 04:12`.
+- The serving dot marks a player (badminton, tennis, table tennis) or a team label (volleyball). Football and basketball show no serving dot. Live tennis adds a red `Pts` column for the current game; a 7–6 set shows the loser's tiebreak points as a small number.
+- Team sports show only the team label in the score table and list a short `Lineups` block below it. Football lists `Goals` and basketball lists `Top scorers` per side.
+- Page titles and card meta use the `sports.js` label (lawn tennis shows `Tennis`). The icon colour comes from `sports.js`; textures come from `/assets/<sport>-background.webp` and its `-640` phone variant. Total columns use short labels (`Games`, `Sets`, `Goals` or `T`) with a full accessible name.
+- Fixture baselines: BWF best of 3 games to 21; ITF best of 3 advantage sets with a 7-point tiebreak at 6–6; ITTF best of 5 games to 11; FIVB best of 5 sets to 25 (fifth set to 15); IFAB two halves; FIBA four quarters with overtime when tied. Completed football and basketball fixtures are never draws because knockout tie resolution is open.
 
 ## Homepage decisions — 8 October 2026
 
 - The React + Vite JavaScript homepage is implemented. Backend, database, authentication and live delivery remain planned. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
 - Phone users are the priority; tablets, desktops and larger screens remain supported. Preserve the full-width rectangular header, heavy Helvetica/Arial wordmark, icon-only phone menu, six-athlete diagonal gallery and original blue hero dot matrix. Reuse the exact visual language in [design.md](design.md).
-- Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. Sport and tournament detail UI remains unbuilt.
+- Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. Tournament detail UI remains unbuilt. Sport pages follow the sport page decisions above.
 - Keep native horizontal match and tournament rails. Partial cards become smaller and less opaque until they enter the spotlight. Do not add pause controls, View All or scrolling arrows.
 - Preserve the approved match texture/color and white-detail shell, and the tournament venue-image/white-detail shell. Competitors, scores, clocks, columns, values, tournament identities and dates are temporary fixtures. Feature teams decide actual fields without redesigning the shell. Do not add public fixture explanations.
 - Keep approved artwork, originals, responsive variants and favicon local and portable. Record sources and licenses in [asset-sources.md](asset-sources.md).
@@ -124,8 +131,8 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Is an English-only first release sufficient?
 - Do spectators need search/filter by sport, branch, status, venue, or date?
 - Should live status include a displayed score freshness timestamp and correction reason?
-- **Open** — ended live badminton match: the page labels it `Ended · <name> won` and `Provisional result` and keeps it in Live. Decision owner: user/product owner. Affects: badminton page, future live feed. Accept when the final label and the moment it moves to Past are confirmed.
-- **Open** — match detail URL: the badminton detail dialog has no URL, so Back leaves the page and details cannot be shared. Decision owner: user/product owner. Affects: badminton page, PRD match routes. Accept when a route or dialog-only rule is confirmed.
+- **Open** — ended live match: the sport pages label it `Ended · <name> won` and `Provisional result` and keep it in Live. Decision owner: user/product owner. Affects: all six sport pages, future live feed. Accept when the final label and the moment it moves to Past are confirmed.
+- **Open** — match detail URL: the sport page detail dialog has no URL, so Back leaves the page and details cannot be shared. Decision owner: user/product owner. Affects: all six sport pages, PRD match routes. Accept when a route or dialog-only rule is confirmed. `frontend/tests/sport-edge-cases.spec.js` pins the current Back behaviour.
 
 ### Delivery and operations
 

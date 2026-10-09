@@ -12,7 +12,7 @@
 
 Build a responsive sports website for phone users first. Support tablets, desktops and larger screens. The first event is Thaparlympics, with the six sports listed above. Spectators can follow tournaments, schedules, live matches and results. Managers set up tournaments, teams, rosters and matches. They assign verified operators to score each match. Accepted score actions update the match and its dependent public views.
 
-**Homepage confirmed 8 October 2026:** the React frontend is implemented. It has a full-width header, Home and Tournaments links, and a Sports dropdown. It also has the approved title, athlete gallery, dot animation, live-match filters and horizontal card rows. Header sport links navigate to reserved pages. Homepage sport buttons filter live matches in place. Tournament cards navigate to reserved detail routes.
+**Homepage confirmed 8 October 2026:** the React frontend is implemented. It has a full-width header, Home and Tournaments links, and a Sports dropdown. It also has the approved title, athlete gallery, dot animation, live-match filters and horizontal card rows. Header sport links navigate to sport pages that show display fixtures (added 9 October 2026). Homepage sport buttons filter live matches in place. Tournament cards navigate to reserved detail routes.
 
 Preserve the approved card colors, rounded shape, white details and native horizontal scrolling. Do not add a pause control, scroll arrows or View All. Match names, scores, clocks and columns are temporary display data. Tournament identities and dates are also temporary. Feature teams will replace this data after they agree its contract. Detail pages and backend services are not part of the completed homepage.
 
@@ -91,7 +91,7 @@ Operating rule: one active assignment per match and one primary scoring device p
 ### Public routes (proposed)
 
 - `/` — implemented homepage: hero, live-match sport filters, live cards and tournament cards.
-- `/sports/{sport}` — reserved global sport destinations from the header; UI to be built by sport teams.
+- `/sports/{sport}` — implemented global sport pages from the header: Live, Upcoming and Past matches with display fixtures and a match detail dialog.
 - `/tournaments/{tournament}` — tournament summary, enabled sports, live/upcoming matches, and results.
 - `/tournaments/{tournament}/sports/{sport}` — that tournament sport's matches, schedule, standings, and configured leaders.
 - `/matches/{match}` — detailed live/final score, score progression, player contributions, status, and correction notes.
@@ -114,7 +114,7 @@ Operating rule: one active assignment per match and one primary scoring device p
 - `/operator/matches` — My Matches: only matches with an active assignment.
 - `/operator/matches/{match}/score` — sport-specific scoring console with connection/sync state.
 
-The homepage and reserved global sport/tournament routes are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
+The homepage, global sport pages and reserved tournament routes are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
 
 ### Main journeys
 
