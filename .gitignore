@@ -1,0 +1,50 @@
+# Installed dependencies and generated build/test output (at any depth)
+node_modules/
+dist/
+test-results/
+playwright-report/
+blob-report/
+coverage/
+.vite/
+.cache/
+.eslintcache
+
+# Local agent and browser working folders (at any depth)
+.playwright-cli/
+.archify/
+.planning/
+.codex/
+.agents/
+
+# Reserved root folders for local output; never store app source here
+/output/
+/artifacts/
+/reports/
+/screenshots/
+/traces/
+/recordings/
+/logs/
+/scratch/
+/tmp/
+/temp/
+
+# Environment secrets, logs and temporary editor files
+.env
+.env.*
+!.env.example
+*.local
+*.log
+*.log.*
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Personal editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+desktop.ini
