@@ -2,7 +2,7 @@
 
 **Status:** Detailed implementation backlog; sport formats and selected operating policies remain open inputs.  
 **Stack:** React/Vite + JavaScript; Node/Express + Socket.IO; hosted Supabase Postgres + Supabase Auth (invite-only); migrations in `supabase/migrations/` applied by GitHub Actions; Redis Socket.IO adapter for multi-instance mode. No Postgres runs on any team device.  
-**Expected audience:** 50–100 actual viewers. **Capacity demonstration:** 3,000 simulated clients only, pending a measured load test.
+**Expected audience:** approximately 1,000 actual concurrent viewers. **Capacity demonstration:** 3,000 simulated clients only, pending a measured load test.
 
 ## 0. Product decisions agents must preserve
 
@@ -25,7 +25,7 @@
 ## Agent workflow and implementation conventions
 
 1. Before coding, read `prd.md`, `architecture.md`, `rules.md`, `design.md`, and `memory.md`.
-2. Start with the earliest incomplete phase. Record assumptions/questions in `memory.md`; do not resolve an open sports rule by guessing.
+2. Choose an agreed, scoped incomplete task with clear ownership and dependencies. Independent frontend work can proceed alongside other phases; preserve completed homepage work. Record assumptions/questions in `memory.md`; do not resolve an open sports rule by guessing.
 3. Keep changes cohesive and reviewable. Every schema change is a migration in `supabase/migrations/`; every new scoring format gets domain tests before UI work depends on it.
 4. Use runtime validation for every API/socket payload. Use JSDoc and linting; never add TypeScript unless the product decision changes.
 5. Enforce permissions server-side. Anonymous spectator APIs are read-only and return only approved public fields.
@@ -33,6 +33,35 @@
 7. Test every protected path per role: Super Admin, Tournament Manager, Match Operator (assigned, unassigned, not yet valid, expired, revoked, locked match), and anonymous Spectator.
 8. Maintain clear states: `LIVE` (provisional), `PENDING_APPROVAL`, `APPROVED/FINAL`, `REJECTED/CORRECTION`. Rejected or pending results must not be reported as final.
 9. Update affected docs and this task list when requirements change; don't silently fork behavior between PRD, architecture, and rules.
+10. Follow [AGENTS.md](../AGENTS.md) for tools, ownership, decision gates, final documentation and publication evidence. Use `handoff.md` for integration and `local-development.md` for setup. Keep one current task entry; do not append an execution diary.
+
+## Current frontend work — publication pending
+
+The frontend and doc changes are uncommitted in the original checkout on `main`. Its base, `c40d3aa`, matches `origin/main` fetched on 9 October 2026. No remote commit/PR is recorded for these changes. Local verification does not establish a published or merged feature. Requirements and unchecked tasks below remain planned.
+
+| Area | Final implementation | Current status |
+| --- | --- | --- |
+| Homepage | React/Vite JavaScript, approved responsive UI, local artwork, filters, native card rails and reserved detail routes. Use [handoff.md](handoff.md) for integration and [design.md](design.md) for visual contracts. Card content remains temporary. | Locally verified, unpublished. |
+| Frontend CI | Same install, lint, build and Chromium suite on Ubuntu, Windows and macOS; each OS reports independently. | Configuration checked locally; remote execution and publication pending. |
+| Shared docs | Existing canonical docs describe final contracts, durable decisions and current task state. Follow [AGENTS.md](../AGENTS.md) for documentation and completion rules. | Document checks passed; unpublished. |
+
+### Latest verification
+
+Homepage, 9 October 2026: the locked install, `npm run lint`, `npm run build` and `CI=true PLAYWRIGHT_CHANNEL=chrome npm test` passed from the original checkout under Node 25.2.1 on Windows. All 8 tests passed. Coverage includes 18 widths from 320 to 3840px, 44px header targets, local assets, phone sources at pixel ratios 1/2/3, filters, keyboard menus, repeated/direct/refresh/back navigation, native rails/final-card access, reduced motion, canvas lifecycle and emulated touch. The test preview rejects an occupied port. Phone, desktop and large-screen captures were reviewed.
+
+Production preview, 9 October 2026: Chrome decoded all 35 local WebPs and verified the favicon and filter isolation. No console/page errors, failed asset requests or external requests occurred.
+
+CI configuration, 9 October 2026: YAML/matrix assertions and `CI=true npm test -- --list` passed; all 8 tests are discovered. GitHub runner execution is pending.
+
+Publication checks, 9 October 2026: source/asset references, local doc links/anchors, contract checks and whitespace checks pass. The staging groups include every intended file once. Generated output, local agent/editor files, logs and environment secrets are ignored; required source, assets, licenses, lockfile, configs and docs remain stageable. No private-key/token patterns or personal paths were found in those candidates. Text uses LF; WebP/ICO files remain binary. The index is empty.
+
+Limits: installed desktop Chrome only; touch was emulated. No physical-device, Safari/Firefox, screen-reader, LCP, capacity, backend or production-host verification is recorded. Test commands are in [local-development.md](local-development.md). Required unfinished checks stay visible until resolved.
+
+### Current task claims
+
+Use one row per active task: owner, scope/files, dependencies, state and branch/PR. Replace it with a concise final result and checks when finished. Record the confirmed remote commit/PR before marking the feature shared and complete. Remove finished edit claims; do not retain per-agent execution logs.
+
+No active edit claims.
 
 ## Phase 0 — Resolve implementation-blocking inputs
 
@@ -72,12 +101,12 @@
 ## Phase 1 — Repository foundation and shared contracts
 
 - [ ] Inspect repository structure and existing README before adding packages; preserve existing files and user changes.
-- [ ] Add `frontend/` React + Vite JavaScript/JSX app and `backend/` Node.js + Express JavaScript service using one documented package-manager/workspace convention.
+- [ ] Preserve the implemented React + Vite JavaScript frontend and root npm workspace. Add the planned Node.js + Express backend only for an agreed backend task; do not recreate the frontend.
 - [ ] Initialize the Supabase CLI project (`supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`). Do not require `supabase start`, Docker, or a local Postgres for development.
 - [ ] Create staging and production Supabase projects. Store `SUPABASE_ACCESS_TOKEN` and each environment's project ID and DB password as GitHub Actions secrets.
 - [ ] Add a GitHub Actions CI workflow: start a throwaway Postgres on the runner, apply all migrations, run lint/tests, then discard it.
 - [ ] Add a release workflow: `supabase db push` to staging on merge to `develop`, and to production on merge to `main`. No one runs `db push` from a laptop.
-- [ ] Add scripts for install, dev, lint, test, build, and new migration; document exact prerequisites and commands in README (no local database prerequisite).
+- [ ] Preserve existing frontend scripts. Add needed backend/migration scripts when those features exist; update exact prerequisites and commands in `local-development.md`. Team devices require no local database.
 - [ ] Add `.env.example` containing variable names only (session-pooler connection string, Supabase URL, publishable and secret key; SMTP credentials live in Supabase Auth settings, not the app); validate required variables at server startup and never expose server secrets to Vite/browser code.
 - [ ] Add formatting/lint conventions, JSDoc expectations, test runner, and runtime schema validation library.
 - [ ] Add API contract conventions: JSON errors (401/403/409 shapes), request correlation ID, pagination/filter syntax, date/time handling, and public/private DTO separation.
@@ -120,7 +149,7 @@
 - [ ] Load the `admin_accounts` row on every protected request; reject disabled or missing accounts with 403. Do not trust role or assignment data from token claims.
 - [ ] Implement role middleware for non-scoring routes: manager-or-above for tournaments, sports, teams, matches, assignments, and reviews; Super Admin only for manager/Super Admin account administration.
 - [ ] Implement invite flows: Super Admin invites managers/Super Admins; managers invite operators only (server rejects any other role). Use `auth.admin.inviteUserByEmail` server-side; audit every account change.
-- [ ] Implement the scoring authorization chain for every scoring HTTP route and every socket command: token → active account → `ACTIVE` assignment for match and user → server-time window → `SCORE` → match accepting scores (`LIVE`, or `REJECTED` with `correction_route = 'OPERATOR'`) → scorer lease. Return 401/403/409 as defined in `architecture.md`.
+- [ ] Implement the scoring chain from `architecture.md`: token → active account → active assignment → server-time window → SCORE → role-aware match state → device lease. LIVE and REJECTED/OPERATOR use the valid assigned scorer. REJECTED/MANAGER requires a self-assigned Tournament Manager or Super Admin; operators remain locked out. Retain the documented 401/403/409 responses, reasons and audit.
 - [ ] Never rely only on hidden UI buttons or room membership.
 - [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason. Audit assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
 - [ ] Add authorization tests (HTTP and sockets):
@@ -129,6 +158,8 @@
   - operator cannot reach tournament, team, match, user, or review routes;
   - manager cannot invite managers or Super Admins; manager can manage every tournament and sport;
   - disabled account denied.
+  - rejected OPERATOR route permits the valid assigned scorer; rejected MANAGER route denies operators and permits only a valid self-assigned manager/Super Admin; missing, expired or revoked assignment and missing lease still fail;
+  - manager takeover revokes the old assignment and creates the self-assignment in one audited transaction; resubmission and independent approval remain required.
 - [ ] Redact tokens, credentials, and unnecessary player personal data from logs.
 
 **Exit criteria:** permission tests cover every role on HTTP and sockets; revocation takes effect on the next request; no sport-scoped admin logic exists; every privileged mutation produces an auditable record.
@@ -268,7 +299,7 @@
 - [ ] Run ramp tests (e.g. 100 → 500 → 1,000 → 3,000), stable soak, all-viewers-one-match hotspot, distribution across tournament sports, and reconnect burst.
 - [ ] During load, issue representative score events and result approvals; verify delivery ordering, no loss/duplication, and no unauthorized mutation path.
 - [ ] Record connect success, p50/p95/p99 update latency, errors, sequence gaps, CPU/memory/event-loop lag, DB pool/slow queries, Redis throughput, outbox lag, and egress.
-- [ ] Record build SHA, topology, region, instance sizes, test profile, duration, findings, and limitations in `doc/load-test-report.md` after the run.
+- [ ] Record build SHA, topology, region, instance sizes, workload, duration, results, failures and limits in the capacity section of this file after the run. Keep raw measurements outside shared source. Do not add a separate report by default.
 - [ ] Do not claim 3,000-viewer capacity until results and thresholds are measured and reported; keep synthetic clients separate from actual audience figures.
 
 ## Cross-feature acceptance checklist
@@ -285,7 +316,7 @@
 - [ ] All schema changes are migrations deployed by CI; RLS is enabled on every public table.
 - [ ] UI covers loading, empty, error, pending review, rejected, approved, stale, assignment, and responsive states.
 - [ ] Tests cover scoring boundaries, undo, approvals, bracket progression, reconnects, idempotent retries, and per-role authorization.
-- [ ] Documentation and `memory.md` match implemented behavior.
+- [ ] Existing docs describe final accepted contracts and concise verification/publication evidence. Applicable checks pass, and the remote commit/PR is confirmed before a feature is marked shared and complete. No abandoned attempts, duplicate summaries or local scratch references are included.
 
 ## Deferred scope
 
@@ -299,4 +330,15 @@
 
 ## Current blockers
 
-The shared foundation, CI/migration pipeline, roles and assignment authorization, tournament configuration UI, teams/rosters, result-approval workflow, and bracket scaffolding can proceed. Do not finish a sport's production scoring engine, standings policy, or custom-match aggregate behavior until `rules.md` records the event-specific format and data policy. Choose the SMTP provider before operator invites can be tested end to end.
+The homepage, fixed bracket shape, role model and common assignment gate are decided. Future foundation work can proceed when its scoped contracts and acceptance cases are agreed. Do not recreate the completed frontend.
+
+| Dependent work | Missing decision | State and decision owner |
+| --- | --- | --- |
+| Production sport engines and standings | Event format, scoring values, ties, standings policy | Blocked; user/authorized event organizer, recorded in rules/memory. |
+| Custom-match statistics and public visibility | Whether custom results contribute, and where they appear | Blocked; user/authorized product owner. |
+| Final roster validation and public fields | Eligibility, limits, squads and approved display data | Blocked; user/authorized event organizer. |
+| Final shared API/lifecycle implementation | Exact payload/error schemas, machine states and transitions | Blocked until scoped contract review; implementing teams agree with the product owner. |
+| End-to-end invitations/recovery | SMTP provider/domain and recovery policy | Blocked; authorized account owner. |
+| Production release and capacity claims | Host, plan, credentials/ownership and measured pass thresholds | Blocked; authorized operations/product owner. |
+
+These blocks apply to the dependent behavior, not every independent task. Record decisions in memory and update the existing authoritative contract before implementation. Record failed/untested cases honestly. Keep the handoff and task evidence current after agreed tests pass.

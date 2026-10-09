@@ -1,7 +1,9 @@
 # Sport Rules and Scoring Model
 
 **Purpose:** Record authoritative references and define how event-specific playing conditions feed scoring software.  
-**Status:** Governing sources researched; Thaparlympics formats and several playing conditions remain undecided.
+**Status:** The bracket is fixed. Match formats and playing conditions remain open. Governing sources were researched; re-check them before scoring work.
+
+**Homepage boundary (8 October 2026):** the implemented match cards use temporary display fixtures, including score breakdowns and clocks. Those values/columns are not approved playing conditions or a scoring engine. Sport teams must confirm this document's open conditions before implementing production score calculations; UI card shape/color does not decide domain rules.
 
 ## 1. Rule governance
 
@@ -27,7 +29,7 @@ These sources are baselines, not a commitment to use professional-length match f
 
 Each tournament/sport should configure, as applicable:
 
-- competition format (for example knockout, league/round robin, group plus playoffs, or event-specific stages);
+- exactly two semifinal matches and one final per tournament sport; only approved semifinal winners advance;
 - match/round duration and start/end conditions;
 - team size, roster size, active squad and substitutes;
 - draw/tie rules, extra time, tiebreaks, walkovers, forfeits, abandonment, and result-awarding authority;
@@ -35,7 +37,7 @@ Each tournament/sport should configure, as applicable:
 - configurable score/point values, correction permissions, and required manager approval before result finalization;
 - any local rule variation, its authority, and effective dates.
 
-No competition format, global standings points, or cross-sport champion formula has yet been chosen. The initial site will show configured sport standings only.
+The bracket is decided. Do not add league/group stages or extra rounds without an approved scope change. Sport match formats, standings columns/points and tie-break rules remain open. Custom matches stay outside the bracket and never advance a team. Their public visibility and effect on statistics or standings must be decided before implementation. Combined cross-sport standings remain deferred.
 
 ## 4. Sport score models
 
@@ -49,7 +51,7 @@ Record period, game clock/time if kept, scoring side, scoring player, scoring va
 
 ### Football
 
-Record period and match time where available, goal and scorer/assist if known, cards, substitutions, penalty kicks, and correction reference. Derive the score, event feed, player contributions, and result. Configure player count, half duration, stoppage-time display, substitute limits/return substitutions if used, tied group-match handling, extra time and shootout format for knockout matches, and any local competition conditions.
+Record period and match time where available, goal and scorer/assist if known, cards, substitutions, penalty kicks, and correction reference. Derive the score, event feed, player contributions, and result. Configure player count, half duration, stoppage-time display, substitute limits/return substitutions if used, extra time and shootout format for knockout matches, and tie handling for custom matches. Confirm each local condition before implementation.
 
 ### Volleyball
 
@@ -80,7 +82,8 @@ Combined branch standings are explicitly deferred. Before implementation of such
 - **Corrections after submission or approval:** create a linked reversal/replacement or correction record with actor, server timestamp, **reason**, and affected action. Public match pages show that a correction occurred; detailed change history is visible to Tournament Managers and Super Admins only.
 - Derived scorecards, results, and standings are recalculated from the corrected action set.
 - **Result approval:** the operator submits the result (`LIVE → PENDING_APPROVAL`); a Tournament Manager or Super Admin approves (`APPROVED/FINAL`) or rejects (`REJECTED/CORRECTION`). The reviewer must differ from the submitter, whatever their role. A Super Admin may override this only with a recorded reason; the override is audited.
-- **Rejection:** requires a reason and a correction route. `OPERATOR` reopens the assigned operator's scoring access for that match until resubmission; `MANAGER` keeps the operator locked out and a manager corrects.
+- **Rejection:** requires a reason and a correction route. `OPERATOR` reopens access for the current scorer only if the assignment remains active and within its window. `MANAGER` locks out Match Operators. A Tournament Manager or Super Admin must revoke the old assignment and assign themselves in one audited transaction before correction.
+- Both correction routes require the common token, active-account, assignment, server-time-window, `SCORE` and device-lease checks. A `REJECTED/MANAGER` match accepts scores only from the self-assigned manager or Super Admin. See the exact acceptance rule in `architecture.md`.
 - Approved results are locked. Post-approval corrections create a new audited result version and require another approval.
 
 ## 7. Scoring event integrity requirements
@@ -100,6 +103,8 @@ These implementation rules apply to all six sports; they do not decide sport-spe
 The 3,000-client capacity demonstration is a delivery/load target only. It does not modify sport laws, result rules, or final score authority.
 
 ## 8. Rules decisions required before scoring implementation
+
+Record each confirmed condition here and record its decision date in `memory.md`. Add its boundary, invalid-input, undo and correction cases to `tasks.md` before coding. Block work that depends on an unknown rule. A sample homepage scorecard is not evidence of an approved rule. After implementation, record actual test results and untested limits; do not mark an untested engine verified.
 
 1. ~~Result approval detail~~ — **Resolved 6 October 2026:** the approver must differ from the submitter, with an audited Super Admin override that requires a reason (see section 6). Bracket structure is fixed to two semifinals and one final; a manager assigns semifinal teams and only approved winners advance.
 2. Badminton singles/doubles and match format; basketball 5v5/3x3, periods/clock/overtime; football team size/duration/substitutions/tie resolution.

@@ -1,34 +1,37 @@
 # Product Requirements: Thaparlympics Score Website
 
-**Status:** Discovery baseline  
+**Status:** Homepage frontend implemented; full scoring application remains planned. See `handoff.md` for the current implementation and route boundaries.
 **Product name:** Thaparlympics (working event name; product name undecided)  
 **Initial users:** Public spectators, Super Admins, Tournament Managers, and Match Operators  
 **Initial sports:** Football, volleyball, basketball, table tennis, lawn tennis, and badminton  
-**Expected live audience:** approximately 50–100 viewers  
-**Capacity demonstration target:** 3,000 simulated concurrent viewers, subject to a real load test
+**Expected live audience:** approximately 1,000 concurrent viewers
+
+**Capacity demonstration target:** 3,000 simulated concurrent viewers; not yet tested
 
 ## 1. Product summary
 
-Build a responsive website for following Thaparlympics across multiple sports and simultaneous matches. Spectators can browse the event, each sport, match schedules, current scores, results, standings, and player contributions within a match. Super Admins and Tournament Managers set up tournaments, sports, teams, rosters, and matches, then assign verified Match Operators to score specific matches. A score update is the source for its match result and sport standings, so dependent public views update together.
+Build a responsive sports website for phone users first. Support tablets, desktops and larger screens. The first event is Thaparlympics, with the six sports listed above. Spectators can follow tournaments, schedules, live matches and results. Managers set up tournaments, teams, rosters and matches. They assign verified operators to score each match. Accepted score actions update the match and its dependent public views.
 
-The primary product object is a tournament, not a yearly event edition. The home page lists tournaments; each tournament enables its own chosen sports and configuration. Annual editions/archive can be added later without changing this hierarchy.
+**Homepage confirmed 8 October 2026:** the React frontend is implemented. It has a full-width header, Home and Tournaments links, and a Sports dropdown. It also has the approved title, athlete gallery, dot animation, live-match filters and horizontal card rows. Header sport links navigate to reserved pages. Homepage sport buttons filter live matches in place. Tournament cards navigate to reserved detail routes.
+
+Preserve the approved card colors, rounded shape, white details and native horizontal scrolling. Do not add a pause control, scroll arrows or View All. Match names, scores, clocks and columns are temporary display data. Tournament identities and dates are also temporary. Feature teams will replace this data after they agree its contract. Detail pages and backend services are not part of the completed homepage.
 
 ## 2. Goals
 
 - Give spectators one public tournament index, then tournament pages with only that tournament's configured sports and dedicated pages for each sport.
 - Show multiple scheduled, live, and completed matches on sport pages.
-- Provide match detail pages with live score, match state, relevant play-by-play, and player contributions.
+- Provide match detail pages.
 - Separate administration from ground-level scoring: Super Admins manage accounts and everything else; Tournament Managers manage tournaments across all sports; Match Operators score only the matches assigned to them, temporarily.
 - Let managers create teams identified by branch and year, add players, and assign players between active and substitute roster states. Management access is not restricted by sport.
 - Let a manager configure the sports and sport-specific rules/settings when creating a tournament.
-- Support a manager-authored knockout bracket, initially including semifinals and a final: managers assign teams to semifinal sides, semifinal outcomes determine finalist slots, and the final determines the champion.
+- Support exactly two semifinals and one final per tournament sport. Managers assign semifinal teams. Only approved semifinal winners advance. The final determines the champion.
 - Allow managers to create custom matches outside the bracket; their effect on standings/statistics is configurable and still to be decided.
 - Require review/approval by someone other than the submitter before a match result is marked final. Live scoring remains visible as provisional; approval/rejection and corrections are audited.
 - Record detailed sport-specific scoring and recalculate match results and sport standings from scoring data.
 - Keep the scoring workflow usable on a laptop, with a responsive mobile interface as a fallback.
 - Queue match scoring actions while offline and synchronize them in order when connectivity returns, making accepted scores visible to spectators.
 - Show post-submission score corrections to spectators and preserve a trace of all changes.
-- Keep public pages efficient for 50–100 expected viewers while designing and load-testing the live delivery path for 3,000 simulated concurrent viewers.
+- Design public pages for approximately 1,000 concurrent viewers. Test the future live delivery path with 3,000 simulated clients before making a capacity claim.
 
 ## 3. Non-goals for the first release
 
@@ -37,7 +40,8 @@ The primary product object is a tournament, not a yearly event edition. The home
 - The combined overall branch championship table; sport-level standings are the initial standings scope.
 - A public archive or editing of past editions.
 - Registration, payments, ticketing, livestreaming, chat, or social feeds.
-- Fixed tournament formats, match durations, tie-break procedures, or overall event points before organizers define them.
+- League/group stages or extra bracket rounds. The initial bracket is fixed to two semifinals and one final.
+- Unconfirmed match formats, durations, tie-break procedures or overall event points. Organizers must decide these before implementation.
 - Sports beyond the six initial choices, though the data model should allow later additions.
 - Tournament-scoped managers or sport-scoped admin roles; operator permissions beyond `SCORE`.
 
@@ -86,7 +90,8 @@ Operating rule: one active assignment per match and one primary scoring device p
 
 ### Public routes (proposed)
 
-- `/` — tournament index and featured live matches.
+- `/` — implemented homepage: hero, live-match sport filters, live cards and tournament cards.
+- `/sports/{sport}` — reserved global sport destinations from the header; UI to be built by sport teams.
 - `/tournaments/{tournament}` — tournament summary, enabled sports, live/upcoming matches, and results.
 - `/tournaments/{tournament}/sports/{sport}` — that tournament sport's matches, schedule, standings, and configured leaders.
 - `/matches/{match}` — detailed live/final score, score progression, player contributions, status, and correction notes.
@@ -109,7 +114,7 @@ Operating rule: one active assignment per match and one primary scoring device p
 - `/operator/matches` — My Matches: only matches with an active assignment.
 - `/operator/matches/{match}/score` — sport-specific scoring console with connection/sync state.
 
-Routes are suggestions for information architecture, not a frozen URL contract. Route visibility is a convenience; the server enforces every permission.
+The homepage and reserved global sport/tournament routes are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
 
 ### Main journeys
 
@@ -173,7 +178,9 @@ Routes are suggestions for information architecture, not a frozen URL contract. 
 - Surface validation errors before accepting invalid state transitions.
 - Result workflow: `LIVE → PENDING_APPROVAL → APPROVED/FINAL`, or `PENDING_APPROVAL → REJECTED/CORRECTION`.
 - The reviewer must differ from the submitter. A Super Admin can override this with a recorded reason (audited).
-- On rejection, the reviewer records a reason and chooses the correction route: reopen the assigned operator's access (`OPERATOR`) or have a manager correct (`MANAGER`).
+- On rejection, the reviewer records a reason and chooses `OPERATOR` or `MANAGER` correction.
+- `OPERATOR` reopens scoring for the assigned scorer only while the assignment remains active and within its time window.
+- `MANAGER` keeps Match Operators locked out. A Tournament Manager or Super Admin revokes the old assignment and assigns themselves in one audited transaction before correction. The same account, assignment, time-window, `SCORE` and device-lease checks still apply.
 - Approved results are locked. Changing one creates a new audited result version and requires another approval.
 - Result approval gates finalization, bracket advancement, and final-result-dependent standings. Combined cross-sport championship standings are not part of initial release.
 
@@ -194,7 +201,8 @@ Routes are suggestions for information architecture, not a frozen URL contract. 
 - No public self-registration; public sign-up is disabled in Supabase Auth.
 - Super Admins invite managers and Super Admins. Managers and Super Admins invite Match Operators by email through Supabase Auth (backend-only admin API, custom SMTP).
 - Spectator endpoints and data are read-only and need no account.
-- Every protected request verifies the token and loads the account and role from the database. Every scoring request also checks: active assignment for this match → within the time window (server time) → `SCORE` permission → match accepting scores → scorer lease.
+- Every protected request verifies the token and reads the active account and role from the database. Every scoring request also checks the match assignment, server-time window, `SCORE` permission, match state and device lease.
+- A valid assigned scorer can score a `LIVE` match or a `REJECTED` match with `OPERATOR` correction. A `REJECTED` match with `MANAGER` correction accepts scores only from a self-assigned Tournament Manager or Super Admin. Other states remain locked. See the acceptance rule in `architecture.md`.
 - An operator attempting to score an unassigned match receives 403 Forbidden. Never rely only on hiding UI buttons.
 - Revocation and expiry take effect on the next request; the server does not rely on token claims for assignment state.
 - There are no sport-scoped admin roles. Audit every privileged mutation, including assignments, revocations, reassignments, self-assignments, reviews, and overrides.
@@ -209,7 +217,7 @@ Routes are suggestions for information architecture, not a frozen URL contract. 
 - Public pages should load without login and should not expose private account, assignment, or audit data.
 - Use accessible labels, keyboard-operable scoring controls, visible contrast, and clear status text.
 - Keep scoring flows low-friction under event conditions, where rapid repeated input and interrupted networks are expected.
-- Capacity target and evidence must be reported separately: expected actual audience is 50–100; 3,000 is only a synthetic load-test target. Do not claim verified 3,000-viewer capacity until a staging test report records the tested build, topology, workload, and results.
+- Keep audience estimates separate from test evidence. The expected audience is approximately 1,000 concurrent viewers. The 3,000-client target is a synthetic test, not measured capacity. Record the tested build, topology, workload and results in `tasks.md` before claiming capacity.
 - Live score delivery should be room-scoped by match/sport, recover from reconnect by fetching an authoritative snapshot, and not issue one database query per connected spectator for every update.
 - No team device needs to keep a database running; all environments are hosted and schema changes deploy from CI.
 
@@ -230,4 +238,6 @@ Routes are suggestions for information architecture, not a frozen URL contract. 
 
 ## 9. Decisions still open
 
-See `doc/memory.md` for the complete question register. The most consequential open items are exact competition formats/playing conditions, standing points and tie-breaks, roster and match-day squad rules, schedule/venue details, public brand assets, the Supabase plan for the event period, the SMTP provider, and the backend host.
+See `memory.md` for the complete question register. The bracket is decided: exactly two semifinals and one final. Match formats, scoring values, standings and custom-match statistics remain open. Other open items include roster limits, squad rules, schedule, venue, brand assets, the Supabase plan, SMTP provider and backend host.
+
+Before work that depends on an open item, record the user's decision in `memory.md`. Update the affected requirement, rule or architecture contract and task acceptance checks. Do not infer a rule from the homepage's sample data. Independent work can continue when it does not depend on that decision. Record a feature as verified only after its required checks pass; name untested cases and limits in `tasks.md`.

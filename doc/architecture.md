@@ -1,10 +1,22 @@
 # Architecture
 
+## Current implementation — 9 October 2026
+
+The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage and reserved future sport/tournament destinations. No Express server, Supabase project/connection, authentication, scoring engine, Socket.IO or Redis has been added. Those parts below describe the target application.
+
+Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` and `features/tournaments/` (sections/cards/display fixtures), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
+
+The homepage owns its selected-sport state and passes filtered display data to presentational match cards. It has no persistence or network score feed. The shared native rail uses IntersectionObserver on stable card slots for partial-card emphasis; the canvas effect has lifecycle cleanup, a capped refresh rate, reduced-motion handling and offscreen/tab-hidden suspension. Build output is static files in `frontend/dist/`. Nested-route deployments require an index.html fallback.
+
+GitHub Actions runs **frontend lint, build and Chromium browser tests** on Ubuntu, Windows and macOS. New frontend specs join the same suite. Extend test commands, jobs and path triggers when new application layers are implemented; follow the verification policy in `AGENTS.md`. Database/migration/deployment workflows below remain future work. Create future feature folders only when they contain actual implementation; do not add empty backend or database scaffolding for this milestone.
+
 ## Overview
 
-Responsive website for tournaments and live sports scores. Public navigation is:
+Responsive website for tournaments and live sports scores. Tournament-specific public navigation is:
 
 `Tournament list → Tournament → Enabled sport → Match → Scorecard`
+
+The implemented homepage additionally has global sport links in its header and in-place sport filters for its live-match row. These are distinct controls; filters do not navigate.
 
 Each tournament can enable any subset of football, volleyball, basketball, table tennis, lawn tennis, and badminton. Each sport has its own configurable match format and scoring rules.
 
@@ -24,14 +36,14 @@ PostgreSQL is the source of truth. Socket.IO sends committed updates to connecte
 
 ## Repository structure
 
-Keep frontend and backend independent. Put shared UI in components and shared business logic in services; sport-specific UI and scoring behavior belongs in that sport's module.
+The following is the **target structure for the full application**, not a list of completed modules. The current frontend structure is recorded above and in the handoff.
+
+Keep frontend and backend independent. Register frontend routes only in `frontend/src/app/App.jsx`. Put page UI in its feature folder and shared UI in `components/`. Put sport-specific UI and scoring behavior in that sport's module. Add folders only when they contain needed implementation. A future route extraction needs an agreed contract and a coordinated task first.
 
 ```text
 frontend/
   src/
-    app/                         # app setup and shared layouts
-    routes/                      # route definitions and navigation
-    pages/                       # tournament, sport, match, admin, and operator pages
+    app/                         # App.jsx: central route registration and app setup
     components/                  # reusable buttons, cards, tables, dialogs, status UI
     features/
       tournaments/               # tournament list, detail, and setup UI
@@ -137,14 +149,28 @@ flowchart TD
   E -- no --> X403
   E -- yes --> F{permission = SCORE?}
   F -- no --> X403
-  F -- yes --> G{"match accepting scores? (LIVE, or REJECTED reopened to operator)"}
+  F -- yes --> G{"match accepts scores for this role? (rule below)"}
   G -- no --> X409[409 scoring locked]
   G -- yes --> H{holds scorer lease for this device?}
   H -- no --> X409
   H -- yes --> I[Validate with sport engine, then save action + snapshot + audit + outbox in one transaction]
 ```
 
-An assignment is effectively valid when `status = 'ACTIVE'`, `valid_from` is null or server now ≥ `valid_from`, `valid_until` is null or server now < `valid_until`, and `permission = 'SCORE'`. The match accepts scores when it is `LIVE`, or `REJECTED` with `correction_route = 'OPERATOR'`. With no `valid_until`, access lasts until the match is locked (submitted or approved) or the assignment is revoked.
+An assignment is valid when its status is `ACTIVE`, its permission is `SCORE`, and server time is within its window. A null bound is open. The lower bound is inclusive; the upper bound is exclusive. With no `valid_until`, the assignment still cannot bypass a locked match or revocation.
+
+Apply this match-state rule after the account, assignment, time-window and permission checks:
+
+```js
+const acceptsScores = match.status === 'LIVE' ||
+  (match.status === 'REJECTED' &&
+    (match.correction_route === 'OPERATOR' ||
+      (match.correction_route === 'MANAGER' &&
+        ['TOURNAMENT_MANAGER', 'SUPER_ADMIN'].includes(account.role))))
+```
+
+This is a planned backend contract, not implemented frontend code. `OPERATOR` correction uses the valid current assignment. `MANAGER` correction accepts only a Tournament Manager or Super Admin who assigned themselves. Match Operators remain locked out, even if an old assignment is still active. The device lease and sport validation remain required in both routes. All other match states reject score commands with 409.
+
+For a manager correction, revoke the previous assignment and create the manager's self-assignment in one audited transaction. Keep one active assignment per match. Record the correction reason and actions, then require resubmission and a new review. Do not let a manager bypass the common scoring authorization chain.
 
 Non-scoring privileged requests (tournament, team, match, assignment, review, account management) check token → active account → required role.
 
@@ -179,7 +205,7 @@ Public routes are read-only and need no account.
 - Custom matches are separate from the bracket and never advance bracket slots.
 - Result states: `LIVE → PENDING_APPROVAL → APPROVED/FINAL`, or `PENDING_APPROVAL → REJECTED/CORRECTION`. Live score updates can be visible before approval, but only approved results are final.
 - The assigned operator submits the result. A Tournament Manager or Super Admin reviews it. The reviewer must differ from the submitter, whatever their role. A Super Admin can override this only with a recorded reason; the override is audited.
-- On rejection the reviewer gives a reason and chooses a correction route: `OPERATOR` reopens that operator's scoring access for the match until they resubmit; `MANAGER` keeps the operator locked out and a manager corrects.
+- On rejection, the reviewer records a reason and chooses `OPERATOR` or `MANAGER` correction. `OPERATOR` reopens the current scorer's valid assignment until resubmission. `MANAGER` keeps Match Operators locked out and requires a manager or Super Admin self-assignment. Apply the role-aware match-state rule above.
 - Approved results are locked. A correction to an approved result creates a new audited result version and requires another approval.
 - An approval records the reviewer, time, result version, and decision.
 
@@ -187,7 +213,9 @@ Public routes are read-only and need no account.
 
 - `tournaments`: name, dates, status, and event details.
 - `tournament_sports`: enabled sport, format/rules configuration, configuration version, and standings options.
-- `teams` and `players`: teams and rosters scoped to a tournament sport.
+- `teams`: teams scoped to a tournament sport.
+- `roster_players`: player entries scoped to a sport team; display name, branch/year, captain marker, optional jersey number and active state.
+- `match_roster`: selected `roster_players` for a match, with active/substitute state.
 - `matches`: participants, schedule, sport configuration snapshot, status, result, and bracket/custom type.
 - `bracket_slots`: the two semifinal assignments and final slots linked to approved semifinal winners.
 - `score_actions`: ordered, auditable sport-specific scoring events, including linked reversal actions for undo/correction.
@@ -206,7 +234,9 @@ Public routes are read-only and need no account.
 - `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
 - `outbox_events`: committed changes waiting to be broadcast.
 
-Use database constraints for relationships and uniqueness. Save the sport configuration version with each match so later tournament setting changes do not alter a match already in progress.
+These are planned record names, not existing database tables. Use `roster_players` as the canonical player table name; do not create a second `players` table for the same records. Use database constraints for relationships and uniqueness. Save the sport configuration version with each match so later settings do not alter a live match.
+
+Before backend work, agree the task's routes, payloads, statuses, authorization and error cases in these shared docs. Record unresolved decisions in `memory.md` and block the dependent task in `tasks.md`. The selected stack is a plan; it does not prove that the service, schema or capacity exists.
 
 ## Database hosting and migrations
 

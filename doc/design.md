@@ -1,172 +1,248 @@
-# Design Direction: Thaparlympics Score Website
+# Thaparlympics Design Language
 
-**Status:** Direction established; detailed visual assets and final screens await approval.  
-**Experience:** Responsive website, not a native app.  
-**Tone:** Official collegiate event + live sports scoreboard.  
-**Scale presentation:** Actual-use estimate is 50–100 viewers; 3,000 is a synthetic capacity-test target, not a live-user count.
+Updated 9 October 2026. This guide records the approved, implemented homepage and provides the shared visual language for future pages. Values below come from the current React components, CSS and local artwork. Product scope and future workflows belong in [prd.md](prd.md), implementation contracts in [handoff.md](handoff.md), and sport rules in [rules.md](rules.md).
 
-## 1. Design principles
+## 1. Visual character
 
-- Put live match state and scores first; keep event administration easy to find but separate from public navigation.
-- Show each signed-in role only what it can do: operators see their assigned matches, not tournament administration.
-- Use clear sport-specific hierarchy while retaining a shared event identity.
-- Make numbers readable at a glance on a laptop from a distance and on a phone outdoors.
-- Give immediate, unambiguous feedback for score input, connectivity, queued updates, and corrections.
-- Use familiar sports cues and avoid copying CricHeroes or Playinga branding, layouts, or assets.
-- Follow accessible contrast, text sizing, focus states, and keyboard interaction.
+A light, mobile-first sports interface: pale blue page, white surfaces, dark ink text, strong blue selection, bold headings and scores, colorful sport artwork, and generous space between sections. Texture belongs in sport imagery; navigation and information surfaces stay clean. Keep decoration behind content and make touch, keyboard and horizontal scrolling comfortable.
 
-## 2. Visual direction
+The homepage establishes the palette, typography, component shapes and interactions. Future features should reuse these choices; this document does not prescribe the layout or functionality of unbuilt pages. The current wordmark is heavy text reading Thaparlympics. These are the site's approved colors, not a claim of official institute branding.
 
-- Blend the credibility of an official university competition with the density and immediacy of a scoreboard.
-- Treat Thaparlympics as the working event label. The product/site name remains undecided.
-- Use the official Thapar logo site-wide (header/navigation, tournament, sport, match, and admin surfaces). Use an institute-controlled, approved asset; preserve aspect ratio and clear space. The exact file/source is still to be added to the repository.
-- Do not claim any colors are official without a brand source. Start with a configurable dark/navy scoreboard base and a restrained bright accent, then reconcile with supplied brand guidance.
-- Use sport-specific icons/colors as secondary accents; scores and status labels must remain understandable without color alone.
-- Use a clean sans-serif type system, tabular numerals for scores/time, and strong heading contrast.
+## 2. Color roles
 
-## 3. Public page layouts
+Use the existing CSS variables for shared brand colors. Primary means the interaction/accent color; secondary means the supporting dark ink color. Muted text and sport colors have separate roles.
 
-### Tournament index
+| Role | Exact value | Homepage use |
+| --- | --- | --- |
+| Primary blue | `#0755ff`, `var(--blue)` | Selected filters, active navigation, hero's second line, totals, link chevrons, focus and text selection. |
+| Secondary ink | `#11182e`, `var(--ink)` | Wordmark, headings, unselected labels and table text. |
+| Page tint | `rgb(225 237 255 / 30%)`, `var(--page-tint)` | A uniform translucent layer over white; the visible result is approximately `#f6faff`. |
+| Main surface | `#fff` | Header, card shell, score detail panel and dropdowns. |
+| Unselected filter surface | `rgb(255 255 255 / 92%)` | Slightly translucent white sport tiles. |
+| Secondary text | `#50688c` | Tournament dates. |
+| Muted table labels | `#607697` | Period/set/game column headings. |
+| Live indicator | `#ff334b` | The red dot beside Live Matches. |
+| Current period accent | `#d5203e` | Active period/set/game label and its scores. |
+| Tournament accent | `#dd7f00` | Trophy heading icon. |
+| Table divider | `#e9eef6` | Fine horizontal rules within score details. |
+| Menu border | `#e7edf7` | Dropdown outlines and nested menu divider. |
+| Header border | `rgb(222 231 246 / 70%)` | Subtle 1px header outline. |
+| Active navigation underline | `#b7ceff` | The 2px underline under Home. |
+| Filter hover surface | `#eaf2ff` | Hover on an unselected sport filter. |
+| Selected filter hover | `#064ae0` | Darker blue on an already selected filter. |
+| Menu hover surface | `#f1f6ff` | Hover/focus background for dropdown items. |
+| Texture darkening layer | `rgb(7 18 39 / 56%)` | Uniform overlay above sport textures on live-match cards. |
 
-- Header with Thapar logo, product/event label, and tournament navigation.
-- Tournament cards/list with status and dates; highlight live matches with tournament and sport context.
-- Tournament is the first selection in the public hierarchy. Do not expose a global sport-first navigation that bypasses tournament selection.
-- On mobile, use a single-column match-card list with concise status/score; on wide screens use a denser multi-column layout.
+The page background in [global.css](../frontend/src/styles/global.css) is:
 
-### Tournament page
+```css
+background: linear-gradient(var(--page-tint), var(--page-tint)), #fff;
+```
 
-- Show tournament name/status, dates/venues when configured, live matches, recent/upcoming fixtures, bracket summary, and only the sports enabled for this tournament.
-- Sport tiles navigate to that tournament's sport page. Do not show disabled sports as empty sections.
+Both gradient stops are equal: this produces an even pale surface, not a directional color change. Keep blue for selection/actions and red for live/current emphasis. Pair color with labels or structure; color alone must not carry meaning. Choose text contrast for its actual surface, especially when placing white text above imagery.
 
-### Sport page
+## 3. Typography
 
-- Sport title within its tournament, sport-specific format summary, and configured division/category filter.
-- Match tabs or filters for live, upcoming, completed.
-- Match rows/cards showing branch-year sides, score, date/time, venue, and status.
-- Sport standings and configured leaders/statistics. Avoid empty or fabricated statistical modules.
-- Show exactly two semifinal matches feeding one final per tournament sport, with team assignments and approved-winner progression clearly represented. Custom matches are visually distinguished and excluded from bracket display/progression.
-- Clear navigation from a match back to its sport.
+Use `font-family: Helvetica, Arial, sans-serif` throughout. Helvetica is used when available, otherwise Arial/the system sans-serif fallback. No font file is bundled or downloaded. Buttons explicitly inherit the family; new controls must also inherit it.
 
-### Match detail
+All sizes below are CSS pixels; `vw` values use viewport width. Weights are the requested CSS weights, which the available font may map to its closest face.
 
-- Prominent score header with teams, status, event/sport, period/innings/game, and last updated.
-- Sport-specific scorecard and event timeline.
-- Player contributions for this match only (no cross-sport personal profile).
-- Public correction marker when relevant.
-- Realtime connection indicator that distinguishes live-updating from stale/offline public data.
+| Role | Size | Weight | Line height / spacing |
+| --- | --- | --- | --- |
+| General body copy | Inherited browser base, normally 16px | Normal, normally 400 | Normal unless specified by the component. Use 16px for new paragraph copy rather than the small metadata scale. |
+| Wordmark, >=1024px | 24px | 900 | `1.2`; letter spacing `-.9px`; `.2px` text stroke. |
+| Wordmark, 768-1023px | 22px | 900 | Same desktop spacing/stroke. |
+| Wordmark, <=767px | 21px | 900 | `1.2`; letter spacing `-.7px`; same stroke. |
+| Hero heading, >=1024px | `clamp(36px, 4.1vw, 62px)` | 800 | `1.06`; letter spacing `-.04em`. |
+| Hero heading, 768-1023px | `clamp(34px, 5.4vw, 52px)` | 800 | `1.06`; letter spacing `-.04em`. |
+| Hero heading, <=767px | `clamp(34px, 9.3vw, 48px)` | 800 | `1.06`; letter spacing `-.04em`. |
+| Section heading | 28px; 24px on phones | 800 | `1.2`; letter spacing `-.03em`. |
+| Desktop main navigation | 13px | 600 | Normal; vertically centered in its link target. |
+| Phone menu items | 14px | 600 | Normal. |
+| Sport dropdown items | 13px | Inherited normal | Normal. |
+| Sport filters | 14px; 12px on phones | 700 | Normal; letter spacing `-.01em`. Phone All Sports remains 14px. |
+| Match sport/competition metadata | 11px | 600 | `1.3`. |
+| Match competitor names | 14px; phone `clamp(12px, 3.4vw, 14px)` | 800 | `1.2`; uppercase in the colored header only. |
+| Main match score | 32px; phone `clamp(28px, 8vw, 32px)` | 800 | Inherits `1.2`; letter spacing `-.04em`; tabular numerals. |
+| Match clock/state line | 12px | 600 | Normal; centered. |
+| Score table column headings | 11px | 600 | Normal. |
+| Score table names/values | 13px | 700 | Normal; tabular numerals. Names retain their regular casing. |
+| Tournament title | 16px | 700 | `1.25`; letter spacing `-.01em`. |
+| Tournament date | 12px | Inherited normal | `1.4`. |
 
-## 4. Manager and operator experience
+For future features, reuse the section-heading, body, card-title, label and numeric hierarchy above. The large display scale belongs to prominent hero content; do not enlarge every heading to the hero size. Keep detailed data readable and prioritize the main score. Use `font-variant-numeric: tabular-nums` for scores, clocks and aligned numeric tables.
 
-Navigation and dashboards follow the user's role. Hiding controls is a convenience only; the server enforces every permission.
+## 4. Sport colors and local backgrounds
 
-### Manager / Super Admin dashboard
+### Icon accents
 
-- Primary actions: Create Tournament, Manage Sports, Manage Teams, Manage Matches, Assign Scorers, Revoke/Reassign Scorers, Review Results.
-- Account administration (invite/disable managers and Super Admins) appears for Super Admins only.
-- Tournaments, enabled tournament sports, and active matches with each match's current scorer and assignment status.
-- Tournament creation selects enabled sports and their individual format/point configuration; bracket creation and semifinal assignments occur within a tournament sport.
-- Quick access to team/roster management, match setup, scorer assignment, reviews, and corrections.
-- Warnings for unconfigured rules, unscheduled matches, matches without an assigned scorer, and failed or paused sync actions.
+[sports.js](../frontend/src/data/sports.js) defines the stable sport keys and icon accents:
 
-### Assign Scorer dialog
+| Sport | Key | Icon color |
+| --- | --- | --- |
+| Football | `football` | `#263653` |
+| Basketball | `basketball` | `#eb6b20` |
+| Tennis | `lawn-tennis` | `#598d2a` |
+| Table Tennis | `table-tennis` | `#df354b` |
+| Badminton | `badminton` | `#526780` |
+| Volleyball | `volleyball` | `#665080` |
 
-- Opened from a match. Fields: operator email, optional `valid_from` and `valid_until`.
-- Shows the current assignee, status (active, not yet active, expired, revoked), and time window.
-- Revoke requires a reason. Reassign revokes the current operator and assigns a new one in one confirmed step.
-- Includes "Assign myself" for a manager who will score personally; label it as audited.
-- Explain that a new email receives an invite and gets match-only scoring access.
+Selected filter icons become white through `currentColor`. Icon accents are not the card-background palette: Tennis has a green icon but blue/cyan artwork, for example.
 
-### Review queue
+### Sport texture assets
 
-- Lists submitted results with tournament/sport/match, teams, final scorecard, event summary, submitter, and corrections.
-- Clear provisional → submitted → approved/final or rejected states.
-- Approve is disabled on the reviewer's own submissions, with a short explanation. Super Admins see an override that requires a reason and warns that it is audited.
-- Reject requires a reason and a choice of correction route: "Reopen to operator" or "Manager will correct".
+The gradients, diagonal streaks, highlights and texture are baked into these approved WebP files. Reuse the image rather than attempting to reproduce it with invented CSS gradient stops. All files are in `frontend/public/assets/`, served at `/assets/<filename>`.
 
-### Match Operator dashboard
+| Sport | Background asset | Appearance | Hero portrait |
+| --- | --- | --- | --- |
+| Football | [football-background.webp](../frontend/public/assets/football-background.webp) | Deep crimson to bright red; diagonal light streaks, subtle dots and a ground texture. | `football-cr7.webp` |
+| Basketball | [basketball-background.webp](../frontend/public/assets/basketball-background.webp) | Dark red/orange to gold/yellow; warm diagonal bands and grain. | `basketball.webp` |
+| Tennis | [lawn-tennis-background.webp](../frontend/public/assets/lawn-tennis-background.webp) | Cyan highlights through bright blue to deep navy; diagonal bands and grain. | `lawn-tennis.webp` |
+| Table Tennis | [table-tennis-background.webp](../frontend/public/assets/table-tennis-background.webp) | Royal/cobalt blue to navy; smoother diagonal bands. | `table-tennis.webp` |
+| Badminton | [badminton-background.webp](../frontend/public/assets/badminton-background.webp) | Bright aqua/turquoise through teal to dark blue; textured diagonal bands. | `badminton-sindhu.webp` |
+| Volleyball | [volleyball-background.webp](../frontend/public/assets/volleyball-background.webp) | Deep red to scarlet/orange with warm gold highlights; diagonal streaks and grain. | `volleyball.webp` |
 
-- "My Matches" shows only matches with an active assignment, as cards:
+Hero panels display the texture at `center / cover` with no darkening overlay. The same sport image is used on its live-match card, with the following overlay so white metadata, names and scores stay readable:
 
-  ```text
-  Football — Semi Final 1
-  Team A vs Team B
-  Ground 1
-  10:00 AM
-  [ SCORE MATCH ]
-  ```
+At widths up to 767px, hero panels and match cards use the same local `<sport>-background-640.webp` variant. Larger layouts use the original texture. Both variants preserve the approved color and shape; the 56% match overlay stays the same. Portraits have local 320px/640px candidates plus the original. Both portrait layers share `srcSet` and `sizes`, so they select the same image. Keep the measured image-slot sizes in `Hero.jsx` aligned with gallery CSS when geometry changes. See `asset-sources.md` for exact dimensions and derivation.
 
-- Each card shows the assignment window when set, and its state (upcoming, active, locked, returned for correction).
-- No tournament, team, match, user, or rules administration appears for operators.
-- Empty state: "No matches assigned to you right now."
+```css
+/* --match-background is supplied by LiveMatchCard for its sport. */
+background:
+  linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)),
+  var(--match-background) center / cover;
+```
 
-### Team and roster management
+`LiveMatchCard.jsx` sets `--match-background` to `url('/assets/${match.sport}-background.webp')`. Keep the 56% darkening on the image layer; do not apply that opacity to the whole card or its white details. Keep sports mapped to their existing keys/assets. See [asset-sources.md](asset-sources.md) for provenance and licenses.
 
-- Branch + year team tiles scoped to one sport.
-- Add-player form with display name, branch/year, captain marker, and optional jersey number.
-- Roster shown as selectable player tiles.
-- Move tiles between available roster, match-active players, and substitutes; clearly label where a player currently belongs.
-- Keep drag-and-drop optional; also provide buttons/keyboard interaction so mobile and assistive input work.
-- Confirm potentially consequential actions such as removing a roster member who appears in a match record.
+### Tournament photography
 
-### Scoring console
+Tournament cards use local, high-quality Unsplash photos of sports venues, with no athletes: `tournament-field.webp`, `tournament-stadium.webp`, `tournament-court.webp`, `tournament-tennis.webp`, and `tournament-track.webp`. These are photos, not sport gradient backgrounds. Show a `2 / 1` image above white details using `width: 100%`, `height: auto`, `object-fit: cover`; preserve each image's crop from `sampleTournaments.js` (`event.position`). No image overlay is applied. Keep source/license records when adding or replacing photography.
 
-- Laptop-first layout: large current score/state, primary scoring controls, event timeline/recent actions, and team/player selection.
-- Sport-specific controls with the most common actions reachable in one or two interactions.
-- Clear undo affordance during live play with no reason prompt and no limit; each undo is recorded, never silently removing a prior accepted event. Corrections after submission ask for a reason.
-- Finish match and submit result actions with a confirmation; after submission the console shows scoring as locked.
-- Persistent connection state: online, offline, pending count, syncing, synced, failed.
-- Mobile layout rearranges controls vertically and keeps the score/status visible while scoring.
-- When offline, make it visually explicit that new actions are queued locally and not yet visible to spectators.
-- When reconnecting, show sync progress and actionable conflicts/errors.
+## 5. Shapes, borders and elevation
 
-## 5. Responsive behavior
+| Element | Radius / border | Shadow |
+| --- | --- | --- |
+| Full-width header | 0 radius; 1px translucent border | `0 8px 30px rgb(35 65 110 / 6%)`; desktop also `0 2px 5px rgb(35 65 110 / 3%)`. |
+| Sport filter | 14px; no border | `0 4px 16px rgb(35 65 110 / 4%)`. |
+| Selected filter | Same shape | `0 6px 18px rgb(7 85 255 / 18%)`. |
+| Match/tournament outer surface | 22px; no decorative outline | `0 6px 18px rgb(35 65 110 / 7%)`. |
+| White match detail panel | 16px | No separate shadow. |
+| Dropdown/phone menu panel | 16px; 1px `#e7edf7` | `0 12px 30px rgb(35 65 110 / 10%)`. |
+| Dropdown item | 9px | No separate shadow. |
 
-- Spectator viewing must work from a phone without horizontal scrolling for standard content.
-- Manager and operator workflows must remain usable on mobile, although detailed scoring is optimized for laptop.
-- Keep touch targets generously sized; prevent accidental duplicate scoring taps with clear acknowledgement and idempotent action handling.
-- Tables may collapse to cards on narrow viewports; preserve key information and explain hidden columns.
-- Do not require hover to reveal scoring or status controls.
+Keep rounded rectangular cards and restrained blue-gray shadows. The header stays rectangular and flush to the top/viewport edges. The hero's diagonal shapes use the existing measured clip paths; keep their geometry and transparent athlete cutouts in `Hero.jsx`/`HomePage.css` rather than rebuilding approximate shapes.
 
-## 6. Interface states to design
+## 6. Layout and spacing
 
-- Loading and no matches yet.
-- No schedule/results configured.
-- Match scheduled, live, paused, completed, tied, abandoned, forfeited.
-- Online and realtime connected.
-- Public page stale/reconnecting.
-- Scorer offline with queued actions.
-- Syncing, action synced, action rejected, conflict requiring manager attention.
-- Corrected score with public correction marker (post-submission corrections only; live undos show none).
-- Unauthorized access and expired session.
-- "You're not assigned to this match" (403).
-- Assignment not yet active (before `valid_from`).
-- Assignment expired (after `valid_until`).
-- Assignment revoked.
-- Scoring locked: result submitted or approved (409).
-- Scoring active on another device (scorer lease held elsewhere).
-- Sync paused because the assignment window ended or was revoked; waiting for a manager.
-- Result returned for correction (reopened to operator, or manager correcting).
-- Approve disabled on own submission; Super Admin override with reason.
-- Empty standings/player stats with honest setup guidance.
+### Shared containers
 
-## 7. Capacity demo and truthful status display
+| Viewport | Hero, filters and section container | Header padding |
+| --- | --- | --- |
+| >=1024px | `width: min(1280px, calc(100% - 64px))`, centered, plus 34px internal padding per side. Maximum usable inner width is 1212px. | 34px per side. |
+| 768-1023px | `width: min(760px, calc(100% - 40px))`, centered, no internal padding. | 26px per side. |
+| <=767px | `width: calc(100% - 32px)`, centered, no internal padding: 16px page gutters. | 16px per side. |
 
-- Do not add a fake “3,000 watching now” counter to the public event experience.
-- If the project presentation includes a live load-test view, label it “simulated viewers” and show the load-generator's current connected-client count only while the harness is actually running.
-- For a static presentation, use a benchmark report with test date/build/topology and measured results; distinguish target, tested capacity, and actual audience.
-- A staging-only operator panel may show active simulated clients, socket node count, score-update latency, and error count. Keep infrastructure/diagnostic detail out of the spectator UI.
-- Demo UI should show score delivery/reconnect behavior, but must not imply the load test proves sports-rule correctness or production availability.
+The header spans the full viewport; content stays centered at larger widths. Standard page content must not overflow horizontally. Horizontal overflow is deliberate inside the card rails only. Reuse these container rules for related future sections so heading/content edges align.
 
-## 8. Reference product takeaways
+### Existing spacing values
 
-- CricHeroes demonstrates the value of a dedicated tournament hub, live score detail, schedule, standings, and sport-specific match data. Its cricket-first detail is inspiration for the clarity and immediacy of match pages.
-- Playinga demonstrates multi-sport setup, role delegation, permissioned scoring, and standings driven by finalized results.
-- The Thaparlympics site adapts these product patterns for branch-year teams and a public laptop/mobile web experience. Do not reproduce proprietary visual identity or exact layouts.
+- Hero: 40px top / 32px bottom margin on desktop; 36px / 28px below 1024px. Desktop column gap 24px; stacked title has 28px space below it.
+- Filters: 12px gaps; 8px on phones. Bottom margin 44px, or 36px on phones.
+- Match/tournament sections: 72px bottom margin, or 48px on phones. Heading-to-rail space 20px. Heading icon-to-text gap 10px; heading row gap 12px.
+- Card rail: 18px gaps, or 16px on phones; 4px top and 18px bottom padding. Preserve 56px end padding so the last card can clear the fade.
+- Match card: header padding `16px 16px 34px`; metadata/name gaps 8px. White details overlap the header by 18px, with 12px side/bottom margins and 8px internal padding. Table cells use `8px 2px` padding.
+- Tournament card: detail padding `16px 40px 18px 16px`; title-to-date gap 8px. The opening chevron is 16px from the right.
 
-## 9. Design inputs still needed
+Use the existing 8/12/16/18/20/24/28/32/36/40/44/48/72px spacing where it fits the same role. Preserve the established hierarchy instead of introducing unrelated spacing scales per team.
 
-- Exact official Thapar logo asset path/source and any institute usage/clear-space guidance.
-- Product/site name if different from the event label.
-- Sport-by-sport match formats and whether gender/division categories need filters.
-- Any official event poster, schedule, or existing visual assets.
-- Final decisions on public roster visibility and match-day substitutes.
+## 7. Responsive component rules
+
+| Component | <=767px | 768-1023px | 1024-1199px | >=1200px |
+| --- | --- | --- | --- | --- |
+| Header | 64px minimum height; wordmark + icon-only menu. | 76px minimum height; desktop links/dropdown. | Same desktop header. | Same desktop header. |
+| Hero | Two centered title lines above gallery. | One centered title line above gallery. | Two left-aligned title lines beside gallery. | Same side-by-side layout. |
+| Sport filters | Full-width All Sports, then six tiles in a 3-column/2-row grid; icon above label. | Four tiles then three; icon beside label. | Four tiles then three. | Seven tiles in one row. |
+| Match card width | `min(312px, calc(100vw - 76px))` | `clamp(290px, 30vw, 360px)` | Same clamp. | Same clamp, capped at 360px. |
+| Tournament card width | `min(280px, calc(100vw - 76px))` | `clamp(248px, 22vw, 270px)` | Same clamp. | Same clamp, capped at 270px. |
+
+Desktop hero columns are `.9fr 1.6fr`. The gallery occupies 90% of its available width, has a `5 / 3` aspect ratio, and scales its six panels as one composition. Keep the two text spans together at their prescribed breakpoints; do not shrink text to force a single line on narrow phones. Large screens retain the maximum content width and card-width caps.
+
+## 8. Component appearance and behavior
+
+### Navigation
+
+Use `SiteHeader` for the shared header. Active Home uses primary blue and a 2px pale-blue underline. Phone menu has only the hamburger icon visually; its accessible label remains Menu. The menu target is at least 44px square. Menu links are at least 44px tall, and the phone's main menu items are 48px tall. Menus close on Escape, outside pointer interaction and navigation. Header Sports items are navigation links; the homepage sport tiles are filters.
+
+### Sport filters
+
+Use `SportIcon` and the palette from `sports.js`. Icons are 24px, unfilled SVG outlines on a 24-unit viewBox with 1.5-unit strokes and rounded caps/joins. Do not replace them with emoji or a different icon family. Preserve the Hugeicons MIT notice.
+
+Unselected tiles use white and ink labels with sport-colored icons. Selected tiles use solid primary blue with white label/icon. Default minimum height is 56px; phone sport tiles are 74px and phone All Sports is 48px. Selection uses `aria-pressed`, has exactly one active filter, and changes only the live-match row in place. Reuse these color/shape states for equivalent selection controls on future pages.
+
+### Live-match cards
+
+Use the existing `LiveMatchCard` shell: sport texture/dark overlay above white details, white metadata, competitor names flanking a large centered score, and a smaller centered clock/state line. The section heading has an 11px round red dot on its left. It is a steady indicator; no blinking animation is implemented.
+
+The detail area uses ink names/numbers, muted column labels, red current-period values and blue totals. The first column is 30% and left-aligned; numeric columns are centered with tabular figures. Keep the layout readable when sport teams replace columns; the sample table does not fix any sport's final scoring format.
+
+### Tournament cards
+
+Use the existing `TournamentCard` shell: venue image above white title/date details, with a small blue opening chevron on the right. The section heading uses a 24px trophy icon in `#dd7f00`. The entire card is a link. Hover changes the title to primary blue; keyboard focus fully emphasizes the card. The card chevron means open the tournament and is not a rail-scrolling control.
+
+### Horizontal rails and spotlight
+
+Reuse `HorizontalRail` for both rows. Use native touch/trackpad/wheel/keyboard scrolling, `scroll-snap-type: x proximity`, start-aligned cards and hidden scrollbars. No carousel arrows or View All controls. The right edge has a 56px fade:
+
+```css
+background: linear-gradient(90deg, transparent, #f6faff);
+```
+
+The fade is decorative and ignores pointer input. At less than 90% card visibility, the inner surface scales to `.9` with `.66` opacity, anchored at left center. At 90% or more, the surface has full size/opacity. Outer card slots keep their original dimensions, preserving scroll/snap geometry. Apply this on phones, tablets, desktops and larger screens. Keyboard-focused tournament cards restore full emphasis. Reduced motion keeps the opacity treatment but removes scale and transitions.
+
+## 9. Motion and decorative backgrounds
+
+Motion is restrained and supports the content:
+
+| Treatment | Existing setting |
+| --- | --- |
+| Hero title reveal | Opacity only, `.45s ease-out`. |
+| Navigation color | `.15s ease`. |
+| Filter color/background | `.16s ease`. |
+| Partial-card transform | `.24s cubic-bezier(.16, 1, .3, 1)`. |
+| Partial-card opacity | `.24s ease`. |
+| Hero matrix | Original blue 2D canvas dots, capped at 30fps. |
+
+The dot matrix fills the hero only, behind text/artwork, with no pointer interaction or visible pause control. Dot spacing is 10px when the canvas is under 600px wide, otherwise 14px; size and alpha vary gently through the original field. Preserve `HeroMatrix` instead of introducing another animation system.
+
+The soft edge comes from the existing masks:
+
+- Desktop: `radial-gradient(ellipse at 75% 54%, #000 22%, transparent 78%)`.
+- Below 1024px: `linear-gradient(transparent 20%, #000 40% 80%, transparent)`.
+
+The field is decorative, not a repeated background for every section. Reduced motion freezes the canvas and removes title/transition animation. Animation work stops when the hero is offscreen, the document is hidden or the route unmounts.
+
+## 10. Accessibility and extension checklist
+
+- Keep visible keyboard focus: 3px primary-blue outline with 5px offset by default. Tournament cards use a -3px inset offset to keep focus visible inside the rail.
+- Keep interactive targets at least 44px and support keyboard activation as well as touch. Use semantic links for destinations and buttons for selection/actions.
+- Preserve readable ink-on-white details and white-on-darkened-image headers. Labels, table structure and selection semantics accompany color.
+- Keep section hierarchy clear: one page `h1`, section `h2`, card `h3`. Decorative icons/canvas stay hidden from assistive technology; meaningful images have useful alt text.
+- Respect reduced motion. Do not require hover to reveal essential information or controls.
+- Keep the approved card colors, rounded shapes, white detail areas and horizontal usage when replacing temporary content. Match names/scores/clocks/columns and tournament names/IDs/dates remain editable display fixtures.
+- For a future page, begin with shared colors, font hierarchy, container gutters, card radii, icons and focus states. Reuse the existing header/rail/card components where their contract fits; add only the feature's necessary layout. An unbuilt form, dashboard or new status is not already designed by this guide.
+- When an approved design changes, update this guide and the actual CSS/component together; record the decision in `memory.md`. Keep asset credits current.
+
+## 11. Source map for agents
+
+| Design responsibility | Existing source |
+| --- | --- |
+| Brand colors, font family, section headings, content widths and focus | [global.css](../frontend/src/styles/global.css) |
+| Header, navigation, menus and wordmark | [SiteHeader.css](../frontend/src/components/SiteHeader.css) |
+| Hero geometry, title, masks and sport-filter layout/states | [HomePage.css](../frontend/src/features/home/HomePage.css), [Hero.jsx](../frontend/src/features/home/Hero.jsx) |
+| Dot field and lifecycle | [HeroMatrix.jsx](../frontend/src/features/home/HeroMatrix.jsx) |
+| Shared rail, edge fade and partial-card emphasis | [HorizontalRail.css](../frontend/src/components/HorizontalRail.css), [HorizontalRail.jsx](../frontend/src/components/HorizontalRail.jsx) |
+| Match shell, score typography and table styling | [LiveMatchCard.css](../frontend/src/features/matches/LiveMatchCard.css), [LiveMatchCard.jsx](../frontend/src/features/matches/LiveMatchCard.jsx) |
+| Venue crop, title/date layout and tournament interactions | [TournamentCard.css](../frontend/src/features/tournaments/TournamentCard.css), [TournamentCard.jsx](../frontend/src/features/tournaments/TournamentCard.jsx) |
+| Sport keys/colors and outline icons | [sports.js](../frontend/src/data/sports.js), [SportIcon.jsx](../frontend/src/components/SportIcon.jsx) |
+| Artwork and license records | `frontend/public/assets/`, [asset-sources.md](asset-sources.md) |
