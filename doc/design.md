@@ -186,6 +186,14 @@ Use the existing `LiveMatchCard` shell: sport texture/dark overlay above white d
 
 The detail area uses ink names/numbers, muted column labels, red current-period values and blue totals. The first column is 30% and left-aligned; numeric columns are centered with tabular figures. Keep the layout readable when sport teams replace columns; the sample table does not fix any sport's final scoring format.
 
+### Badminton page patterns
+
+Source: [BadmintonPage.css](../frontend/src/features/sports/badminton/BadmintonPage.css). Page `h1` is 40px (32px on phones), weight 800, with the 32px sport icon in its sport colour. Sections reuse the section container and `.live-heading`.
+
+- Header-only match card: the live-match texture covers the whole card; no white detail area. The whole header is one button (44px+) with an inset focus outline.
+- Date chips: a horizontally scrollable row above a rail. Same colours, 14px radius and selected states as sport filters; 44px tall; `aria-pressed`.
+- Match detail dialog: native modal. Full viewport on phones; from 768px a centered `min(760px, 100% - 64px)` panel with 22px radius and a 56% dark backdrop. Textured header with a visible Close button, then the white detail panel. Completed-game winner scores are weight 800, others 500; current-game cells use `#d5203e`; the serving player has an 8px blue dot. A text legend explains bold, red and the dot. Winners get a small blue Winner tag.
+
 ### Tournament cards
 
 Use the existing `TournamentCard` shell: venue image above white title/date details, with a small blue opening chevron on the right. The section heading uses a 24px trophy icon in `#dd7f00`. The entire card is a link. Hover changes the title to primary blue; keyboard focus fully emphasizes the card. The card chevron means open the tournament and is not a rail-scrolling control.

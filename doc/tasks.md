@@ -61,7 +61,11 @@ Limits: installed desktop Chrome only; touch was emulated. No physical-device, S
 
 Use one row per active task: owner, scope/files, dependencies, state and branch/PR. Replace it with a concise final result and checks when finished. Record the confirmed remote commit/PR before marking the feature shared and complete. Remove finished edit claims; do not retain per-agent execution logs.
 
-No active edit claims.
+| Owner | Scope / files | Dependencies | State | Branch / PR |
+| --- | --- | --- | --- | --- |
+| Kiro agent (for the user) | Badminton sport page: `frontend/src/features/sports/badminton/*`, `App.jsx` (badminton route only), `global.css` (section container), `tests/badminton.spec.js`, `tests/homepage.spec.js` (badminton route now has a page), README and docs | None. Badminton format stays open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified, unpublished | `main`, uncommitted; no PR |
+
+Badminton page checks, 9 October 2026, Linux, Node 22.21.1, installed Chrome 146: `npm run lint`, `npm run build` and `PLAYWRIGHT_CHANNEL=chrome npm test` passed, 18 tests (8 homepage, 10 badminton). Coverage: three sections, header-only cards, pointer/Enter/Space open, Close/Escape/backdrop close with focus return, players, per-game points, bold game winner, red current game, serving dot, ended match winner, past/upcoming chip filtering and empty day, direct load/refresh/back, the five other sport routes blank, no body overflow and 44px targets from 320 to 2560px, doubles dialog fits at 320px, phone texture and reduced motion. Final re-run on the same date and machine: `npm run lint` passed, `npm run build` passed and `PLAYWRIGHT_CHANNEL=chrome npm test` passed all 18 tests. The bundled Playwright Chromium is not installed on this machine, so plain `npm test` cannot launch a browser; [local-development.md](local-development.md) documents both options. A fresh production preview was checked with `playwright-cli` at phone 390×844 and desktop 1440×900: Live, Upcoming and Past sections; header-only cards; live, just-ended, past and upcoming details; bold game winners, red current game, serving dot; date chip filtering and the empty 12 Oct day; no body overflow; no console errors. Captures stay local and are not committed. Limits: Chromium only; no Safari/Firefox, physical-device or screen-reader check; Back does not close the dialog.
 
 ## Phase 0 — Resolve implementation-blocking inputs
 

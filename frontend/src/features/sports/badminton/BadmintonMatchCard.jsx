@@ -1,0 +1,40 @@
+import '../../matches/LiveMatchCard.css';
+
+/** Side name with winner emphasis once a result exists. */
+function SideName({ match, index }) {
+  if (match.winner == null) return <span>{match.sides[index].name}</span>;
+  const won = match.winner === index;
+  return <span className={won ? 'is-winner' : 'is-loser'}>{match.sides[index].name}{won && <span className="sr-only"> (winner)</span>}</span>;
+}
+
+/** Side names around the games won, or VS before a match starts. */
+export function Overview({ match }) {
+  return <><SideName match={match} index={0} /><strong>{match.gamesWon ? match.gamesWon.join('–') : 'VS'}</strong><SideName match={match} index={1} /></>;
+}
+
+function stateLine(match) {
+  if (match.status === 'live') return match.clock;
+  if (match.status === 'ended') return `Ended · ${match.sides[match.winner].name} won`;
+  if (match.status === 'completed') return `${match.dateLabel} · ${match.tournament}`;
+  return `${match.dateLabel} · ${match.timeLabel} · ${match.tournament}`;
+}
+
+/** Header-only scorecard; activating it opens the full match details. */
+export default function BadmintonMatchCard({ match, onOpen }) {
+  const headingId = `badminton-${match.id}`;
+  return (
+    <article className="match-card badminton-card" data-status={match.status} data-date={match.date} data-match-id={match.id} aria-labelledby={headingId}>
+      <div className="match-surface">
+        <h3 id={headingId}>
+          <button type="button" className="badminton-card-open" aria-haspopup="dialog" onClick={event => onOpen(match, event.currentTarget)}>
+            <span className="match-header">
+              <span className="match-meta"><span>Badminton</span><span>{match.category}</span></span>
+              <span className="match-overview"><Overview match={match} /></span>
+              <span className="match-clock">{stateLine(match)}</span>
+            </span>
+          </button>
+        </h3>
+      </div>
+    </article>
+  );
+}

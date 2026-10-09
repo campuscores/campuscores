@@ -182,8 +182,12 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
     if (destination.startsWith('/sports/')) await page.locator('.desktop-nav .sports-dropdown summary').click();
     await page.locator(`a[href="${destination}"]`).first().click();
     await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    await expect(page.locator('#root')).toHaveText('');
+    // Badminton has its page; the other destinations stay reserved and blank.
+    const built = destination === '/sports/badminton/';
+    const ready = () => built ? expect(page.getByRole('heading', { level: 1, name: 'Badminton' })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    await ready();
     expect((await page.reload()).status()).toBe(200);
+    await ready();
     await page.goBack();
     await expect(page.locator('.hero')).toBeVisible();
   }

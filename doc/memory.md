@@ -9,6 +9,13 @@
 - Final feature completion requires applicable verification and a confirmed remote commit or PR. Local unpushed work is not shared complete. Follow [AGENTS.md](../AGENTS.md) for verification policy; record actual results and limits in [tasks.md](tasks.md).
 - Required frontend CI checks run the same install, lint, build and Chromium suite on Ubuntu, Windows and macOS. Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. This does not cover Safari, Firefox or physical devices.
 
+## Badminton page decisions — 9 October 2026
+
+- `/sports/badminton/` shows Live, Upcoming and Past matches from frontend display fixtures. Fixtures use a BWF-like best-of-3 shape for display only; the badminton format in [rules.md](rules.md) stays open and no scoring engine exists.
+- Default cards show only the textured match header. Activating a card opens a native modal dialog: full viewport on phones, a centered 760px panel from 768px. Close, Escape and a desktop backdrop click close it and return focus to the card. The dialog does not change the URL.
+- Details bold each completed game's winning score, colour the current game red with a text legend and labelled column, and mark the serving player with a dot plus screen-reader text. Winners also get a visible Winner tag.
+- Upcoming and Past have date chips that filter in place with `aria-pressed`, like homepage sport filters. Chip days come from the fixture calendar, so a day can show an empty message.
+
 ## Homepage decisions — 8 October 2026
 
 - The React + Vite JavaScript homepage is implemented. Backend, database, authentication and live delivery remain planned. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
@@ -117,6 +124,8 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Is an English-only first release sufficient?
 - Do spectators need search/filter by sport, branch, status, venue, or date?
 - Should live status include a displayed score freshness timestamp and correction reason?
+- **Open** — ended live badminton match: the page labels it `Ended · <name> won` and `Provisional result` and keeps it in Live. Decision owner: user/product owner. Affects: badminton page, future live feed. Accept when the final label and the moment it moves to Past are confirmed.
+- **Open** — match detail URL: the badminton detail dialog has no URL, so Back leaves the page and details cannot be shared. Decision owner: user/product owner. Affects: badminton page, PRD match routes. Accept when a route or dialog-only rule is confirmed.
 
 ### Delivery and operations
 

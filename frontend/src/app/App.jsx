@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
+import BadmintonPage from '../features/sports/badminton/BadmintonPage.jsx';
 import { sports } from '../data/sports.js';
 
 function ReservedPage() { return null; }
@@ -24,7 +25,7 @@ export default function App() {
           : '/#tournaments'
       } replace />} />
       {/* Replace reserved route elements as each team integrates its page. */}
-      {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={<ReservedPage />} />)}
+      {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={sport.id === 'badminton' ? <BadmintonPage /> : <ReservedPage />} />)}
       <Route path="/tournaments/:tournament" element={<ReservedPage />} />
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>

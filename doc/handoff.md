@@ -13,6 +13,7 @@ Use [local-development.md](local-development.md) to install and start the site. 
 - Seven sport filter buttons, including All Sports. They affect live matches in place, update selection/accessibility status and reset the match rail without changing the URL or tournament row.
 - Live Matches heading with red dot and six sport cards. Native horizontal scrolling and a smaller, faded partial-card preview on phones, tablets and large screens.
 - Five tournament cards: venue photo above a white name/date area, native horizontal scrolling and the same spotlight treatment. Photos contain sports venues, not athletes.
+- Badminton sport page with Live, Upcoming and Past sections, date chips and a match detail dialog (frontend fixtures only).
 - Registered future sport/tournament destinations. Their detail UI is intentionally unbuilt.
 
 There is no autoplay/sliding hero carousel: the approved hero is the diagonal athlete gallery with animated background. Do not reintroduce abandoned animation variants or controls.
@@ -35,6 +36,10 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | Native card rail | `frontend/src/components/HorizontalRail.jsx` | Receives card children, label, class, optional ID/reset key. Observes stable outer slots; scales inner surfaces only. |
 | Match card | `frontend/src/features/matches/LiveMatchCard.jsx` | Receives `match`: ID, sport, display metadata, two sides and detail columns. Presentational; calculates no scores. Replace the white detail rendering when integrating sport-specific cards. |
 | Tournament card | `frontend/src/features/tournaments/TournamentCard.jsx` | Receives `event`: ID, title, local image/alt/crop, date values and labels. Links to the event route. |
+| Badminton page | `frontend/src/features/sports/badminton/BadmintonPage.jsx` | Owns Upcoming/Past date state and the open match. Registered for `badminton` only in `App.jsx`. |
+| Badminton sections and cards | `BadmintonSection.jsx`, `BadmintonMatchCard.jsx` (same folder) | Section: `id, title, live, matches, dates, selectedDate, onSelectDate, onOpen`; renders chips, status text, the rail or an empty message. Card: `match, onOpen(match, button)`; header-only. |
+| Badminton match dialog | `BadmintonMatchDialog.jsx` (same folder) | `match` (null = closed), `onClose`. Native `<dialog>` with `showModal()`; score table, legend, players or schedule, and match info. |
+| Badminton fixtures | `badmintonMatches.js` (same folder) | `liveMatches`, `upcomingMatches`, `pastMatches`, `upcomingDates`, `pastDates`. Match: `id, status` (`live`/`ended`/`scheduled`/`completed`), `category, tournament, round, date, dateLabel, timeLabel, venue, clock, sides[{name, team, players[{name, serving}]}], games[3]` (`{points, winner, current}` or null), `gamesWon, winner`. Values are precomputed. |
 | Shared styling | `frontend/src/styles/global.css` | Approved colors, font stack, content widths, section headings and accessibility helpers. Component styles sit with their components. |
 | Assets | `frontend/public/assets/`, `frontend/public/favicon.ico` | Local root-relative URLs. Phones use responsive portrait candidates and shared 640px textures. Sources/license stay in `doc/asset-sources.md`. |
 
@@ -44,7 +49,8 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | --- | --- | --- |
 | `/` | Complete homepage with temporary card content | Homepage/shared UI team |
 | `/#tournaments` | Scrolls to the homepage tournament section | Homepage/shared UI team |
-| `/sports/<sport>/` | Six known sport routes, deliberately blank | Respective sport teams |
+| `/sports/badminton/` | Badminton page: Live, Upcoming and Past matches from display fixtures, date chips and a match detail dialog | Badminton team |
+| `/sports/<sport>/` | The other five sport routes, deliberately blank | Respective sport teams |
 | `/tournaments/:tournament` | Deliberately blank tournament destination | Tournament team |
 | `/index.html` | Redirects to `/`; old preview query values are discarded | Compatibility only |
 | `/tournament.html?event=<id>` | Redirects to `/tournaments/<id>` | Compatibility only |
