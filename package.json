@@ -1,0 +1,14 @@
+{
+  "name": "thaparlympics",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["frontend"],
+  "engines": { "node": ">=22.22.0" },
+  "scripts": {
+    "dev": "npm run dev --workspace @thaparlympics/frontend --",
+    "build": "npm run build --workspace @thaparlympics/frontend",
+    "preview": "npm run preview --workspace @thaparlympics/frontend --",
+    "lint": "npm run lint --workspace @thaparlympics/frontend",
+    "test": "npm run test --workspace @thaparlympics/frontend --"
+  }
+}

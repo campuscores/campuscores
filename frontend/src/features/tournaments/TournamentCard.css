@@ -1,0 +1,12 @@
+.tournament-trophy { flex-shrink: 0; color: #dd7f00; }
+    .tournament-card { flex-basis: clamp(248px, 22vw, 270px); }
+.tournament-surface img { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; object-fit: cover; }
+    .tournament-details { position: relative; padding: 16px 40px 18px 16px; }
+    .tournament-details h3 { margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
+    .tournament-details p { margin: 0; color: #50688c; font-size: 12px; line-height: 1.4; }
+    .tournament-open { position: absolute; right: 16px; top: calc(50% - 8px); color: var(--blue); }
+    .tournament-card:hover h3 { color: var(--blue); }
+    .tournament-card:focus-visible { outline-offset: -3px; border-radius: 22px; }
+    .tournament-card:focus-visible .tournament-surface { transform: none; opacity: 1; }
+    
+@media (max-width: 767px) { .tournament-card { flex-basis: min(280px, calc(100vw - 76px)); } }
