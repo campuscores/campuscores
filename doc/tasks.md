@@ -1,7 +1,7 @@
 # Implementation Tasks: Thaparlympics Score Website
 
 **Status:** Detailed implementation backlog; sport formats and selected operating policies remain open inputs.  
-**Stack:** React/Vite + JavaScript; Node/Express + Socket.IO; hosted Supabase Postgres + Supabase Auth (invite-only); migrations in `supabase/migrations/` applied by GitHub Actions; Redis Socket.IO adapter for multi-instance mode. No Postgres runs on any team device.  
+**Stack:** React/Vite + JavaScript on Cloudflare Workers static assets; Hono API Worker; Durable Object WebSocket rooms for live delivery; Neon Postgres through Hyperdrive; Clerk sign-in (open Viewer sign-up, invited staff roles); `dbmate` migrations in `db/migrations/` applied by GitHub Actions. No Postgres or Docker runs on any team device. Decided 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).  
 **Expected audience:** approximately 1,000 actual concurrent viewers. **Capacity demonstration:** 3,000 simulated clients only, pending a measured load test.
 
 ## 0. Product decisions agents must preserve
@@ -18,15 +18,15 @@
 - A completed score is provisional until approved. Only an approved result is final. The submitter can never approve their own result, except via an audited Super Admin override with a reason. Rejection chooses `correction_route` `OPERATOR` or `MANAGER`. Keep live score updates visible while the match is in progress.
 - Live undo by the assigned operator is unlimited, needs no reason, is stored as reversal actions, and shows no public marker. Corrections after submission/approval need a reason and show a public marker.
 - Use the Thapar logo site-wide when the user supplies the official asset. Do not fabricate or substitute an unofficial mark. Build a replaceable logo asset slot; logo file is intentionally pending.
-- Implement in JavaScript, not TypeScript. PostgreSQL is the durable source of truth; Socket.IO/Redis are transport only.
-- Never change the remote database schema through the Supabase Dashboard; every schema change is a migration deployed by CI.
+- Implement in JavaScript, not TypeScript. PostgreSQL is the durable source of truth; Durable Object rooms are transport only.
+- Never change a hosted database schema outside CI; every schema change is a `dbmate` migration deployed by CI.
 - Never describe the 3,000 simulated-client goal as actual attendance or tested capacity until the load test is run and reported.
 
 ## Agent workflow and implementation conventions
 
 1. Before coding, read `prd.md`, `architecture.md`, `rules.md`, `design.md`, and `memory.md`.
 2. Choose an agreed, scoped incomplete task with clear ownership and dependencies. Independent frontend work can proceed alongside other phases; preserve completed homepage work. Record assumptions/questions in `memory.md`; do not resolve an open sports rule by guessing.
-3. Keep changes cohesive and reviewable. Every schema change is a migration in `supabase/migrations/`; every new scoring format gets domain tests before UI work depends on it.
+3. Keep changes cohesive and reviewable. Every schema change is a migration in `db/migrations/`; every new scoring format gets domain tests before UI work depends on it.
 4. Use runtime validation for every API/socket payload. Use JSDoc and linting; never add TypeScript unless the product decision changes.
 5. Enforce permissions server-side. Anonymous spectator APIs are read-only and return only approved public fields.
 6. Persist an accepted score action, projection update, audit record, and outbox event in a transaction. Broadcast only committed data.
@@ -35,15 +35,15 @@
 9. Update affected docs and this task list when requirements change; don't silently fork behavior between PRD, architecture, and rules.
 10. Follow [AGENTS.md](../AGENTS.md) for tools, ownership, decision gates, final documentation and publication evidence. Use `handoff.md` for integration and `local-development.md` for setup. Keep one current task entry; do not append an execution diary.
 
-## Current frontend work — publication pending
+## Current frontend work — pushed, remote CI not recorded
 
-The homepage and frontend CI commits are on `origin/main` (`dac54a0` per the local remote-tracking ref). The badminton page commit `9a22720` is local on `main` and unpushed. The all-sports change is uncommitted on `main`. No remote commit/PR is recorded for the sport pages. Local verification does not establish a published or merged feature. Requirements and unchecked tasks below remain planned.
+The homepage, frontend CI, badminton page (`9a22720`) and all-sports change (`dfe54f5`) are on `origin/main`, per the local remote-tracking ref on 11 October 2026. The GitHub Actions results for these commits are not recorded here. Requirements and unchecked tasks below remain planned.
 
 | Area | Final implementation | Current status |
 | --- | --- | --- |
-| Homepage | React/Vite JavaScript, approved responsive UI, local artwork, filters, native card rails and reserved detail routes. Use [handoff.md](handoff.md) for integration and [design.md](design.md) for visual contracts. Card content remains temporary. | Locally verified, unpublished. |
-| Frontend CI | Same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects; Windows runs `chromium`, `firefox` and `pixel`. Each OS reports independently. | Configuration checked locally; remote execution and publication pending. |
-| Shared docs | Existing canonical docs describe final contracts, durable decisions and current task state. Follow [AGENTS.md](../AGENTS.md) for documentation and completion rules. | Document checks passed; unpublished. |
+| Homepage | React/Vite JavaScript, approved responsive UI, local artwork, filters, native card rails and reserved detail routes. Use [handoff.md](handoff.md) for integration and [design.md](design.md) for visual contracts. Card content remains temporary. | Locally verified; on `origin/main`; remote CI result not recorded. |
+| Frontend CI | Same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects; Windows runs `chromium`, `firefox` and `pixel`. Each OS reports independently. | On `origin/main`; remote CI result not recorded. |
+| Shared docs | Existing canonical docs describe final contracts, durable decisions and current task state. Follow [AGENTS.md](../AGENTS.md) for documentation and completion rules. | Backend stack decisions recorded 11 October 2026. |
 
 ### Latest verification
 
@@ -63,8 +63,19 @@ Use one row per active task: owner, scope/files, dependencies, state and branch/
 
 | Owner | Scope / files | Dependencies | State | Branch / PR |
 | --- | --- | --- | --- | --- |
-| Kiro agent (for the user) | Cross-browser, phone-emulation and edge-case tests: `frontend/playwright.config.js` (six projects), `tests/sport-edge-cases.spec.js`, `tests/mobile.spec.js`, `tests/helpers.js`, small edits to `tests/homepage.spec.js`, `.github/workflows/frontend.yml`, two CSS fixes (`SportPage.css`, `HorizontalRail.css`) and docs | The uncommitted sport-pages change | Locally verified, unpublished (all six projects; WebKit needed side-loaded libraries, see below) | `main`, uncommitted; no PR |
-| Kiro agent (for the user) | Sport pages for all six sports: `frontend/src/features/sports/*`, `App.jsx` (sport routes), `global.css` (section container selector), `tests/sport-pages.spec.js` (replaces `badminton.spec.js`), `tests/homepage.spec.js` (sport routes built), README and docs | None. Formats stay open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified, unpublished | `main`, uncommitted; no PR |
+| Kiro agent (for the user) | Cross-browser, phone-emulation and edge-case tests: `frontend/playwright.config.js` (six projects), `tests/sport-edge-cases.spec.js`, `tests/mobile.spec.js`, `tests/helpers.js`, small edits to `tests/homepage.spec.js`, `.github/workflows/frontend.yml`, two CSS fixes (`SportPage.css`, `HorizontalRail.css`) and docs | The sport-pages change | Locally verified (all six projects; WebKit needed side-loaded libraries, see below); remote CI result not recorded | `origin/main`, `dfe54f5`; no PR |
+| Kiro agent (for the user) | Sport pages for all six sports: `frontend/src/features/sports/*`, `App.jsx` (sport routes), `global.css` (section container selector), `tests/sport-pages.spec.js` (replaces `badminton.spec.js`), `tests/homepage.spec.js` (sport routes built), README and docs | None. Formats stay open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified; remote CI result not recorded | `origin/main`, `dfe54f5`; no PR |
+| Kiro agent (for the user) | Backend 1: shared docs for the confirmed stack; `.gitignore` rules for `.dev.vars*` and `.wrangler/`; `backend/` workspace (Hono, Wrangler, Workers test pool), `GET /health`, root scripts, backend CI | None | In progress: docs and ignore rules committed; scaffold pending | `main` |
+| Kiro agent (for the user) | Backend 2: `MatchRoom` Durable Object, `/live/:room`, request-count estimate and the Workers Paid gate | Backend 1 | Planned | — |
+| Kiro agent (for the user) | Backend 3: Neon projects, `dbmate` pipeline, core schema and constraint tests, CI throwaway Postgres, deploy workflow | Backend 1; manual prerequisites | Planned | — |
+| Kiro agent (for the user) | Backend 4: Hyperdrive cached and uncached configs, public read API, fake seed | Backend 3 | Planned | — |
+| Kiro agent (for the user) | Backend 5: Clerk token and role middleware, invitations, Super Admin bootstrap, header Sign in link, privacy and account-deletion pages | Backend 4; privacy owner (Open) for production | Planned | — |
+| Kiro agent (for the user) | Backend 6: assignments, scorer leases, shared scoring authorization chain and its test matrix | Backend 5 | Planned | — |
+| Kiro agent (for the user) | Backend 7: score-action write path, test-only engine, single-transaction outbox, outbox sweep | Backend 6; production engines Blocked on [rules.md](rules.md) | Planned | — |
+| Kiro agent (for the user) | Backend 8: frontend live client and homepage live row | Backend 7; snapshot-to-card contract agreed in [handoff.md](handoff.md) | Planned | — |
+| Kiro agent (for the user) | Backend 9: operator console with the offline queue | Backend 8 | Planned | — |
+| Kiro agent (for the user) | Backend 10: hardening, nightly encrypted backup, load harness | Backend 9; rate-limit threshold and load-test thresholds (Open) | Blocked for the load test | — |
+| Kiro agent (for the user) | Backend 11: production cutover (domain route, Clerk production, Google OAuth, smoke check) | Backend 10; manual prerequisites | Blocked on prerequisites | — |
 
 Sport page checks, 9 October 2026, Linux, Node 22.21.1, installed Chrome 146: `npm run lint` and `npm run build` passed; `PLAYWRIGHT_CHANNEL=chrome npm test` passed all 73 tests (8 in `homepage.spec.js`, 65 in `sport-pages.spec.js`). Coverage: all six sport routes; three sections; header-only cards; fixture validity against the official baselines and the registry; one dialog per scoring model (badminton, tennis, table tennis, volleyball, football, basketball) with bold winners, red current period, serving dot, Pts and tiebreak, scorers and lineups; ended-match winner; date chips and the empty 12 Oct day; keyboard open, Escape and focus return; desktop backdrop close; no body overflow and 44px targets from 320 to 2560px; textures and icon colour; route entry, refresh and back; chip reset between sports; tournament routes stay blank. A production preview was checked with `playwright-cli` at phone 390×844 and desktop 1440×900: all six pages and one open live dialog for badminton, tennis, volleyball, football and basketball; no body, dialog or table overflow; sport textures loaded; no console errors. Captures stay local and are not committed. Limits: Chromium only; no Safari/Firefox, physical-device or screen-reader check; Back does not close the dialog; plain `npm test` needs the bundled Playwright Chromium, which is not installed on this machine ([local-development.md](local-development.md)).
 
@@ -87,6 +98,18 @@ CI matrix: Windows runs `chromium`, `firefox` and `pixel` only. Safari does not 
 
 Limits: emulated devices only. No physical phone, branded Safari or screen-reader check. Use the manual checklist in [local-development.md](local-development.md#check-on-a-real-phone). Firefox has no phone emulation. WebKit touch swipe and system text size are manual checks only. On emulated iPhone and iPad, one ArrowRight press on a rail snaps back to the start; three presses scroll it. The homepage cards have no long-name test. The empty-cell `—` marks in the dialog keep their pending screen-reader fix. The LAN preview command was not started in this run.
 
+## Backend manual prerequisites (user)
+
+These are account and console steps, not coding tasks. Backend 1 needs none of them.
+
+- [ ] Claim a GitHub Student Pack domain and move its DNS to Cloudflare.
+- [ ] Create the Cloudflare account, the Neon staging and production projects, and the Clerk development and production instances.
+- [ ] Create a Google OAuth client for Clerk production.
+- [ ] Create the `develop` branch.
+- [ ] Add the GitHub Environment secrets for `staging` and `production`.
+
+Open backend decisions are listed in [memory.md](memory.md#backend-open-items).
+
 ## Phase 0 — Resolve implementation-blocking inputs
 
 ### Tournament and identity setup
@@ -95,7 +118,7 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 - [ ] Confirm branch/year/division categories and team naming conventions.
 - [x] Role model and invite rules decided: Super Admin creates managers/Super Admins; managers invite operators only; no sport-scoped roles.
 - [x] Approver policy decided: submitter ≠ approver, with audited Super Admin override.
-- [ ] Choose the custom SMTP provider and sender domain; set up SPF/DKIM/DMARC.
+- [x] Invitation email decided: Clerk sends invitation and verification email; no custom SMTP provider is needed.
 - [ ] Decide whether invited emails must be Thapar addresses, and the account recovery policy.
 - [ ] Decide whether the Assign Scorer form suggests a default time window.
 
@@ -118,20 +141,20 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 ### Branding and delivery
 
 - [ ] Keep the site-wide Thapar logo component/slot ready, but leave the real image unset until supplied. Then add the approved asset, source/usage note, responsive variants if needed, and verify aspect ratio/contrast on every layout.
-- [ ] Choose the Supabase plan for the event period: Pro, or Free with the project unpaused before the event plus scheduled `pg_dump` backups from CI.
-- [ ] Choose the long-running backend host and region (near the Supabase project), domain, budget, account owner, supported browsers, and event-day support contact.
+- [x] Database and hosting plan decided: Neon Free and Cloudflare Workers Free, with Workers Paid in event months only if the measured gate requires it.
+- [ ] Choose the production account owner, supported browsers and event-day support contact. Host (Cloudflare) and domain source (Student Pack) are decided.
 - [ ] Agree load-test pass thresholds: connection ramp/soak duration, message/update frequency, p95/p99 latency, reconnect profile, and acceptable errors.
 
 ## Phase 1 — Repository foundation and shared contracts
 
 - [ ] Inspect repository structure and existing README before adding packages; preserve existing files and user changes.
-- [ ] Preserve the implemented React + Vite JavaScript frontend and root npm workspace. Add the planned Node.js + Express backend only for an agreed backend task; do not recreate the frontend.
-- [ ] Initialize the Supabase CLI project (`supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`). Do not require `supabase start`, Docker, or a local Postgres for development.
-- [ ] Create staging and production Supabase projects. Store `SUPABASE_ACCESS_TOKEN` and each environment's project ID and DB password as GitHub Actions secrets.
+- [ ] Preserve the implemented React + Vite JavaScript frontend and root npm workspace. Add the `backend/` Worker workspace only for an agreed backend task; do not recreate the frontend.
+- [ ] Add `db/migrations/` and a pinned `dbmate`. Do not require Docker or a local Postgres for development.
+- [ ] Create staging and production Neon projects and Hyperdrive configs. Store each environment's database URL and Clerk keys as GitHub Environment secrets.
 - [ ] Add a GitHub Actions CI workflow: start a throwaway Postgres on the runner, apply all migrations, run lint/tests, then discard it.
-- [ ] Add a release workflow: `supabase db push` to staging on merge to `develop`, and to production on merge to `main`. No one runs `db push` from a laptop.
+- [ ] Add a deploy workflow: `dbmate up` and `wrangler deploy` to staging on merge to `develop`, and to production on merge to `main`. No one applies migrations or deploys from a laptop.
 - [ ] Preserve existing frontend scripts. Add needed backend/migration scripts when those features exist; update exact prerequisites and commands in `local-development.md`. Team devices require no local database.
-- [ ] Add `.env.example` containing variable names only (session-pooler connection string, Supabase URL, publishable and secret key; SMTP credentials live in Supabase Auth settings, not the app); validate required variables at server startup and never expose server secrets to Vite/browser code.
+- [ ] Keep local Worker secrets in ignored `.dev.vars`; document variable names only. Validate required bindings and secrets at startup and never expose server secrets to Vite/browser code.
 - [ ] Add formatting/lint conventions, JSDoc expectations, test runner, and runtime schema validation library.
 - [ ] Add API contract conventions: JSON errors (401/403/409 shapes), request correlation ID, pagination/filter syntax, date/time handling, and public/private DTO separation.
 - [ ] Add `/health` and `/ready` endpoints; readiness must detect required DB connectivity without exposing secrets or internal diagnostics publicly.
@@ -141,7 +164,7 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 
 ## Phase 2 — Database schema and migration foundation
 
-- [ ] Document the migration policy: forward-only migrations in `supabase/migrations/`, created with `supabase migration new`; never edit the remote schema via the Dashboard; use `supabase migration repair` / `db pull` only to recover drift. Migrations must apply cleanly in CI against an empty database.
+- [ ] Document the migration policy: forward-only `dbmate` migrations in `db/migrations/`; never edit a hosted schema outside a CI migration. Migrations must apply cleanly in CI against an empty database.
 - [ ] Create core tables and indexes:
   - `tournaments`: name, slug, dates/timezone, status, venue/description, created/updated metadata.
   - `sports`: stable keys and display labels for the six supported sports.
@@ -151,32 +174,32 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
   - `matches`: tournament sport, two sides, schedule/venue, `bracket` or `custom` origin, status, score/result projection, format-config snapshot/version.
   - `match_roster`: selected players and active/substitute state for a match.
   - `tournament_brackets` and `bracket_slots`: exactly two semifinal matches and one final per tournament sport; final participant slots reference the approved semifinal winner.
-  - `admin_accounts`: Supabase Auth user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No sport or tournament scope column.
+  - `admin_accounts`: Clerk user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No sport or tournament scope column.
   - `match_operator_assignments`: `id`, `match_id`, `user_id`, `assigned_by`, `permission` (`'SCORE'` default, only value), nullable `valid_from`/`valid_until`, `status` (`ACTIVE` | `REVOKED`), `created_at`, `revoked_at`, `revoked_by`, `revoke_reason`.
   - `match_result_reviews`: result version, `submitted_by`, `reviewed_by`, `decision`, `reason`, `correction_route` (`OPERATOR` | `MANAGER`), `self_approval_override`, `override_reason`.
   - `score_actions` (including linked reversal actions), `match_snapshots`, `player_match_stats`, `sport_standings`, `scorer_leases`, `admin_audit_log`, and `outbox_events`.
 - [ ] Add foreign keys, check constraints, uniqueness rules, timestamps, status constraints, and indexes for tournament/sport/match public reads and for assignment lookups by `(match_id, user_id, status)`.
 - [ ] Assignment constraints: check `valid_until > valid_from` when both are set; partial unique index on `match_id` where `status = 'ACTIVE'`; revoked rows require `revoked_at` and `revoked_by`.
 - [ ] Review constraint: `reviewed_by <> submitted_by` unless `self_approval_override` is true with a non-empty `override_reason`; rejection requires `reason` and `correction_route`.
-- [ ] Enable RLS on every `public` table with no policies (deny-all for the Data API); add a CI test asserting no table lacks RLS.
+- [ ] Grant database access only to the Worker's role; no browser or public API connects to the database.
 - [ ] Add constraints/tests preventing a custom match from occupying a bracket slot and preventing the bracket from having extra semifinal/final slots.
 - [ ] Ensure one team cannot be assigned to both sides of the same semifinal unless an explicitly approved special rule supports it.
 - [ ] Store immutable-at-match-start format config snapshots so changing tournament defaults cannot reinterpret an in-progress match.
-- [ ] Seed synthetic data in `supabase/seed.sql` for CI and staging only. Clearly mark seeded users, teams, and scores as fake; never seed production.
+- [ ] Seed synthetic data in `db/seed/fake.sql` for CI and staging only. Clearly mark seeded users, teams, and scores as fake; never seed production.
 
-**Exit criteria:** migrations build the schema from scratch in CI, constraints reject invalid bracket/match/assignment/review rows, RLS is enabled everywhere, and seeds create a tournament with multiple enabled sports, assigned operators, and pending/approved sample results.
+**Exit criteria:** migrations build the schema from scratch in CI, constraints reject invalid bracket/match/assignment/review rows, and seeds create a tournament with multiple enabled sports, assigned operators, and pending/approved sample results.
 
 ## Phase 3 — Authentication, roles, match assignment authorization, and audit
 
-- [ ] Configure invite-only Supabase Auth: disable public sign-up, configure custom SMTP and invite redirect URLs, raise the email rate limit as needed.
-- [ ] Use asymmetric JWT signing keys; verify tokens in Express (`supabase.auth.getClaims()` or JWKS) for HTTP and at the Socket.IO handshake. Keep the secret key backend-only.
+- [ ] Configure Clerk: open sign-up, required email verification, the suspicious-sign-up challenge, Google as the only social provider, and allowed redirect URLs.
+- [ ] Verify Clerk session tokens in the Worker with `@clerk/backend` and an `authorizedParties` allow-list. Keep the secret key on the Worker only.
 - [ ] Load the `admin_accounts` row on every protected request; reject disabled or missing accounts with 403. Do not trust role or assignment data from token claims.
 - [ ] Implement role middleware for non-scoring routes: manager-or-above for tournaments, sports, teams, matches, assignments, and reviews; Super Admin only for manager/Super Admin account administration.
-- [ ] Implement invite flows: Super Admin invites managers/Super Admins; managers invite operators only (server rejects any other role). Use `auth.admin.inviteUserByEmail` server-side; audit every account change.
+- [ ] Implement invite flows: Super Admin invites managers/Super Admins; managers invite operators only (server rejects any other role). Use the Clerk Invitations API server-side; audit every account change. Sign-up without an invitation stays a Viewer.
 - [ ] Implement the scoring chain from `architecture.md`: token → active account → active assignment → server-time window → SCORE → role-aware match state → device lease. LIVE and REJECTED/OPERATOR use the valid assigned scorer. REJECTED/MANAGER requires a self-assigned Tournament Manager or Super Admin; operators remain locked out. Retain the documented 401/403/409 responses, reasons and audit.
-- [ ] Never rely only on hidden UI buttons or room membership.
+- [ ] Never rely only on hidden UI buttons or room membership. Viewer sockets accept no commands.
 - [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason. Audit assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
-- [ ] Add authorization tests (HTTP and sockets):
+- [ ] Add authorization tests (HTTP; viewer sockets are receive-only):
   - anonymous public GET allowed; anonymous mutation denied;
   - operator scoring an unassigned match → 403; before `valid_from` → 403; after `valid_until` → 403; revoked → 403 on the next command; submitted/approved match → 409; no lease → 409;
   - operator cannot reach tournament, team, match, user, or review routes;
@@ -186,7 +209,7 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
   - manager takeover revokes the old assignment and creates the self-assignment in one audited transaction; resubmission and independent approval remain required.
 - [ ] Redact tokens, credentials, and unnecessary player personal data from logs.
 
-**Exit criteria:** permission tests cover every role on HTTP and sockets; revocation takes effect on the next request; no sport-scoped admin logic exists; every privileged mutation produces an auditable record.
+**Exit criteria:** permission tests cover every role, including a signed-in Viewer; revocation takes effect on the next request; no sport-scoped admin logic exists; every privileged mutation produces an auditable record.
 
 ## Phase 4 — Tournament creation and sports configuration
 
@@ -291,7 +314,7 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 
 ## Phase 10 — Realtime delivery and offline scoring
 
-- [ ] Fetch authoritative public snapshot before joining relevant tournament/sport/match Socket.IO rooms.
+- [ ] Connect viewers to the relevant match room or the `home` room; the room sends its stored snapshot first.
 - [ ] Keep room subscriptions narrow and public payloads free of account, assignment, and audit detail.
 - [ ] Publish committed changes from PostgreSQL outbox only; include event ID, sequence, schema version, and timestamp.
 - [ ] Make clients deduplicate old events, detect sequence gaps, fetch a fresh snapshot, and recover after reconnect.
@@ -309,20 +332,19 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 - [ ] Add unit tests for all six configured score engines and bracket/result state transitions.
 - [ ] Add integration tests (in CI against the throwaway Postgres) for DB constraints, transactions, per-role authorization, assignment validity, review workflow, idempotency, outbox retries, and projection rebuild.
 - [ ] Add browser tests for tournament create, sport config, roster/match setup, scorer assignment/revocation, operator My Matches, scoring and undo, approval/rejection, public updates, mobile layouts, and offline recovery.
-- [ ] Add security checks for public data minimization, RLS deny-all coverage, admin/operator route protection, input validation, CORS/origin, rate limits, secret handling, and log redaction.
-- [ ] Add backup/restore rehearsal (Supabase backups on Pro, or scheduled `pg_dump` from CI on Free), health checks, structured logs, error reporting, and an event-day runbook (unpause project if on Free, verify SMTP, verify migrations deployed).
+- [ ] Add security checks for public data minimization, database access through the Worker only, admin/operator route protection, input validation, CORS/origin, rate limits, secret handling, and log redaction.
+- [ ] Add backup/restore rehearsal (nightly encrypted `pg_dump` from CI), health checks, structured logs, error reporting, and an event-day runbook (check Workers usage and the paid gate, verify migrations deployed, verify Clerk sign-in).
 - [ ] Confirm all domain statuses have accessible text/icon labels and do not depend on color alone.
 - [ ] Confirm logo integration once asset arrives: header, tournament, sport, match, admin, operator, mobile; no distortion and appropriate contrast.
 
-## Phase 12 — Multi-instance capacity demo and honest reporting
+## Phase 12 — Capacity demo and honest reporting
 
-- [ ] Package persistent Node/Socket.IO server and verify WebSocket upgrades through selected load balancer.
-- [ ] Add Redis Socket.IO adapter; verify cross-instance room delivery and reconnect behavior. Configure sticky sessions if polling fallback is enabled.
-- [ ] Keep normal event deployment able to run on one instance; demonstrate scale-out using multiple stateless Node replicas.
-- [ ] Build synthetic viewer harness using the real Socket.IO/Engine.IO protocol; monitor the generator to avoid client-side bottleneck.
+- [ ] Verify WebSocket upgrades to Durable Object rooms through the production route.
+- [ ] Measure room delivery with one Durable Object per room; split a room across objects only if the measurement requires it.
+- [ ] Build a synthetic viewer harness with plain WebSocket clients; monitor the generator to avoid a client-side bottleneck.
 - [ ] Run ramp tests (e.g. 100 → 500 → 1,000 → 3,000), stable soak, all-viewers-one-match hotspot, distribution across tournament sports, and reconnect burst.
 - [ ] During load, issue representative score events and result approvals; verify delivery ordering, no loss/duplication, and no unauthorized mutation path.
-- [ ] Record connect success, p50/p95/p99 update latency, errors, sequence gaps, CPU/memory/event-loop lag, DB pool/slow queries, Redis throughput, outbox lag, and egress.
+- [ ] Record connect success, p50/p95/p99 update latency, errors, sequence gaps, Worker and Durable Object request counts, Neon compute and slow queries, outbox lag, and egress.
 - [ ] Record build SHA, topology, region, instance sizes, workload, duration, results, failures and limits in the capacity section of this file after the run. Keep raw measurements outside shared source. Do not add a separate report by default.
 - [ ] Do not claim 3,000-viewer capacity until results and thresholds are measured and reported; keep synthetic clients separate from actual audience figures.
 
@@ -335,9 +357,9 @@ Limits: emulated devices only. No physical phone, branded Safari or screen-reade
 - [ ] Bracket contains exactly two semifinals and one final; only approved semifinal results advance.
 - [ ] Custom matches never affect bracket progression.
 - [ ] Final result requires approval by someone other than the submitter (or an audited Super Admin override); pending/rejected results are not final standings inputs.
-- [ ] HTTP/socket inputs are runtime-validated and authorized; audit records identify actors and transitions, including assignments and overrides.
+- [ ] HTTP inputs are runtime-validated and authorized; viewer sockets accept no commands; audit records identify actors and transitions, including assignments and overrides.
 - [ ] Score event, projections, audit, and outbox are consistent and recoverable.
-- [ ] All schema changes are migrations deployed by CI; RLS is enabled on every public table.
+- [ ] All schema changes are migrations deployed by CI; only the Worker connects to the database.
 - [ ] UI covers loading, empty, error, pending review, rejected, approved, stale, assignment, and responsive states.
 - [ ] Tests cover scoring boundaries, undo, approvals, bracket progression, reconnects, idempotent retries, and per-role authorization.
 - [ ] Existing docs describe final accepted contracts and concise verification/publication evidence. Applicable checks pass, and the remote commit/PR is confirmed before a feature is marked shared and complete. No abandoned attempts, duplicate summaries or local scratch references are included.
@@ -362,7 +384,7 @@ The homepage, fixed bracket shape, role model and common assignment gate are dec
 | Custom-match statistics and public visibility | Whether custom results contribute, and where they appear | Blocked; user/authorized product owner. |
 | Final roster validation and public fields | Eligibility, limits, squads and approved display data | Blocked; user/authorized event organizer. |
 | Final shared API/lifecycle implementation | Exact payload/error schemas, machine states and transitions | Blocked until scoped contract review; implementing teams agree with the product owner. |
-| End-to-end invitations/recovery | SMTP provider/domain and recovery policy | Blocked; authorized account owner. |
-| Production release and capacity claims | Host, plan, credentials/ownership and measured pass thresholds | Blocked; authorized operations/product owner. |
+| Account recovery for staff | Recovery policy | Blocked; authorized account owner. |
+| Production release and capacity claims | Account ownership, privacy contact, rate-limit and load-test thresholds (see [memory.md](memory.md#backend-open-items)) | Blocked; authorized operations/product owner. |
 
 These blocks apply to the dependent behavior, not every independent task. Record decisions in memory and update the existing authoritative contract before implementation. Record failed/untested cases honestly. Keep the handoff and task evidence current after agreed tests pass.

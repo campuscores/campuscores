@@ -119,6 +119,15 @@ Review phone and desktop rendering after UI/asset changes. Record tested cases, 
 
 Add feature and regression specs to `frontend/tests/` in the same change as the implementation. `npm test` discovers matching test files in that folder. Add applicable edge, failure and integration cases; preserve existing coverage. When other application layers are built, extend their commands and CI jobs/path triggers. Follow the shared verification policy in [AGENTS.md](../AGENTS.md).
 
+## Backend (planned)
+
+The backend is planned and not implemented. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).
+
+- No Postgres or Docker is needed on team devices. CI tests migrations on a throwaway Postgres on the GitHub Actions runner.
+- These root commands arrive with the backend scaffold: `npm run dev:backend` (local Worker), `npm run lint:backend` and `npm run test:backend`.
+- Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
+- Only GitHub Actions applies migrations and deploys. Do not run them from a laptop.
+
 ## Common problems
 
 | Symptom | Check or action |
@@ -138,7 +147,7 @@ Add feature and regression specs to `frontend/tests/` in the same change as the 
 
 `node_modules/`, `frontend/dist/`, `frontend/test-results/` and `frontend/playwright-report/` are local generated output. They are ignored by Git. Keep source, local assets, tests, configs, manifests, the lockfile and docs in the shared repository.
 
-Future hosting must serve `frontend/dist/` and return `index.html` for app routes such as `/sports/football`. This is the single-page application (SPA) fallback. The production host is still open; local preview is not a deployment.
+Hosting must serve `frontend/dist/` and return `index.html` for app routes such as `/sports/football`. This is the single-page application (SPA) fallback. The planned host is Cloudflare Workers static assets; it is not deployed yet. Local preview is not a deployment.
 
 ## GitHub Actions and Docker
 

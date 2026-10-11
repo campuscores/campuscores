@@ -2,7 +2,7 @@
 
 **Status:** Homepage frontend implemented; full scoring application remains planned. See `handoff.md` for the current implementation and route boundaries.
 **Product name:** Thaparlympics (working event name; product name undecided)  
-**Initial users:** Public spectators, Super Admins, Tournament Managers, and Match Operators  
+**Initial users:** Public spectators (anonymous, or with an optional Viewer account), Super Admins, Tournament Managers, and Match Operators  
 **Initial sports:** Football, volleyball, basketball, table tennis, lawn tennis, and badminton  
 **Expected live audience:** approximately 1,000 concurrent viewers
 
@@ -35,7 +35,7 @@ Preserve the approved card colors, rounded shape, white details and native horiz
 
 ## 3. Non-goals for the first release
 
-- Player sign-in, personal profiles, or cross-sport career statistics.
+- Player sign-in, personal profiles, or cross-sport career statistics. Optional Viewer accounts are not player profiles.
 - An app-store mobile app; the product is a responsive website.
 - The combined overall branch championship table; sport-level standings are the initial standings scope.
 - A public archive or editing of past editions.
@@ -47,11 +47,11 @@ Preserve the approved card colors, rounded shape, white details and native horiz
 
 ## 4. User types and access
 
-Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spectators have no account. Each account has one role, and Super Admin includes every manager capability.
+Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spectators need no account. Each account has one role, and Super Admin includes every manager capability.
 
 ### Spectator
 
-- Visits without signing in.
+- Visits without signing in. Can optionally create a Viewer account with a verified email or Google. A Viewer account adds no rights for now.
 - Views public event, sport, team, match, score, player contribution, and sport-standing information.
 - Sees whether a match is scheduled, live, paused, completed, or otherwise ended according to the configured status model.
 - Sees a clear correction marker when a submitted or approved score is corrected (not for live undos).
@@ -78,7 +78,7 @@ Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spec
 
 ### Match Operator
 
-- Verified person invited by email and signed in through Supabase Auth.
+- Verified person invited by email and signed in through Clerk, by email or Google.
 - Sees only matches with an active assignment ("My Matches").
 - Can view the assigned match, start scoring, enter live scores, undo live actions freely, finish the match, and submit the result.
 - Cannot create/edit tournaments or matches, change sport rules, modify teams/players, manage users, access unrelated matches, or approve results.
@@ -198,15 +198,15 @@ The homepage, global sport pages and reserved tournament routes are registered i
 
 ### Authentication and authorization
 
-- No public self-registration; public sign-up is disabled in Supabase Auth.
-- Super Admins invite managers and Super Admins. Managers and Super Admins invite Match Operators by email through Supabase Auth (backend-only admin API, custom SMTP).
+- Anyone can create an account through Clerk with a verified email or Google. Clerk challenges suspicious sign-ups. Sign-up alone gives only the Viewer role, with public read access.
+- Staff roles come only from invitations recorded in our database. Super Admins invite managers and Super Admins. Managers and Super Admins invite Match Operators. The backend sends invitations through the Clerk Invitations API.
 - Spectator endpoints and data are read-only and need no account.
 - Every protected request verifies the token and reads the active account and role from the database. Every scoring request also checks the match assignment, server-time window, `SCORE` permission, match state and device lease.
 - A valid assigned scorer can score a `LIVE` match or a `REJECTED` match with `OPERATOR` correction. A `REJECTED` match with `MANAGER` correction accepts scores only from a self-assigned Tournament Manager or Super Admin. Other states remain locked. See the acceptance rule in `architecture.md`.
 - An operator attempting to score an unassigned match receives 403 Forbidden. Never rely only on hiding UI buttons.
 - Revocation and expiry take effect on the next request; the server does not rely on token claims for assignment state.
 - There are no sport-scoped admin roles. Audit every privileged mutation, including assignments, revocations, reassignments, self-assignments, reviews, and overrides.
-- Keep service credentials server-side and keep the Supabase Data API closed (RLS deny-all); all data flows through the backend.
+- Keep service credentials server-side. Browsers never connect to the database; all data flows through the backend.
 
 ## 7. Quality attributes
 
@@ -233,11 +233,11 @@ The homepage, global sport pages and reserved tournament routes are registered i
 - A Tournament Manager cannot create Tournament Managers or Super Admins.
 - A manager can correct an approved result and the new result version, audit record, re-approval, and public correction marker agree.
 - A complete first edition can be configured without code changes for its team list, match schedule, and chosen formats.
-- Staging load test reaches 3,000 simulated Socket.IO clients under the agreed test profile without score-action loss/duplication; event-to-screen latency/error thresholds must be selected before the test.
-- Load-test report distinguishes test clients from actual event viewers and captures server, database, Redis, network, reconnect, and latency measurements.
+- Staging load test reaches 3,000 simulated WebSocket clients under the agreed test profile without score-action loss/duplication; event-to-screen latency/error thresholds must be selected before the test.
+- Load-test report distinguishes test clients from actual event viewers and captures Worker and Durable Object request counts, database, network, reconnect, and latency measurements.
 
 ## 9. Decisions still open
 
-See `memory.md` for the complete question register. The bracket is decided: exactly two semifinals and one final. Match formats, scoring values, standings and custom-match statistics remain open. Other open items include roster limits, squad rules, schedule, venue, brand assets, the Supabase plan, SMTP provider and backend host.
+See `memory.md` for the complete question register. The bracket is decided: exactly two semifinals and one final. Match formats, scoring values, standings and custom-match statistics remain open. Other open items include roster limits, squad rules, schedule, venue and brand assets. Backend open items (paid gate, Facebook sign-in, rate-limit threshold, privacy contact, load-test thresholds, management features) are in `memory.md`.
 
 Before work that depends on an open item, record the user's decision in `memory.md`. Update the affected requirement, rule or architecture contract and task acceptance checks. Do not infer a rule from the homepage's sample data. Independent work can continue when it does not depend on that decision. Record a feature as verified only after its required checks pass; name untested cases and limits in `tasks.md`.

@@ -57,7 +57,7 @@ Read the current `SKILL.md` before using a skill. Check installed commands and t
 | Browser MCP fallback | An available browser MCP, such as `mcp__cua_repl` | Follow its documented API. Name the actual browser/tool used and any missing checks. |
 | Architecture visuals | `archify` when useful or requested | Derive connections from source. Validate and inspect output. Keep generated reports outside the repository. |
 | Git and integration | Git; GitHub MCP or `gh` if available | Inspect diffs/conflicts. Commit, push, merge and messaging need task authorization. |
-| Future database work | `supabase` skill and agreed CLI/CI workflow | Resolve contracts first. Keep secrets server-side. Never change hosted schema through the Dashboard. |
+| Future database work | Neon, `dbmate` and the agreed CI workflow | Resolve contracts first. Keep secrets server-side. Change a hosted schema only through a CI migration, never through the Neon console. |
 
 Node/npm and Git are setup requirements. App/test dependencies are pinned by `package-lock.json`. Skills, optional CLIs and MCP connectors depend on each machine; they are not app dependencies. Use a documented equivalent if unavailable and state the limit. Do not add every optional tool to `package.json`.
 

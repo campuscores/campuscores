@@ -48,4 +48,4 @@ frontend/
 doc/                      shared requirements, decisions, tasks and guides
 ```
 
-Keep generated dependencies/build/test output out of Git. Future deployment needs SPA route fallback; hosting is not selected. The existing GitHub Actions workflow checks the frontend and does not deploy it.
+Keep generated dependencies/build/test output out of Git. Deployment needs SPA route fallback. The planned host is Cloudflare; the backend stack is in [architecture](doc/architecture.md). The existing GitHub Actions workflow checks the frontend and does not deploy it.

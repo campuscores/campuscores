@@ -2,7 +2,7 @@
 
 ## Current implementation — 9 October 2026
 
-The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages with display fixtures and reserved tournament destinations. No Express server, Supabase project/connection, authentication, scoring engine, Socket.IO or Redis has been added. Those parts below describe the target application.
+The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages with display fixtures and reserved tournament destinations. No backend Worker, database, authentication, scoring engine or live delivery has been added. Those parts below describe the target application. The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
 
 Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` and `features/tournaments/` (sections/cards/display fixtures), `features/sports/` (shared sport page, sections, cards, dialog, calendar, fixture registry and one fixture folder per sport), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
 
@@ -24,15 +24,15 @@ Super Admins and Tournament Managers run tournaments across all enabled sports. 
 
 ## Technology
 
-- Frontend: React + Vite
-- Backend: Node.js + Express
-- Live updates: Socket.IO
-- Database: hosted Supabase Postgres (separate staging and production projects); no Postgres runs on any team device
-- Sign-in: Supabase Auth, invite-only, for Super Admins, Tournament Managers, and Match Operators
-- Schema changes: SQL migrations in `supabase/migrations/`, applied by GitHub Actions
-- Multi-server Socket.IO delivery: Redis adapter, only when running more than one backend instance
+- Frontend: React + Vite (JavaScript), served as Cloudflare Workers static assets with the SPA fallback
+- API: one Cloudflare Worker with Hono (JavaScript); staff commands, including scoring, use HTTPS
+- Live updates: SQLite-backed Durable Objects with the WebSocket Hibernation API; one room per match and one `home` room; viewer sockets are receive-only
+- Database: Neon Postgres (separate staging and production projects); no Postgres runs on any team device
+- Database connection: Cloudflare Hyperdrive with the `pg` driver; a cached configuration for public reads and an uncached one for everything else
+- Sign-in: Clerk. Anyone can sign up with a verified email or Google; staff roles come only from invitations recorded in our database
+- Schema changes: plain SQL migrations in `db/migrations/`, applied with `dbmate` by GitHub Actions only
 
-PostgreSQL is the source of truth. Socket.IO sends committed updates to connected viewers; it is not the score database.
+PostgreSQL is the source of truth. Durable Object rooms send committed updates to connected viewers; they are not the score database.
 
 ## Repository structure
 
@@ -70,49 +70,45 @@ frontend/
         badminton/
           components/
           scoring/
-    services/                    # HTTP API and Socket.IO clients
+    services/                    # HTTP API and live WebSocket clients
     state/                       # shared client state where needed
 
 backend/
+  wrangler.jsonc                 # Worker, Durable Object, Hyperdrive, cron and environment config
   src/
-    app.js                       # Express app setup
-    routes/                      # URL/method mapping to controllers
-    controllers/                 # HTTP request/response handling
-    middleware/                  # authentication, role/assignment authorization, validation, errors
-    services/                    # tournament, team, match, assignment, review, and score workflows
-    sports/
-      football/                  # rules, score validation, result calculation
-      volleyball/
-      basketball/
-      table-tennis/
-      lawn-tennis/
-      badminton/
-    sockets/                     # Socket.IO setup, handshake auth, rooms, and live events
-    database/                    # PostgreSQL connection and queries
-    jobs/                        # outbox delivery and queued background work
+    index.js                     # Hono app, static assets, live-socket routing, scheduled handler
+    http.js                      # request ID, error body, public field allow-lists
+    auth.js                      # Clerk token check, account load, role checks
+    scoring.js                   # scoring authorization chain and match-state rule
+    rooms.js                     # MatchRoom Durable Object (match rooms and the home room)
+    outbox.js                    # outbox sweep
+    db.js                        # Hyperdrive pools and transactions
+    routes/                      # public, me, invites, assignments, leases, actions
+    engines/                     # sport engine registry; production engines wait for rules.md
+  scripts/                       # Super Admin bootstrap, smoke check
+  test/
 
-supabase/
-  config.toml                    # Supabase CLI project config
-  migrations/                    # <timestamp>_name.sql, applied in order by CI
-  seed.sql                       # fake data for CI/staging only
+db/
+  migrations/                    # <timestamp>_name.sql, applied in order by dbmate in CI
+  seed/fake.sql                  # fake data for CI and staging only
 
 .github/
-  workflows/                     # CI (test migrations) and release (db push) workflows
+  workflows/                     # frontend and backend CI, deploy, backup and bootstrap workflows
 
 doc/                             # project documentation
 ```
 
-Keep each backend sport module responsible for validating that sport's score actions and calculating its score/result. Shared services can call a sport module through a small common interface; avoid putting sport rules in controllers or UI components. Frontend sport folders contain sport-specific scoring controls and scorecards; reusable layout and form elements stay in `components/`.
+Keep each backend sport module responsible for validating that sport's score actions and calculating its score/result. Shared services can call a sport module through a small common interface; avoid putting sport rules in route handlers or UI components. Frontend sport folders contain sport-specific scoring controls and scorecards; reusable layout and form elements stay in `components/`.
 
 ## Roles and access
 
 Core principle:
 
-- **Authentication** answers "who is this person?" (Supabase Auth).
+- **Authentication** answers "who is this person?" (Clerk).
 - **Role** answers "what can this type of user do?" (`admin_accounts.role`).
 - **Match assignment** answers "which specific match can this person operate?" (`match_operator_assignments`).
 
-Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OPERATOR`. Spectators have no account. Each account has exactly one role; Super Admin includes every Tournament Manager capability. Tournament Managers are global across all tournaments. There are no sport-scoped admin roles.
+Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OPERATOR`. A Spectator needs no account. A signed-in account with no `admin_accounts` row is a Viewer: it has exactly the Spectator column's rights. Each account has exactly one role; Super Admin includes every Tournament Manager capability. Tournament Managers are global across all tournaments. There are no sport-scoped admin roles.
 
 | Capability | Super Admin | Tournament Manager | Match Operator | Spectator |
 | --- | --- | --- | --- | --- |
@@ -135,11 +131,11 @@ A manager or Super Admin who wants to score a match assigns themselves first; th
 
 ### Scoring authorization chain
 
-Every protected scoring HTTP request and Socket.IO command runs this chain server-side. Account and assignment state are read from the database on every request, not only at sign-in or from token claims, so a revocation takes effect on the next command. Hidden UI buttons are never the control.
+Every protected scoring HTTP command runs this chain server-side. Account and assignment state are read from the database on every request, not only at sign-in or from token claims, so a revocation takes effect on the next command. Hidden UI buttons are never the control.
 
 ```mermaid
 flowchart TD
-  A[Request with Supabase JWT] --> B{Token valid?}
+  A[Request with Clerk session JWT] --> B{Token valid?}
   B -- no --> X401[401]
   B -- yes --> C{admin_accounts row ACTIVE?}
   C -- no --> X403[403]
@@ -174,26 +170,26 @@ For a manager correction, revoke the previous assignment and create the manager'
 
 Non-scoring privileged requests (tournament, team, match, assignment, review, account management) check token → active account → required role.
 
-### Operator invitation
+### Staff invitation
 
-1. A Tournament Manager selects a match and chooses **Assign Scorer**.
-2. The manager enters the operator's email and an optional time window.
-3. If no account exists, the backend calls Supabase `auth.admin.inviteUserByEmail` with the secret key (server-side only) and creates an `admin_accounts` row with role `MATCH_OPERATOR`. It then creates the assignment row. Both are audited.
-4. The operator receives the invite and signs in through Supabase Auth.
-5. The backend verifies the active assignment on each request.
-6. The operator sees only assigned matches.
+1. A Tournament Manager selects a match and chooses **Assign Scorer**, or a Super Admin invites a manager or Super Admin.
+2. The backend checks the inviter's role: managers can invite `MATCH_OPERATOR` only.
+3. The backend calls the Clerk Invitations API with the secret key (server-side only), then stores a pending invitation row and an audit row in one transaction. Clerk sends the email.
+4. The invited person signs up or signs in through Clerk with the same verified email, by email or Google.
+5. The backend matches the verified email to the pending invitation and creates the `admin_accounts` row with the invited role, with an audit row.
+6. For an operator, the manager creates the assignment row (audited). The backend verifies the active assignment on each request, and the operator sees only assigned matches.
 
 Example: Football SF1 → Rahul → `SCORE` → 09:30–12:30.
 
-Managers can invite `MATCH_OPERATOR` accounts only. Only a Super Admin creates Tournament Managers and Super Admins. Ending a match never deletes the user account; only the assignment expires or is revoked.
+Only a Super Admin creates Tournament Managers and Super Admins. Sign-up without an invitation gives only the Viewer role. Ending a match never deletes the user account; only the assignment expires or is revoked.
 
 ## Main backend request flow
 
-1. A route sends the request to a controller.
-2. Middleware verifies the Supabase JWT, loads the `admin_accounts` row, and checks the required role. Scoring commands also run the full assignment chain above. Request data is validated.
+1. A Hono route receives the request.
+2. Middleware verifies the Clerk session JWT, loads the `admin_accounts` row, and checks the required role. Scoring commands also run the full assignment chain above. Request data is validated.
 3. The service applies tournament/match workflow and calls the appropriate sport module for scoring rules.
 4. The database transaction saves the score action, updated match state, audit entry, and live-update outbox record.
-5. After commit, Socket.IO broadcasts the public update to the match/tournament room.
+5. After commit, the Worker publishes the public snapshot to the match room and the `home` room. A cron sweep resends any undelivered outbox event.
 
 Public routes are read-only and need no account.
 
@@ -220,7 +216,7 @@ Public routes are read-only and need no account.
 - `bracket_slots`: the two semifinal assignments and final slots linked to approved semifinal winners.
 - `score_actions`: ordered, auditable sport-specific scoring events, including linked reversal actions for undo/correction.
 - `match_snapshots` and `sport_standings`: derived current match and standings views.
-- `admin_accounts`: Supabase Auth user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No `is_admin` flag.
+- `admin_accounts`: Clerk user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No `is_admin` flag.
 - `match_operator_assignments`:
   - `id`, `match_id`, `user_id`, `assigned_by`
   - `permission`: `'SCORE'` only (default)
@@ -240,60 +236,64 @@ Before backend work, agree the task's routes, payloads, statuses, authorization 
 
 ## Database hosting and migrations
 
-No Postgres runs on any team device, including when the schema changes. All environments are hosted Supabase projects.
+No Postgres runs on any team device, including when the schema changes. All environments are hosted Neon projects.
 
-- **Environments:** one Supabase project for staging and one for production.
-- **Migrations:** create files with `supabase migration new <name>` in `supabase/migrations/<timestamp>_name.sql`. Supabase records applied migrations in `supabase_migrations.schema_migrations`; `supabase db push` applies only pending files, in timestamp order.
-- **Golden rule:** never change the remote schema through the Supabase Dashboard SQL or Table editors. That bypasses migration history and breaks `db push` (recovery needs `supabase migration repair` or `supabase db pull`).
-- **Testing without a local database:** Supabase's local stack needs Docker, so it is not used. CI applies every migration to a throwaway Postgres on the GitHub Actions runner (service container or Supabase CLI on the runner), runs integration tests, and discards it.
-- **Deploying:** only GitHub Actions runs `supabase db push`: merge to `develop` deploys to staging, merge to `main` deploys to production. Required repository secrets: `SUPABASE_ACCESS_TOKEN` (scoped to these projects) plus the database password and project ID for each environment.
-- **Seed data:** `supabase/seed.sql` holds clearly fake data for CI and staging only; never seed production.
+- **Environments:** one Neon project for staging and one for production, each capped at 0.5 CU of autoscaling.
+- **Migrations:** plain SQL files in `db/migrations/<timestamp>_name.sql`, applied in order with a pinned `dbmate`. `dbmate` records applied migrations in the database and applies only pending files.
+- **Golden rule:** change a hosted schema only through a CI migration. Never edit it through the Neon console SQL editor.
+- **Testing without a local database:** CI applies every migration to a throwaway Postgres service container on the GitHub Actions runner, runs integration tests, and discards it.
+- **Deploying:** only GitHub Actions applies migrations and deploys the Worker: merge to `develop` deploys staging, merge to `main` deploys production. Secrets live in GitHub Environments (`staging`, `production`).
+- **Seed data:** `db/seed/fake.sql` holds clearly fake data for CI and staging only; never seed production.
+- **Backups:** a nightly GitHub Actions workflow runs an encrypted `pg_dump` of production and checks that it restores. Neon Free keeps only 6 hours of restore history.
 
 ```mermaid
 flowchart LR
-  M[Write SQL in supabase/migrations] --> PR[Pull request]
+  M[Write SQL in db/migrations] --> PR[Pull request]
   PR --> CI[GitHub Actions: temporary Postgres, apply all migrations, run tests]
-  CI --> S[Merge to develop: supabase db push to staging]
-  S --> P[Merge to main: supabase db push to production]
+  CI --> S[Merge to develop: dbmate up + deploy staging]
+  S --> P[Merge to main: dbmate up + deploy production]
 ```
 
 ### Backend connection
 
-- The long-running Node backend connects through the Supabase shared pooler in **session mode** (`aws-[index]-[region].pooler.supabase.com:5432`, user `postgres.[project-ref]`), which is IPv4. Copy the host from the Dashboard **Connect** dialog; it cannot be derived from the region.
-- Direct connections (`db.[project-ref].supabase.co:5432`) are IPv6-only unless the paid IPv4 add-on is enabled. Migrations run by the CLI use the direct path.
-- Avoid transaction mode (port 6543) for this backend: it does not support prepared statements, LISTEN/NOTIFY, or session state, which the outbox worker may rely on.
-- Use `sslmode=require`, or `verify-full` with the downloaded server root certificate.
+- The Worker connects to Neon through Cloudflare Hyperdrive with the `pg` driver and SSL.
+- **Cached configuration:** public read routes only.
+- **Uncached configuration:** sign-in, roles, assignments, leases and every write. A cached read would delay a revocation.
+- Browsers never connect to the database. All data access goes through the Worker.
 
-### Supabase security setup
+### Sign-in setup
 
-- All data access goes through Express. Enable RLS on every table in the `public` schema with **no policies** (deny-all), so the Data API exposed with the publishable key returns nothing; alternatively disable Data API exposure of the schema.
-- Use the new `sb_publishable_...` / `sb_secret_...` keys rather than legacy `anon`/`service_role`. The secret key stays on the backend only.
-- Disable public sign-ups. Configure a custom SMTP provider (for example Resend, AWS SES, Postmark, Brevo) for invite emails: the built-in SMTP only delivers to project team members at about 2 messages/hour. Custom SMTP starts at 30 messages/hour and can be raised under Rate Limits. Set up SPF, DKIM, and DMARC for the sender domain.
-- Use asymmetric JWT signing keys (ES256) so Express verifies tokens locally with `supabase.auth.getClaims()` or the JWKS endpoint. Public keys can be cached up to about 20 minutes, which is another reason account and assignment state is checked in the database on every request.
+- Clerk Free: open sign-up, required email verification, the suspicious-sign-up challenge on, and Google as the only social provider.
+- The Worker verifies session tokens with `@clerk/backend` and an `authorizedParties` allow-list. Roles never come from token claims.
+- The Clerk secret key stays on the Worker as a secret. Only the publishable key reaches the browser.
+- Staging uses a Clerk development instance on `workers.dev`. Production needs our own domain, its own Clerk instance, our own Google OAuth credentials and a privacy policy URL. Clerk DNS records stay "DNS only".
 
-### Plan and hosting decisions (open)
+### Plan and limits
 
-- Supabase Free projects pause after 1 week of inactivity and have no automatic backups (500 MB database, 1-day logs). Pro never pauses and keeps 7 days of backups (8 GB disk). Choose Pro at least for the event period, or Free with the project unpaused before the event and scheduled `pg_dump` backups from CI.
-- The Express + Socket.IO backend needs a long-running host while events run; it can be stopped between events. The frontend is static files on a CDN. The backend host is not yet chosen.
+Free-tier limits and the paid gate are recorded in [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026). Design for daily request counts, not CPU:
+
+- Viewers get the stored snapshot from the room on connect, so viewing never queries Neon.
+- The outbox sweep skips Neon when no score was written in the last 15 minutes, so Neon can sleep.
+- Public routes fail closed at the daily request cap. One rate-limit rule, counted per IP, covers API and sign-up paths, not live sockets.
 
 ## Live updates and offline scoring
 
-- Viewers load an HTTP snapshot, then subscribe to the relevant match or tournament Socket.IO room.
+- Viewers open a receive-only WebSocket to the relevant match room or the `home` room. The room sends its stored snapshot first, then each newer snapshot.
 - Broadcast only public fields. Account identities, assignments, audit details, and private roster data are not sent to public rooms.
-- Publish from the database outbox after transaction commit. On reconnect or a missed update, fetch a fresh snapshot from PostgreSQL-backed APIs.
+- Publish from the database outbox after transaction commit. Each snapshot carries the match sequence; a room ignores an older sequence. On reconnect, the client replaces its state with the room's first message.
 - While a match is `LIVE`, the assigned operator can undo or correct as many times as needed, with no extra permission and no reason prompt. Each undo is stored as a linked reversal action with actor and server time; accepted actions are never erased. Live undos show no public correction marker. Corrections after submission or approval require a reason and show the public correction marker.
 - The operator downloads the current match snapshot, stores actions locally when offline, sends them in order after reconnect, and retries with the same action ID to prevent duplicate scoring.
 - The server validates each synced action against the operator's assignment and the score sequence, using **server receipt time** (the device clock is untrusted). If actions arrive after `valid_until` or after the assignment was revoked, sync pauses and a manager either extends the window or resolves the conflict.
 - Mark offline actions as pending until the server confirms them. Pause sync and request manager resolution if match state or score sequence conflicts.
 - One primary scoring device per match, enforced by `scorer_leases`.
-- Use Redis only if multiple backend instances need to share Socket.IO room broadcasts. A single backend instance needs no Redis adapter.
+- Split a room across several Durable Objects only if a measurement shows one room is not enough.
 
 ## Security basics
 
 - Spectators view public tournament and match data without signing in; they cannot change data.
-- Privileged users sign in through invite-only Supabase Auth. Every protected request checks the token, loads the account from the database, and checks its role; scoring commands also run the full assignment chain.
+- Anyone can sign in through Clerk, but only an invitation recorded in our database grants a staff role. Every protected request checks the token, loads the account from the database, and checks its role; scoring commands also run the full assignment chain.
 - An operator attempting to score or open the private view of an unassigned match receives 403 Forbidden. A locked match returns 409.
 - Managers can invite Match Operators only; only Super Admins create managers and Super Admins.
-- Socket.IO scoring commands authenticate at the handshake and re-run the authorization chain per command; room membership alone grants nothing.
-- Keep database credentials, the Supabase secret key, and SMTP credentials on the backend.
+- Viewer sockets are receive-only and ignore incoming messages. Scoring commands use HTTPS and run the authorization chain per command; room membership grants nothing.
+- Keep database credentials and the Clerk secret key on the Worker as secrets.
 - Validate input on the backend, use HTTPS/WSS in deployed environments, and audit account changes, assignments, revocations, reassignments, overrides, result reviews, and corrections.

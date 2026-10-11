@@ -2,6 +2,43 @@
 
 **Purpose:** Durable reference for future work in this repository. Update this file when the user makes a decision; do not convert an open question into a default silently.
 
+## Backend and hosting decisions — 11 October 2026
+
+These decisions replace the earlier Express, Socket.IO, Redis, Supabase Postgres and Supabase Auth plan. No backend code existed, so no implemented contract changes. [Architecture](architecture.md) owns the technical contract.
+
+- **Budget:** $0, or student credits. Workers Paid ($5/month) is approved for event months only, and only if the measured request gate below requires it.
+- **Frontend hosting:** Cloudflare Workers static assets serve `frontend/dist/` with the single-page application (SPA) fallback.
+- **API:** one Cloudflare Worker with Hono, in JavaScript. Staff commands, including scoring, use HTTPS.
+- **Live delivery:** SQLite-backed Durable Objects with the WebSocket Hibernation API. One room per match plus one `home` room for the homepage live row. Viewer sockets are receive-only. A viewer gets the stored public snapshot on connect, so viewers never wait for the database. Plain WebSockets replace Socket.IO; Redis is not needed.
+- **Database:** Neon Postgres Free. One project for staging and one for production. Autoscaling is capped at 0.5 CU. PostgreSQL stays the score source of truth.
+- **Database connection:** Cloudflare Hyperdrive with the `pg` driver. The cached configuration serves public reads only. The uncached configuration serves sign-in, roles, assignments, leases and writes, so a revocation takes effect on the next request.
+- **Migrations:** plain SQL files in `db/migrations/`, applied with `dbmate`. Only GitHub Actions applies them: merge to `develop` deploys staging, merge to `main` deploys production. CI tests every migration on a throwaway Postgres on the runner. No team device runs Postgres or Docker.
+- **Backups:** a nightly encrypted `pg_dump` from GitHub Actions. Neon Free keeps only 6 hours of restore history.
+- **Sign-in:** Clerk Free. Anyone can create an account with a verified email or with Google. Clerk challenges suspicious sign-ups. Google is the only social provider. Apple is not implemented: production needs a paid Apple developer account. Facebook is deferred (see Open items).
+- **Roles:** an account without an `admin_accounts` row is a Viewer with public read access only. A signed-in Viewer gets nothing extra for now. Watching needs no account and never depends on Clerk. Staff roles come only from invitations recorded in our database. The server reads the role on every request. A Super Admin invites managers and Super Admins; managers invite Match Operators only. Clerk sends the invitation email, so no custom SMTP provider is needed.
+- **Domain:** a free GitHub Student Pack domain (Namecheap .me, .TECH or name.com) on Cloudflare DNS. Clerk production does not accept `*.workers.dev` or `*.pages.dev`. Staging uses `workers.dev` with a Clerk development instance. Clerk DNS records stay "DNS only".
+- **Abuse limits:** one Cloudflare Free rate-limit rule on API and sign-up paths, counted per IP. Public routes fail closed at the daily request cap. Cloudflare usage notifications are on.
+- **Paid gate:** if the measured peak exceeds about 70,000 Worker or Durable Object requests per day (less than 30% headroom), use Workers Paid during event months.
+- **Fallback, not chosen:** Heroku with the GitHub Student credit ($13/month for 24 months) can run a long-lived Node server. It needs a card, works on personal accounts only, ends after 24 months and gives one 512 MB instance.
+
+Rationale the next team needs:
+
+- The outbox sweep runs every minute. It reads the last score-write time from the `home` room first and skips Neon when no score was written in the last 15 minutes. A query every minute would keep Neon awake and exceed its 100 free compute hours per month.
+- Durable Object CPU is not the broadcast limit: each request or WebSocket message gets 30 seconds of CPU. Daily request counts are the limit. Outgoing WebSocket messages are free.
+
+### Backend open items
+
+These items are **Open** and deferred for now. Independent backend work continues. Do not build the dependent behavior until the decision is recorded here.
+
+1. **Open — Workers Paid gate.** Question: does the measured peak need Workers Paid in event months? Owner: user. Affects: backend task 2 and the production cutover. Accept when the request-count estimate, its inputs and the $0 or $5 decision are recorded in [tasks.md](tasks.md).
+2. **Open — Facebook sign-in.** Question: add Facebook later? It needs a Meta developer app, a privacy policy, a data-deletion request path with a contact email, and Live mode. Owner: user. Affects: sign-in only; the Clerk dashboard adds it without code. Accept when the user approves it and the Meta app is live.
+3. **Open — rate-limit threshold.** Question: what per-IP threshold avoids blocking many viewers behind one campus Wi-Fi address? Owner: user. Affects: the hardening task. Accept when the threshold is recorded and the rule stays off live-score sockets.
+4. **Open — privacy policy owner and contact.** Question: who owns the policy, and which contact email does it publish? Google's consent screen needs it. Owner: user/product owner. Affects: the privacy page and the Google sign-in setup. Accept when the owner and email are recorded.
+5. **Open — load-test thresholds.** Question: what ramp, duration, room distribution, update rate, reconnect burst, p95/p99 latency and tolerated errors define a pass for 3,000 simulated clients? Owner: user. Affects: the capacity test. Accept when the thresholds are recorded here before any run.
+6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when a follow-up feature is scoped and claimed in [tasks.md](tasks.md).
+7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
+8. **Open — package details.** Confirm the current Clerk React SDK package name and the `@cloudflare/vitest-pool-workers` configuration API at install. Owner: implementing team. Affects: backend scaffold and sign-in tasks. Accept when both are pinned and working.
+
 ## Documentation decisions — 9 October 2026
 
 - Canonical docs describe final accepted behavior and contracts. [Requirements](prd.md), [architecture](architecture.md), [design](design.md) and [rules](rules.md) own their contracts. [Handoff](handoff.md) maps current integration points. [Tasks](tasks.md) holds minimal ownership, state and verification evidence.
@@ -39,8 +76,8 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Shared repository: `Kush-Saharan/t-lympics`. Each teammate may use a different local checkout path; app and test code must stay portable.
 - Event label: **Thaparlympics** for now. Product/site name is undecided.
 - Site type: responsive website, not a native app.
-- Primary users: public spectators (anonymous), Super Admins, Tournament Managers, and Match Operators. No player login/profile in initial release.
-- Public access: anyone can view event scores without an account; privileged tools are protected.
+- Primary users: public spectators (anonymous or with an optional Viewer account), Super Admins, Tournament Managers, and Match Operators. No player login/profile in initial release.
+- Public access: anyone can view event scores without an account; an optional Viewer account adds no rights for now; privileged tools are protected.
 - Primary data entity: tournament; each tournament enables a configurable subset of sports at creation, then tournament sport/match detail. The homepage also has global header sport links and live-match filters as confirmed above.
 - Initial selectable sports: football, volleyball, basketball, table tennis, lawn tennis, and badminton. Cricket is not in the current scope.
 - Tournament competition: exactly two semifinals and one final per configured tournament sport. A Tournament Manager or Super Admin assigns semifinal teams; only approved semifinal winners fill final slots. Custom matches are separate and never advance the bracket.
@@ -50,10 +87,10 @@ The product and service decisions below are confirmed requirements. Scoring, bac
   - `MATCH_OPERATOR`: verified person who can score only matches they hold an active assignment for. Cannot create or edit tournaments, matches, sport rules, teams/players, or users, and cannot approve results.
   - Spectator: anonymous, read-only, no account.
   - Each account has exactly one role. Super Admin includes every Tournament Manager capability. There is still no sport-scoped admin role.
-- Account creation: only a Super Admin creates/invites Super Admins and Tournament Managers. Managers (and Super Admins) can invite `MATCH_OPERATOR` accounts only. Accounts are invite-only through Supabase Auth; public sign-up is disabled.
+- Account creation: only a Super Admin invites Super Admins and Tournament Managers. Managers (and Super Admins) invite `MATCH_OPERATOR` accounts only. Staff roles come only from invitations recorded in our database. Anyone can sign up through Clerk, but sign-up alone gives only the Viewer role (decided 11 October 2026; replaces invite-only Supabase Auth).
 - Match operator assignments: `match_operator_assignments` rows grant `SCORE` permission for one match. Status stores only `ACTIVE` or `REVOKED`; expiry is derived from `valid_from`/`valid_until`, which are both optional. With no `valid_until`, access lasts until the match is locked (submitted/approved) or the assignment is revoked. Ending a match never deletes the user account.
 - Planned scorer concurrency: at most one active assignment per match (partial unique index). The planned `scorer_leases` table identifies the one active device/session. Reassignment revokes the old row and inserts a new one in one audited transaction. Managers assign themselves before scoring. No database table or enforcement exists in the current frontend.
-- Authorization: every scoring HTTP request and Socket.IO command checks token → active account → active assignment → time window (server time) → `SCORE` permission → match accepting scores → scorer lease, against the database on every request. An unassigned match returns 403. UI hiding is never the control.
+- Authorization: every scoring HTTP command checks token → active account → active assignment → time window (server time) → `SCORE` permission → match accepting scores → scorer lease, against the database on every request. An unassigned match returns 403. UI hiding is never the control. Viewer sockets are receive-only and accept no commands.
 - Planned scoring gate: `LIVE` and `REJECTED/OPERATOR` require a valid assigned scorer. `REJECTED/MANAGER` permits only a self-assigned Tournament Manager or Super Admin. Preserve account, assignment, server-time window, `SCORE`, lease, reason and audit checks. Revoke the old assignment and create the self-assignment in one transaction. Operators remain locked out; corrected results need resubmission and review. See [architecture.md](architecture.md#scoring-authorization-chain).
 - Match finalization: the operator submits the result (`LIVE → PENDING_APPROVAL`); a Tournament Manager or Super Admin approves (`APPROVED/FINAL`) or rejects (`REJECTED/CORRECTION`). The submitter can never approve their own result, whatever their role, except through a Super Admin override that requires a reason and is audited. On rejection the reviewer chooses the correction route: `OPERATOR` reopens the assigned operator's scoring access, or `MANAGER` keeps the operator locked out while a manager corrects. Approved results are locked; post-approval corrections create a new audited result version and need another approval.
 - Teams: separate team/roster per sport, identified by branch + year.
@@ -70,16 +107,16 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Past edition archive: public archive with organizer-only edits is a future option; exclude from initial implementation.
 - Branding: approved homepage currently uses the Thaparlympics text wordmark. The official Thapar logo is still pending; use an institute-controlled asset and record the exact source/path when supplied/approved. Homepage colors are approved choices, not official institute branding claims.
 - Stack language: JavaScript (not TypeScript).
-- Final recommended stack: React + Vite (JavaScript) frontend, Node.js + Express API, Socket.IO live delivery, hosted Supabase Postgres, Supabase Auth for invitation-only privileged accounts, and Redis + Socket.IO adapter when running multiple Node instances. Serve static frontend assets through a CDN. Do not use Supabase Realtime as the score broadcast layer in the selected architecture.
-- Database hosting (decided 6 October 2026): no Postgres runs on any team device, including for schema changes. Separate hosted Supabase projects for staging and production. Migrations live in `supabase/migrations/`, are created with `supabase migration new`, and are applied by GitHub Actions with `supabase db push` (develop → staging, main → production). CI applies migrations and runs integration tests against a throwaway Postgres on the runner; no local Docker/Postgres required. Never edit the remote schema through the Supabase Dashboard.
-- Database access: the Node backend connects through the Supabase shared pooler in session mode (port 5432, IPv4) with SSL; not transaction mode. All data access goes through Express; every public table has RLS enabled with no policies (deny-all for the Data API). The Supabase secret key stays backend-only.
-- Auth setup: custom SMTP provider required for invite emails (built-in SMTP only reaches project team members at ~2 messages/hour). Use asymmetric JWT signing keys so Express verifies tokens locally; account and assignment state is still checked in the database on every request.
-- Backend hosting: Express + Socket.IO needs a long-running host while events run; it can be stopped between events. Host is not yet chosen.
+- Final stack (decided 11 October 2026): React + Vite (JavaScript) frontend and Hono API on Cloudflare Workers, Durable Object WebSocket rooms for live delivery, Neon Postgres through Hyperdrive, Clerk sign-in. See [Backend and hosting decisions](#backend-and-hosting-decisions--11-october-2026).
+- Database hosting: no Postgres runs on any team device, including for schema changes. Separate hosted Neon projects for staging and production. `dbmate` migrations in `db/migrations/` are applied only by GitHub Actions (develop → staging, main → production). CI tests them on a throwaway Postgres on the runner. Never change a hosted schema outside a CI migration.
+- Database access: the Worker connects through Hyperdrive with SSL. Public reads use the cached configuration; sign-in, roles, assignments, leases and writes use the uncached one. All data access goes through the Worker; browsers never connect to the database.
+- Auth setup: Clerk verifies email and challenges suspicious sign-ups. The Worker verifies Clerk session tokens with `@clerk/backend` and an `authorizedParties` allow-list. Account and assignment state is still read from the database on every request; token claims never grant a role.
+- Backend hosting: Cloudflare Workers and Durable Objects. They have no idle shutdown, so nothing needs a manual restart between events.
 - Actual event audience estimate: approximately 1,000 simultaneous viewers.
-- Capacity demonstration target: 3,000 simulated concurrent Socket.IO clients. This is not actual attendance and not a verified capacity claim until the benchmark is run and documented.
-- Normal operation can start with one Node instance; scale demonstration should run multiple Node replicas behind a WebSocket-capable load balancer with Redis adapter. Configure sticky sessions if Socket.IO polling fallback is enabled.
-- PostgreSQL is the score source of truth. Each accepted score action is persisted transactionally with projection/outbox data, then broadcast. Reconnect fetches authoritative state; socket delivery alone is not replay/history.
-- Hosting vendor, region, domain, budget, and capacity-test thresholds are not yet chosen.
+- Capacity demonstration target: 3,000 simulated concurrent WebSocket clients. This is not actual attendance and not a verified capacity claim until the benchmark is run and documented.
+- Live rooms: one Durable Object room per match plus the `home` room. Split a room across several objects only if a measurement shows it is needed.
+- PostgreSQL is the score source of truth. Each accepted score action is persisted transactionally with projection/outbox data, then published to its room. Reconnect delivers the stored snapshot; socket delivery alone is not replay/history.
+- Hosting: Cloudflare and Neon, with a free Student Pack domain. Production account ownership and capacity-test thresholds are not yet chosen.
 
 ## Research notes
 
@@ -92,7 +129,8 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Playinga inspiration: multisport management, granular roles, scoring permissions, and results feeding standings.
 - CricHeroes published an AWS overview naming RDS/Aurora Serverless, EC2/ALB, S3/CloudFront, WAF/SES and operational figures. Its “users per hour” number is not concurrent viewers; do not misstate it. Cricbuzz's public job listings reveal some backend skill requirements, not a verified production architecture.
 - Capacity evidence rule: distinguish expected users, simulated clients and measured capacity. Record build, topology, workload, metrics, failures and limits in the capacity section of `tasks.md` before saying “load-tested for 3,000.” Keep raw measurements outside shared source.
-- Supabase (checked 6 October 2026): Free plan pauses after 1 week of inactivity, has no automatic backups, 500 MB database, 1-day logs; Pro never pauses, keeps 7-day backups, 8 GB disk. Direct DB connections are IPv6-only without the paid IPv4 add-on; the shared pooler is IPv4 (session mode 5432, transaction mode 6543 without prepared statements or LISTEN/NOTIFY). `auth.admin.inviteUserByEmail` is an admin API requiring the secret key. Custom SMTP starts at 30 messages/hour (adjustable). JWKS signing keys may be cached up to ~20 minutes. Sources: Supabase docs on database migrations, managing environments, connecting to Postgres, pricing, custom SMTP, and JWT signing keys.
+- Platform limits (checked 11 October 2026): Cloudflare Workers Free gives 100,000 requests/day and 10 ms CPU per request, and returns error 1027 at the cap. Durable Objects Free gives 100,000 requests/day, 13,000 GB-s/day, 5 GB storage and 100,000 row writes/day. Each request or WebSocket message gets 30 s of CPU. Outgoing WebSocket messages are free; incoming messages bill at 20:1. Hyperdrive Free gives 100,000 queries/day. Cloudflare Free allows one rate-limit rule on your own zone. Neon Free gives 1 GB per project, 100 CU-hours per month and 5 GB egress; it sleeps after 5 minutes idle and wakes on the next query. Clerk Free gives 50,000 retained users and 3 social providers, supports open or invite-only sign-up and email verification, and needs an owned domain for production. Facebook Login needs no app review for name and email, but needs a privacy policy and data-deletion path. Sources: Cloudflare Workers limits, Durable Objects limits and pricing, Hyperdrive pricing and WAF rate-limiting rules pages; Neon plans page; Clerk pricing, restricting access, bot protection and production deployment guides; Meta Facebook Login overview; Heroku for GitHub Students page.
+- The earlier Supabase research (6 October 2026) no longer applies; Supabase is not used.
 
 ## Open questions to resolve
 
@@ -115,7 +153,6 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 
 ### Access and offline reliability
 
-- Which custom SMTP provider and sender domain will send invites (for example Resend, AWS SES, Postmark, Brevo), and who owns SPF/DKIM/DMARC setup?
 - Must operator (and manager) emails be Thapar addresses, or can any verified email be invited?
 - What password reset/account recovery policy applies to privileged accounts?
 - Should the Assign Scorer form suggest a default time window (for example 30 minutes before to 2 hours after the scheduled start), or leave it empty by default?
@@ -136,16 +173,13 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 
 ### Delivery and operations
 
-- Which Supabase plan for the event period: Pro (no pausing, daily backups), or Free with the project unpaused before the event plus scheduled `pg_dump` backups from CI?
-- Which host runs the long-running Express + Socket.IO backend, and in which region relative to the Supabase project?
-- Which domain/accounts should own production? What budget and operating constraints apply?
+- Who owns the production Cloudflare, Neon and Clerk accounts and the domain?
 - Is the existing GitHub repository the intended long-term project repository; confirm the develop → staging, main → production branch workflow.
 - What expected number of matches, teams and operators should sizing target? The latest viewer estimate is approximately 1,000; confirm any change before capacity work.
 - Who owns production backups, privileged account recovery, and event-day support?
 - What are acceptable public update latency and availability targets?
-- What precise synthetic load profile and pass thresholds define the 3,000-client demonstration (ramp, duration, room distribution, score event rate, reconnect burst, p95/p99 latency, and tolerated errors)?
-- Which persistent-WebSocket host/load balancer supports multiple Node replicas and the required session affinity, and what instance sizes will be benchmarked?
-- What monitoring/load-generator setup will record CPU, memory, event-loop lag, socket connections, Redis throughput, PostgreSQL pool/slow queries, event-to-screen latency, and sequence gaps?
+- Load-test thresholds: see backend open item 5.
+- What monitoring/load-generator setup will record Worker and Durable Object request counts and errors, socket connections, Neon compute and query time, event-to-screen latency, and sequence gaps?
 - Does the chosen React/Vite frontend need server-rendered social link previews/SEO? If yes, reassess UI framework while keeping API/socket/database boundaries.
 
 ## Explicitly deferred
@@ -156,6 +190,7 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Additional sports beyond the six current selectable sports.
 - Livestreaming, media uploads, registrations/payments, notifications, or social features.
 - Tournament-scoped managers and permissions other than `SCORE` for operators.
+- Sign in with Apple (needs a paid Apple developer account).
 
 ## Change-control note
 

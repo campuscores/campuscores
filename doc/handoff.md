@@ -71,4 +71,4 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend, Supabase, authentication, scoring correctness, realtime/offline services and production hosting have not been implemented or verified. They are separate future tasks.
+Backend, database, authentication, scoring correctness, live/offline services and production hosting have not been implemented or verified. They are separate future tasks. The planned backend integration points are in [architecture.md](architecture.md#technology); the frontend contracts above do not change until a live-data contract is agreed here.
