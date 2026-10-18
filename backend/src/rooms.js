@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { toPublic } from './http.js';
 
 export const ROOM_PATTERN = /^(home|match:[1-9][0-9]{0,17})$/;
 export const parseRoom = (s) => (typeof s === 'string' && ROOM_PATTERN.test(s) ? s : null);
@@ -15,7 +16,7 @@ export const liveCards = (state) => Object.values(state.cards).filter((card) => 
 const WRITE_SIGNAL_MS = 60 * 1000;
 
 // One class for every Live_Room: `home` and `match:<id>`. Viewer sockets are receive-only.
-// shortcut: snapshots and cards are sent as given by trusted Worker callers; filter with toPublic when task 5.2 adds it.
+// Every Room_Message carries only Public_DTO fields (toPublic), whatever the caller passes.
 export class MatchRoom extends DurableObject {
   async fetch() {
     const { 0: client, 1: server } = new WebSocketPair();
@@ -37,7 +38,8 @@ export class MatchRoom extends DurableObject {
 
   async publish(snapshot, seq) {
     if (!shouldAccept(await this.ctx.storage.get('seq'), seq)) return false;
-    const message = JSON.stringify({ type: 'snapshot', room: this.ctx.id.name, seq, data: snapshot });
+    const data = toPublic('snapshot', snapshot);
+    const message = JSON.stringify({ type: 'snapshot', room: this.ctx.id.name, seq, data });
     await this.ctx.storage.put({ seq, message });
     this.#broadcast(message);
     return true;
@@ -45,7 +47,7 @@ export class MatchRoom extends DurableObject {
 
   async publishCard(matchId, card, seq) {
     const state = (await this.ctx.storage.get('home')) ?? { seq: 0, cards: {} };
-    const next = applyCard(state, String(matchId), card, seq);
+    const next = applyCard(state, String(matchId), toPublic('card', card), seq);
     if (!next) return false;
     const message = JSON.stringify({ type: 'snapshot', room: 'home', seq: next.seq, data: liveCards(next) });
     await this.ctx.storage.put({ home: next, message });

@@ -29,7 +29,7 @@ describe('Property 2: live room publish is monotonic', () => {
         const sentinel = new Promise((resolve) => (sentinelSeen = resolve));
         ws.addEventListener('message', (e) => {
           const msg = JSON.parse(e.data);
-          if (msg.data === 'sentinel') sentinelSeen();
+          if (msg.data?.status === 'sentinel') sentinelSeen();
           else received.push(msg.seq);
         });
         ws.accept();
@@ -38,7 +38,7 @@ describe('Property 2: live room publish is monotonic', () => {
         const accepted = [];
         for (const [i, seq] of seqs.entries()) {
           const expected = Number.isSafeInteger(seq) && seq > max;
-          expect(await room.publish({ i }, seq)).toBe(expected);
+          expect(await room.publish({ matchId: i }, seq)).toBe(expected);
           if (expected) accepted.push((max = seq));
         }
 
@@ -46,7 +46,7 @@ describe('Property 2: live room publish is monotonic', () => {
         expect(stored ?? 0).toBe(max);
 
         // Per-socket delivery is ordered, so once the sentinel arrives every earlier broadcast has too.
-        expect(await room.publish('sentinel', max + 1)).toBe(true);
+        expect(await room.publish({ status: 'sentinel' }, max + 1)).toBe(true);
         await sentinel;
         expect(received).toEqual(accepted);
         ws.close(1000);

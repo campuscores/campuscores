@@ -11,6 +11,12 @@ export class AppError extends Error {
   }
 }
 
+export async function jsonBody(c) {
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError(400, 'BAD_REQUEST', 'JSON object body required');
+  return body;
+}
+
 export async function requestId(c, next) {
   const id = crypto.randomUUID();
   c.set('requestId', id);
@@ -43,4 +49,59 @@ export function redact(value) {
     );
   }
   return value;
+}
+
+// Public_DTO allow-lists. `true` copies a primitive (or an array of primitives); an object recurses
+// into a nested object or array of objects. Anything not listed, or of another shape, is dropped.
+const SIDE = { name: true };
+const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true, points: true }, corrected: true };
+const MATCH = {
+  id: true,
+  tournamentId: true,
+  sport: true,
+  kind: true,
+  stage: true,
+  status: true,
+  scheduledAt: true,
+  venue: true,
+  seq: true,
+  sides: SIDE,
+  snapshot: SNAPSHOT,
+};
+const PUBLIC = {
+  snapshot: SNAPSHOT,
+  match: MATCH,
+  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true },
+  tournament: {
+    id: true,
+    slug: true,
+    name: true,
+    startsOn: true,
+    endsOn: true,
+    status: true,
+    venue: true,
+    description: true,
+    sports: true,
+    matches: MATCH,
+  },
+};
+
+const isPrimitive = (v) => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+
+function pick(spec, obj) {
+  if (Array.isArray(obj)) return obj.map((item) => pick(spec, item));
+  if (!obj || typeof obj !== 'object') return null;
+  const out = {};
+  for (const [key, sub] of Object.entries(spec)) {
+    if (!Object.hasOwn(obj, key)) continue;
+    const v = obj[key];
+    if (sub !== true) out[key] = pick(sub, v);
+    else if (isPrimitive(v) || (Array.isArray(v) && v.every(isPrimitive))) out[key] = v;
+  }
+  return out;
+}
+
+export function toPublic(kind, obj) {
+  if (!PUBLIC[kind]) throw new Error(`Unknown Public_DTO kind: ${kind}`);
+  return pick(PUBLIC[kind], obj);
 }

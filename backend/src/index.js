@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { AppError, onError, requestId } from './http.js';
 import { parseRoom } from './rooms.js';
+import { publicRoutes } from './routes/public.js';
 export { MatchRoom } from './rooms.js';
 const app = new Hono();
 app.use('*', requestId);
@@ -14,6 +15,7 @@ app.get('/live/:room', (c) => {
   if (!room) throw new AppError(404, 'NOT_FOUND', 'Room not found');
   return c.env.ROOMS.get(c.env.ROOMS.idFromName(room)).fetch(c.req.raw);
 });
+app.route('/api', publicRoutes); // cached pool, no auth
 app.notFound(() => {
   throw new AppError(404, 'NOT_FOUND', 'Route not found');
 });

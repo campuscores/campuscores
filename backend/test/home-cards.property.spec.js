@@ -20,7 +20,7 @@ function model(ops) {
   return { accepted, seq, list };
 }
 
-const byMatch = (a, b) => a.matchId - b.matchId;
+const byMatch = (a, b) => a.id - b.id;
 
 const op = fc.integer({ min: 1, max: 4 }).chain((matchId) =>
   fc.record({
@@ -29,7 +29,7 @@ const op = fc.integer({ min: 1, max: 4 }).chain((matchId) =>
     seq: fc.oneof(fc.integer({ min: -1, max: 6 }), fc.constant(1.5)),
     // Plain prototype: Workers RPC cannot serialize fast-check's null-prototype records.
     card: fc.record(
-      { matchId: fc.constant(matchId), status: fc.constantFrom('LIVE', 'SCHEDULED', 'FINISHED'), score: fc.nat(30) },
+      { id: fc.constant(matchId), status: fc.constantFrom('LIVE', 'SCHEDULED', 'FINISHED'), score: fc.nat(30) },
       { noNullPrototype: true },
     ),
   }),
