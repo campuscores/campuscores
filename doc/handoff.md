@@ -2,7 +2,7 @@
 
 Updated 9 October 2026. A handoff is the current implementation map for the next team. It says what exists, which files to extend, and which contracts to preserve. Git transfers the files; this document explains how to continue safely.
 
-Publication: the current frontend changes are local and unpublished. No pushed commit/PR is recorded for them. See `tasks.md` for checks and publication state; confirm the shared branch before treating this as an integrated feature.
+Publication: the homepage is published on `main`. See [tasks.md](tasks.md) for its confirmed revision, checks and any unpublished updates. Confirm the shared branch before extending it.
 
 Use [local-development.md](local-development.md) to install and start the site. Use [tasks.md](tasks.md) for ownership and dated test evidence. This handoff records stable integration points, not a second task log. Update it when an implemented interface or boundary changes. Read the six shared project documents and [AGENTS.md](../AGENTS.md) before extending the app.
 
