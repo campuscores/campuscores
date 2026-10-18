@@ -243,6 +243,19 @@ No Postgres runs on any team device, including when the schema changes. All envi
 - **Golden rule:** change a hosted schema only through a CI migration. Never edit it through the Neon console SQL editor.
 - **Testing without a local database:** CI applies every migration to a throwaway Postgres service container on the GitHub Actions runner, runs integration tests, and discards it.
 - **Deploying:** only GitHub Actions applies migrations and deploys the Worker: merge to `develop` deploys staging, merge to `main` deploys production. Secrets live in GitHub Environments (`staging`, `production`).
+- **Deploy workflow:** [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs on push to `develop` (Environment `staging`) or `main` (Environment `production`). One run at a time per environment; a newer push waits and never cancels a running deploy. Order: `npm ci`; frontend lint; backend lint; backend tests against a throwaway Postgres with `REQUIRE_DB=1`; frontend Chromium and Pixel tests; `dbmate up` on the environment database; fake seed (staging only); `npm run build` with the environment `VITE_*` values; `wrangler deploy --env <env>` from `backend/`. Any failed step stops the run, so a failed migration never deploys the Worker. Migrations must stay compatible with the running Worker (expand, deploy, then contract).
+- **Per-environment settings** (set the same names in both GitHub Environments, with that environment's values):
+
+  | Name | Kind | Value |
+  | --- | --- | --- |
+  | `DATABASE_URL` | Secret | Neon **direct** (unpooled) connection string with `sslmode=require` |
+  | `CLOUDFLARE_API_TOKEN` | Secret | Cloudflare API token with Workers deploy rights for the account |
+  | `CLOUDFLARE_ACCOUNT_ID` | Secret | Cloudflare account ID |
+  | `VITE_API_BASE` | Variable | Public API base URL of that environment (public; sent to the browser) |
+  | `VITE_CLERK_PUBLISHABLE_KEY` | Variable | Clerk publishable key of that environment's instance (public) |
+
+  `CLERK_SECRET_KEY` and `CLERK_JWT_KEY` are Worker secrets; `CLERK_PUBLISHABLE_KEY`, `AUTHORIZED_PARTIES` and `INVITE_REDIRECT_URL` (the sign-up page URL in invitation emails) are Worker vars. The Worker reads them for staff routes ([Sign-in setup](#sign-in-setup)); they are not yet in `wrangler.jsonc` or the deploy workflow.
+- **Known limit:** the Hyperdrive IDs in `backend/wrangler.jsonc` are placeholders. `wrangler deploy` fails until the real config IDs from the manual prerequisite step replace them. No deploy has run yet.
 - **Seed data:** `db/seed/fake.sql` holds clearly fake data for CI and staging only; never seed production.
 - **Backups:** a nightly GitHub Actions workflow runs an encrypted `pg_dump` of production and checks that it restores. Neon Free keeps only 6 hours of restore history.
 
@@ -261,10 +274,26 @@ flowchart LR
 - **Uncached configuration:** sign-in, roles, assignments, leases and every write. A cached read would delay a revocation.
 - Browsers never connect to the database. All data access goes through the Worker.
 
+### Public read API
+
+Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No authentication; every caller gets the same body through the cached configuration.
+
+- `GET /api/tournaments` → `{ tournaments: [tournament] }`
+- `GET /api/tournaments/:id` → `{ tournament }` with `sports` (sport keys) and `matches`
+- `GET /api/matches/:id` → `{ match }` with `snapshot` (the latest Match_Room snapshot data, or `null`)
+- An ID is a positive integer without a leading zero, up to 18 digits. Otherwise 400 `BAD_REQUEST`. An unknown or non-public ID returns 404 `NOT_FOUND`.
+- Every body and Room_Message goes through `toPublic(kind, obj)` in [`backend/src/http.js`](../backend/src/http.js). It copies only the allow-listed fields for `tournament`, `match`, `snapshot` and `card`. Database IDs are strings; dates are ISO text.
+- Current limits: `DRAFT` tournaments and `CUSTOM` matches are not public while the lifecycle and custom-match visibility questions in [memory.md](memory.md) are open. `snapshot` is `null` until the scoring migration adds `match_snapshots`.
+
 ### Sign-in setup
 
 - Clerk Free: open sign-up, required email verification, the suspicious-sign-up challenge on, and Google as the only social provider.
 - The Worker verifies session tokens with `@clerk/backend` and an `authorizedParties` allow-list. Roles never come from token claims.
+- Source: [`backend/src/auth.js`](../backend/src/auth.js). `clerkAuth` verifies the token locally with `CLERK_JWT_KEY` and checks `azp` against `AUTHORIZED_PARTIES` (comma-separated origins); no token or a bad token returns 401 `UNAUTHENTICATED`. `loadAccount` reads `admin_accounts` by Clerk user ID through the uncached configuration on every request. `requireRole('staff' | 'manager' | 'superAdmin')` returns 403 `NOT_STAFF`, `ACCOUNT_DISABLED` or `ROLE_FORBIDDEN`. A missing Clerk setting returns 500, so a misconfigured Worker never grants access.
+- `GET /api/me` (signed in) → `{ role, status }` for an `ACTIVE` staff account, else `{ role: 'VIEWER' }` (no row or `DISABLED`).
+- `POST /api/invites { email, role }` (manager or above; [`routes/invites.js`](../backend/src/routes/invites.js)) → 201 `{ invitation: { id, email, role, status, expiresAt } }`. The email is stored in lower case and expires after 7 days. A role the caller cannot invite returns 403 `ROLE_FORBIDDEN`; a bad email 400; an unexpired pending invitation for that email 409 `INVITE_PENDING`. The Clerk invitation (redirect `INVITE_REDIRECT_URL`) is created first; a Clerk failure returns 502 `CLERK_UNAVAILABLE` and stores no row. If the database step then fails, the Clerk invitation is revoked (best effort) and the call returns 500.
+- `POST /api/invites/accept` (signed in, no staff role needed) → `{ role, status }`. It matches the caller's verified Clerk emails to the oldest pending, unexpired invitation and creates the account with the invited role and `invited_by` in one transaction. No match returns 404 `INVITE_NOT_FOUND`; a caller who already has an account (also a disabled one) gets 409 `ACCOUNT_EXISTS` and nothing changes.
+- `POST /api/accounts/:id/disable { reason }` (Super Admin; [`routes/accounts.js`](../backend/src/routes/accounts.js)) → `{ account: { id, status, revokedAssignmentIds } }`. One transaction sets `DISABLED`, revokes the account's `ACTIVE` assignments with the reason, deletes its scorer leases and writes an `ACCOUNT_DISABLED` audit row. An empty reason returns 409 `REASON_REQUIRED`; the last active Super Admin 409 `LAST_SUPER_ADMIN`; an unknown ID 404.
 - The Clerk secret key stays on the Worker as a secret. Only the publishable key reaches the browser.
 - Staging uses a Clerk development instance on `workers.dev`. Production needs our own domain, its own Clerk instance, our own Google OAuth credentials and a privacy policy URL. Clerk DNS records stay "DNS only".
 
