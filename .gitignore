@@ -53,3 +53,5 @@ coverage/
 Thumbs.db
 Desktop.ini
 desktop.ini
+# Local Kiro MCP config and steering (not shared)
+/.kiro

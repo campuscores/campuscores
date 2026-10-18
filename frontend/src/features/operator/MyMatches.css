@@ -1,0 +1,55 @@
+.operator-title { margin-bottom: 8px; }
+.operator-title h1 {
+  margin: 40px 0 6px;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -.04em;
+}
+.operator-title p { margin: 0; color: #50688c; font-size: 16px; }
+
+/* Sport label with its outline icon in the card meta row. */
+.operator-sport { display: inline-flex; align-items: center; gap: 6px; }
+.operator-sport-icon { width: 15px; height: 15px; }
+
+/* White foot below the textured header: venue plus the scoring action. */
+.operator-card .match-surface { display: flex; flex-direction: column; }
+.operator-card .match-header { flex: 1; }
+.operator-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+}
+.operator-venue { margin: 0; min-width: 0; color: #50688c; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.operator-score-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  background: var(--blue);
+  box-shadow: 0 6px 18px rgb(7 85 255 / 18%);
+  transition: background .16s ease;
+}
+.operator-score-link:hover { background: #064ae0; }
+.operator-score-link:focus-visible { outline-offset: 2px; }
+/* Completed matches are read-only: a quiet secondary action. */
+.operator-score-link[data-state="completed"] {
+  color: var(--blue);
+  background: #eaf2ff;
+  box-shadow: none;
+}
+.operator-score-link[data-state="completed"]:hover { background: #d8e8ff; }
+
+@media (max-width: 767px) {
+  .operator-title h1 { margin: 36px 0 6px; font-size: 32px; }
+}

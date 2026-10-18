@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
 import SportPage from '../features/sports/SportPage.jsx';
+import MyMatchesPage from '../features/operator/MyMatchesPage.jsx';
 import { sportFixtures } from '../features/sports/sportFixtures.js';
 import { sports } from '../data/sports.js';
 
@@ -11,7 +12,8 @@ export default function App() {
   const { pathname, hash, search, key } = useLocation();
   useEffect(() => {
     document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
-      : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics' : 'Thaparlympics';
+      : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
+      : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics' : 'Thaparlympics';
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
     else window.scrollTo(0, 0);
   }, [pathname, hash, key]);
@@ -27,6 +29,9 @@ export default function App() {
       } replace />} />
       {/* Every sport gets the shared sport page with its display fixtures; key resets its state between sports. */}
       {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={<SportPage key={sport.id} sport={sport} fixtures={sportFixtures[sport.id]} />} />)}
+      <Route path="/operator/matches" element={<MyMatchesPage />} />
+      {/* Shared scoring console (admin + scorer) is designed in a later pass; route reserved so links resolve. */}
+      <Route path="/operator/matches/:matchId/score" element={<ReservedPage />} />
       <Route path="/tournaments/:tournament" element={<ReservedPage />} />
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>
