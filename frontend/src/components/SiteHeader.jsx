@@ -3,6 +3,9 @@ import { Link, useLocation } from 'react-router';
 import { sports } from '../data/sports.js';
 import './SiteHeader.css';
 
+// Sign-in is optional: builds without a Clerk key show no link (Req 13.1, 13.2).
+const signInLink = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+
 function SportsDropdown() {
   return (
     <details className="sports-dropdown">
@@ -17,6 +20,7 @@ function SportsDropdown() {
 export default function SiteHeader() {
   const headerRef = useRef(null);
   const location = useLocation();
+  const signInCurrent = location.pathname.startsWith('/sign-in') ? 'page' : undefined;
 
   useEffect(() => {
     const header = headerRef.current;
@@ -51,6 +55,7 @@ export default function SiteHeader() {
           <Link className="nav-link" to="/#tournaments">Tournaments</Link>
           <Link className="nav-link" to="/operator/matches" aria-current={location.pathname.startsWith('/operator/matches') ? 'page' : undefined}>My Matches</Link>
           <SportsDropdown />
+          {signInLink && <Link className="nav-link" to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
         </nav>
       </header>
       <header className="mobile-header" aria-label="Thaparlympics mobile header">
@@ -62,6 +67,7 @@ export default function SiteHeader() {
             <Link to="/#tournaments">Tournaments</Link>
             <Link to="/operator/matches" aria-current={location.pathname.startsWith('/operator/matches') ? 'page' : undefined}>My Matches</Link>
             <SportsDropdown />
+            {signInLink && <Link to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
           </nav>
         </details>
       </header>

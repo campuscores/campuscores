@@ -32,7 +32,9 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | --- | --- | --- |
 | Routes and app entry | `frontend/src/app/App.jsx`, `frontend/src/main.jsx` | Central React Router routes. Each navigation entry restores section/top scrolling, including a repeat click to the same destination. |
 | Homepage composition | `frontend/src/features/home/HomePage.jsx` | Owns selected sport and composes sections; no backend calls. |
-| Header | `frontend/src/components/SiteHeader.jsx` | Homepage links and six sport destinations; filter buttons are separate. |
+| Header | `frontend/src/components/SiteHeader.jsx` | Homepage links and six sport destinations; filter buttons are separate. One `Sign in` link to `/sign-in` (desktop nav end, phone menu last item) renders only when the build sets `VITE_CLERK_PUBLISHABLE_KEY`. It reuses the existing nav link styles and 44px targets. |
+| Sign-in area | `frontend/src/features/auth/` (lazy chunk) | `/sign-in/*`, `/sign-up/*` and `/account/delete`. `ClerkProvider` exists only inside this chunk, so public pages load no Clerk code. After sign-in or sign-up it calls `POST /api/invites/accept` once (404 `INVITE_NOT_FOUND` is ignored). `/account/delete` calls `DELETE /api/me`, then signs out. API base: `VITE_API_BASE`. Without a Clerk key the routes show a "sign-in unavailable" message. |
+| Privacy page | `frontend/src/features/legal/PrivacyPage.jsx` | `/privacy`, plain page, no Clerk. Contact stays "to be confirmed" until the Open item in [memory.md](memory.md#backend-open-items) closes. |
 | Native card rail | `frontend/src/components/HorizontalRail.jsx` | Receives card children, label, class, optional ID/reset key. Observes stable outer slots; scales inner surfaces only. |
 | Match card | `frontend/src/features/matches/LiveMatchCard.jsx` | Receives `match`: ID, sport, display metadata, two sides and detail columns. Presentational; calculates no scores. Replace the white detail rendering when integrating sport-specific cards. |
 | Tournament card | `frontend/src/features/tournaments/TournamentCard.jsx` | Receives `event`: ID, title, local image/alt/crop, date values and labels. Links to the event route. |
@@ -54,6 +56,9 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | `/sports/<sport>/` | Shared sport page for all six sports: Live, Upcoming and Past matches from display fixtures, date chips and a match detail dialog | Respective sport teams |
 | `/operator/matches` | Match Operator "My Matches" dashboard: assigned matches only, in Live / Scheduled / Done sections, from display fixtures. No auth gate yet | Scorer / operator team |
 | `/operator/matches/:matchId/score` | Reserved blank: the shared admin + scorer scoring console is a later pass | Scorer / operator team |
+| `/sign-in/*`, `/sign-up/*` | Lazy Clerk sign-in and sign-up (email with verification, or Google) | Backend/auth team |
+| `/account/delete` | Lazy Clerk area: explains deletion; a signed-in user can delete the account | Backend/auth team |
+| `/privacy` | Privacy policy, no Clerk | Backend/auth team; policy owner (Open) |
 | `/tournaments/:tournament` | Deliberately blank tournament destination | Tournament team |
 | `/index.html` | Redirects to `/`; old preview query values are discarded | Compatibility only |
 | `/tournament.html?event=<id>` | Redirects to `/tournaments/<id>` | Compatibility only |

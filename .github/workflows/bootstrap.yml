@@ -1,0 +1,35 @@
+name: Bootstrap Super Admin
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment whose database gets the first Super Admin
+        type: choice
+        options: [staging, production]
+        required: true
+      clerk_user_id:
+        description: Clerk user ID (user_...) of the first Super Admin
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: bootstrap-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+      - run: npm ci
+      # Inputs pass through env, never inline in the shell, so a crafted ID cannot inject commands.
+      # The script refuses (exit 1, no row changed) when an active Super Admin already exists.
+      - run: node backend/scripts/bootstrap-super-admin.js --clerk-user-id "$CLERK_USER_ID"
+        env:
+          CLERK_USER_ID: ${{ inputs.clerk_user_id }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

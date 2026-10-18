@@ -1,19 +1,29 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
 import SportPage from '../features/sports/SportPage.jsx';
 import MyMatchesPage from '../features/operator/MyMatchesPage.jsx';
+import PrivacyPage from '../features/legal/PrivacyPage.jsx';
+import SignInUnavailable from '../features/auth/SignInUnavailable.jsx';
 import { sportFixtures } from '../features/sports/sportFixtures.js';
 import { sports } from '../data/sports.js';
 
 function ReservedPage() { return null; }
+
+// Clerk code loads only in this lazy chunk, and only when the build has a Clerk key (Req 11.8, 13.3).
+const AuthArea = lazy(() => import('../features/auth/AuthArea.jsx'));
+const authPage = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+  ? <Suspense fallback={<p className="sr-only" role="status">Loading sign-in…</p>}><AuthArea /></Suspense>
+  : <SignInUnavailable />;
 
 export default function App() {
   const { pathname, hash, search, key } = useLocation();
   useEffect(() => {
     document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
       : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
-      : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics' : 'Thaparlympics';
+      : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics'
+      : pathname === '/privacy' ? 'Privacy | Thaparlympics'
+      : /^\/(sign-in|sign-up|account)/.test(pathname) ? 'Account | Thaparlympics' : 'Thaparlympics';
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
     else window.scrollTo(0, 0);
   }, [pathname, hash, key]);
@@ -33,6 +43,11 @@ export default function App() {
       {/* Shared scoring console (admin + scorer) is designed in a later pass; route reserved so links resolve. */}
       <Route path="/operator/matches/:matchId/score" element={<ReservedPage />} />
       <Route path="/tournaments/:tournament" element={<ReservedPage />} />
+      <Route path="/sign-in/*" element={authPage} />
+      <Route path="/sign-up/*" element={authPage} />
+      <Route path="/account" element={authPage} />
+      <Route path="/account/delete" element={authPage} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>
   );
