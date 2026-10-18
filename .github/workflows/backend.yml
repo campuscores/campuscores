@@ -9,6 +9,21 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Neon Postgres major is not recorded yet; 17 is Neon's current default. Match it once recorded.
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: tlympics_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci -d tlympics_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Throwaway runner database; the container has no TLS, so dbmate's default sslmode would fail.
+      TEST_DATABASE_URL: postgres://ci:ci@localhost:5432/tlympics_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,5 +33,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint:backend
+      - run: npx dbmate --url "$TEST_DATABASE_URL" --migrations-dir db/migrations --no-dump-schema --wait up
+      - run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/seed/fake.sql
       # test:backend builds the frontend first; the asset routing test needs frontend/dist.
+      # REQUIRE_DB=1 makes a skipped DB suite fail the run.
       - run: npm run test:backend
+        env:
+          REQUIRE_DB: '1'

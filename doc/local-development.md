@@ -125,6 +125,7 @@ The backend is planned and not implemented. The stack is a Cloudflare Worker (Ho
 
 - No Postgres or Docker is needed on team devices. CI tests migrations on a throwaway Postgres on the GitHub Actions runner.
 - These root commands arrive with the backend scaffold: `npm run dev:backend` (local Worker), `npm run lint:backend` and `npm run test:backend`.
+- Database test suites run only when `TEST_DATABASE_URL` is set; CI sets it to its throwaway Postgres. Without it they skip; with `REQUIRE_DB=1` (set in CI) the run fails instead. The URL must include a password, because Miniflare's Hyperdrive binding rejects a URL without one. The database must be migrated and loaded with `db/seed/fake.sql`. A developer may point it at a personal Neon branch of the staging project.
 - Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
 - Only GitHub Actions applies migrations and deploys. Do not run them from a laptop.
 

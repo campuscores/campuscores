@@ -10,5 +10,24 @@
     "run_worker_first": ["/api/*", "/live/*", "/health"]
   },
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MatchRoom"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MatchRoom"] }],
+  // Bindings are not inherited by environments, so each one repeats them.
+  // PLACEHOLDER Hyperdrive IDs: replace with the real config IDs from the manual prerequisite step before deploying.
+  // Local `wrangler dev --env <env>` reads CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_<BINDING>; never commit a connection string.
+  "env": {
+    "staging": {
+      "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE_CACHED", "id": "08bbe0e8c1ac44368a2c5dcbfe24752a" },
+        { "binding": "HYPERDRIVE_UNCACHED", "id": "505c46438fd0458c995d837905abb63e" }
+      ]
+    },
+    "production": {
+      "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE_CACHED", "id": "PLACEHOLDER_PRODUCTION_CACHED_HYPERDRIVE_ID" },
+        { "binding": "HYPERDRIVE_UNCACHED", "id": "PLACEHOLDER_PRODUCTION_UNCACHED_HYPERDRIVE_ID" }
+      ]
+    }
+  }
 }
