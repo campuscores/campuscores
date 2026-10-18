@@ -1,0 +1,23 @@
+{
+  "name": "@thaparlympics/backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.4",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "fast-check": "4.10.2",
+    "globals": "17.13.0",
+    "vitest": "4.1.12",
+    "wrangler": "4.151.1"
+  }
+}

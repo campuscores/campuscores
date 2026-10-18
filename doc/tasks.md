@@ -65,8 +65,8 @@ Use one row per active task: owner, scope/files, dependencies, state and branch/
 | --- | --- | --- | --- | --- |
 | Kiro agent (for the user) | Cross-browser, phone-emulation and edge-case tests: `frontend/playwright.config.js` (six projects), `tests/sport-edge-cases.spec.js`, `tests/mobile.spec.js`, `tests/helpers.js`, small edits to `tests/homepage.spec.js`, `.github/workflows/frontend.yml`, two CSS fixes (`SportPage.css`, `HorizontalRail.css`) and docs | The sport-pages change | Locally verified (all six projects; WebKit needed side-loaded libraries, see below); remote CI result not recorded | `origin/main`, `dfe54f5`; no PR |
 | Kiro agent (for the user) | Sport pages for all six sports: `frontend/src/features/sports/*`, `App.jsx` (sport routes), `global.css` (section container selector), `tests/sport-pages.spec.js` (replaces `badminton.spec.js`), `tests/homepage.spec.js` (sport routes built), README and docs | None. Formats stay open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified; remote CI result not recorded | `origin/main`, `dfe54f5`; no PR |
-| Kiro agent (for the user) | Backend 1: shared docs for the confirmed stack; `.gitignore` rules for `.dev.vars*` and `.wrangler/`; `backend/` workspace (Hono, Wrangler, Workers test pool), `GET /health`, root scripts, backend CI | None | In progress: docs and ignore rules committed; scaffold pending | `main` |
-| Kiro agent (for the user) | Backend 2: `MatchRoom` Durable Object, `/live/:room`, request-count estimate and the Workers Paid gate | Backend 1 | Planned | — |
+| Kiro agent (for the user) | Backend 1: shared docs for the confirmed stack; `.gitignore` rules for `.dev.vars*` and `.wrangler/`; `backend/` workspace (Hono, Wrangler, Workers test pool), `GET /health`, root scripts, backend CI | None | Locally verified, 18 October 2026: `lint:backend` and `test:backend` (22 tests, incl. property tests) passed; frontend `lint` and `build` passed; `npm test` passed in Firefox only (Chromium, Pixel, WebKit, iPhone and iPad could not launch on this machine: Chromium revision 1248 and `libavif.so.16` missing); remote CI result not recorded | `main` |
+| Kiro agent (for the user) | Backend 2: `MatchRoom` Durable Object, `/live/:room`, request-count estimate and the Workers Paid gate | Backend 1 | Locally verified, 18 October 2026: `MatchRoom`, `/live/:room`, live room integration tests and property tests pass in `test:backend`; same browser limits as Backend 1. Usage estimate and Workers Paid gate: decision Workers Free (see below); remote CI result not recorded | `main` |
 | Kiro agent (for the user) | Backend 3: Neon projects, `dbmate` pipeline, core schema and constraint tests, CI throwaway Postgres, deploy workflow | Backend 1; manual prerequisites | Planned | — |
 | Kiro agent (for the user) | Backend 4: Hyperdrive cached and uncached configs, public read API, fake seed | Backend 3 | Planned | — |
 | Kiro agent (for the user) | Backend 5: Clerk token and role middleware, invitations, Super Admin bootstrap, header Sign in link, privacy and account-deletion pages | Backend 4; privacy owner (Open) for production | Planned | — |
@@ -76,6 +76,27 @@ Use one row per active task: owner, scope/files, dependencies, state and branch/
 | Kiro agent (for the user) | Backend 9: operator console with the offline queue | Backend 8 | Planned | — |
 | Kiro agent (for the user) | Backend 10: hardening, nightly encrypted backup, load harness | Backend 9; rate-limit threshold and load-test thresholds (Open) | Blocked for the load test | — |
 | Kiro agent (for the user) | Backend 11: production cutover (domain route, Clerk production, Google OAuth, smoke check) | Backend 10; manual prerequisites | Blocked on prerequisites | — |
+
+Usage estimate and Workers Paid gate, 18 October 2026 (**user-confirmed inputs**). The Usage_Calculator is a local script in ignored `output/usage/`. `node output/usage/usage.mjs` reproduces the results below; its self-check passes. Cost model: each socket connect is 1 Worker + 1 DO request; each score action is 1 Worker request, 3 DO requests (`noteWrite`, `publish`, `publishCard`), about 5 DO row writes and about 6 Hyperdrive queries; each staff request is 1 Worker request and about 2 queries; each public `/api/*` read is 1 Worker request and 1 cached query; each sweep is 1 Worker + 1 DO request (queries counted as an upper bound). Static assets are not counted.
+
+| Peak-day input (user-confirmed 18 October 2026) | Value |
+| --- | --- |
+| Viewers | 1,000 |
+| Extra socket connects per viewer | 10 |
+| Live matches | 12 |
+| Score actions per match (incl. undo) | 200 |
+| Staff API requests (besides score actions) | 2,000 |
+| Public API reads per viewer | 10 |
+| Outbox sweeps | 1,440 |
+
+| Peak-day estimate | Result | Free cap |
+| --- | --- | --- |
+| Worker requests | 26,840 | 100,000 |
+| DO requests | 19,640 | 100,000 |
+| DO row writes | 12,000 | 100,000 |
+| Hyperdrive queries | 29,840 | 100,000 |
+
+Decision: Workers Free ($0). The gate (more than 70,000 Worker or DO requests/day) is not reached. No Workers Paid for Event_Months unless the inputs change ([memory.md](memory.md#backend-open-items) item 1, closed). Sensitivity: Worker requests grow by about 21 per viewer; 3,000 viewers with the same other inputs gives 68,840, near the gate.
 
 Sport page checks, 9 October 2026, Linux, Node 22.21.1, installed Chrome 146: `npm run lint` and `npm run build` passed; `PLAYWRIGHT_CHANNEL=chrome npm test` passed all 73 tests (8 in `homepage.spec.js`, 65 in `sport-pages.spec.js`). Coverage: all six sport routes; three sections; header-only cards; fixture validity against the official baselines and the registry; one dialog per scoring model (badminton, tennis, table tennis, volleyball, football, basketball) with bold winners, red current period, serving dot, Pts and tiebreak, scorers and lineups; ended-match winner; date chips and the empty 12 Oct day; keyboard open, Escape and focus return; desktop backdrop close; no body overflow and 44px targets from 320 to 2560px; textures and icon colour; route entry, refresh and back; chip reset between sports; tournament routes stay blank. A production preview was checked with `playwright-cli` at phone 390×844 and desktop 1440×900: all six pages and one open live dialog for badminton, tennis, volleyball, football and basketball; no body, dialog or table overflow; sport textures loaded; no console errors. Captures stay local and are not committed. Limits: Chromium only; no Safari/Firefox, physical-device or screen-reader check; Back does not close the dialog; plain `npm test` needs the bundled Playwright Chromium, which is not installed on this machine ([local-development.md](local-development.md)).
 

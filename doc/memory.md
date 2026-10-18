@@ -28,16 +28,16 @@ Rationale the next team needs:
 
 ### Backend open items
 
-These items are **Open** and deferred for now. Independent backend work continues. Do not build the dependent behavior until the decision is recorded here.
+Items marked **Open** are deferred for now. Independent backend work continues. Do not build the dependent behavior until the decision is recorded here. Closed items keep their numbers so that references stay valid.
 
-1. **Open — Workers Paid gate.** Question: does the measured peak need Workers Paid in event months? Owner: user. Affects: backend task 2 and the production cutover. Accept when the request-count estimate, its inputs and the $0 or $5 decision are recorded in [tasks.md](tasks.md).
+1. **Closed (18 October 2026) — Workers Paid gate.** Decision: Workers Free ($0); no Workers Paid for Event_Months unless the inputs change. User-confirmed peak-day inputs: 1,000 viewers, 10 reconnects per viewer, 12 live matches, 200 score actions per match, 2,000 staff requests, 10 public reads per viewer, 1,440 sweeps. Result: 26,840 Worker requests, 19,640 DO requests, 12,000 DO row writes and 29,840 Hyperdrive queries per day, under the 70,000 gate. Estimate and cost model: [tasks.md](tasks.md). Reopen if a peak input changes materially: for example, about 3,000 viewers gives about 68,840 Worker requests, near the gate.
 2. **Open — Facebook sign-in.** Question: add Facebook later? It needs a Meta developer app, a privacy policy, a data-deletion request path with a contact email, and Live mode. Owner: user. Affects: sign-in only; the Clerk dashboard adds it without code. Accept when the user approves it and the Meta app is live.
 3. **Open — rate-limit threshold.** Question: what per-IP threshold avoids blocking many viewers behind one campus Wi-Fi address? Owner: user. Affects: the hardening task. Accept when the threshold is recorded and the rule stays off live-score sockets.
 4. **Open — privacy policy owner and contact.** Question: who owns the policy, and which contact email does it publish? Google's consent screen needs it. Owner: user/product owner. Affects: the privacy page and the Google sign-in setup. Accept when the owner and email are recorded.
 5. **Open — load-test thresholds.** Question: what ramp, duration, room distribution, update rate, reconnect burst, p95/p99 latency and tolerated errors define a pass for 3,000 simulated clients? Owner: user. Affects: the capacity test. Accept when the thresholds are recorded here before any run.
 6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when a follow-up feature is scoped and claimed in [tasks.md](tasks.md).
 7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
-8. **Open — package details.** Confirm the current Clerk React SDK package name and the `@cloudflare/vitest-pool-workers` configuration API at install. Owner: implementing team. Affects: backend scaffold and sign-in tasks. Accept when both are pinned and working.
+8. **Open — package details.** Confirm the current Clerk React SDK package name at install. Owner: implementing team. Affects: sign-in tasks. Accept when it is pinned and working. Resolved part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
 
 ## Documentation decisions — 9 October 2026
 

@@ -1,0 +1,22 @@
+name: Backend checks
+on:
+  push:
+    paths: ['backend/**', 'db/**', 'package*.json', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['backend/**', 'db/**', 'package*.json', '.github/workflows/backend.yml']
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Root engines needs >=22.22.0; a bare '22' can resolve to an older cached 22.x.
+          node-version: '22.22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:backend
+      # test:backend builds the frontend first; the asset routing test needs frontend/dist.
+      - run: npm run test:backend
