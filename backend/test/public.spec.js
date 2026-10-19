@@ -67,7 +67,7 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
     const { match } = await res.json();
     const { snapshot, ...rest } = match;
     expectSeedMatch(rest, SEED_MATCHES[0]);
-    expect(snapshot).toBeNull(); // no match_snapshots table until task 9.1
+    expect(snapshot).toBeNull(); // the seed scores no match, so there is no match_snapshots row
   });
 
   it('returns a 404 Error_Body for unknown and private IDs', async () => {

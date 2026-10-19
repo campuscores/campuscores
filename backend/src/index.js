@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { AppError, onError, requestId } from './http.js';
+import { sweep } from './outbox.js';
 import { parseRoom } from './rooms.js';
 import { accountRoutes } from './routes/accounts.js';
+import { actionRoutes } from './routes/actions.js';
 import { assignmentRoutes } from './routes/assignments.js';
 import { inviteRoutes } from './routes/invites.js';
 import { leaseRoutes } from './routes/leases.js';
@@ -26,7 +28,11 @@ app.route('/api', inviteRoutes); // clerkAuth (+ loadAccount for staff), uncache
 app.route('/api', accountRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', assignmentRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', leaseRoutes); // clerkAuth + loadAccount, uncached pool
+app.route('/api', actionRoutes); // clerkAuth; the chain SELECT loads the account, uncached pool
 app.notFound(() => {
   throw new AppError(404, 'NOT_FOUND', 'Route not found');
 });
-export default { fetch: app.fetch };
+export default {
+  fetch: app.fetch,
+  scheduled: (controller, env, ctx) => ctx.waitUntil(sweep(env, ctx)), // Requirement 17.1: cron Outbox_Sweep
+};

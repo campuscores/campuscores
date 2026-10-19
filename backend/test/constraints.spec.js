@@ -64,6 +64,28 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('core schema constraints', () => {
     ]);
     expect(err).toMatchObject({ code: UNIQUE, constraint: 'one_pending_invitation' });
   });
+  // Two rows in one statement: ($1, $2, seq 1) and ($3, $4, seq $5) for seed match 4 and operator 3.
+  const actions = `INSERT INTO score_actions (match_id, action_id, seq, client_seq, device_id, account_id, type, payload, payload_hash, result, reverses_action_id)
+    VALUES (4, $1, 1, 1, gen_random_uuid(), 3, 'POINT', '{}', 'h', '{}', NULL),
+           ($2, $3, $4, 2, gen_random_uuid(), 3, 'POINT', '{}', 'h', '{}', $5)`;
+  const a1 = '00000000-0000-4000-8000-000000000001';
+  const a2 = '00000000-0000-4000-8000-000000000002';
+  it('rejects a repeated action_id for a match', async () => {
+    const { err } = await inRolledBackTx(actions, [a1, 4, a1, 2, null]);
+    expect(err).toMatchObject({ code: UNIQUE, constraint: 'score_actions_match_id_action_id_key' });
+  });
+  it('rejects a repeated seq for a match', async () => {
+    const { err } = await inRolledBackTx(actions, [a1, 4, a2, 1, null]);
+    expect(err).toMatchObject({ code: UNIQUE, constraint: 'score_actions_match_id_seq_key' });
+  });
+  it('rejects a reversal of an action from another match', async () => {
+    const { err } = await inRolledBackTx(actions, [a1, 3, a2, 1, a1]);
+    expect(err).toMatchObject({ code: '23503', table: 'score_actions' });
+  });
+  it('accepts a linked reversal in the same match', async () => {
+    const { err } = await inRolledBackTx(actions, [a1, 4, a2, 2, a1]);
+    expect(err).toBeUndefined();
+  });
   it('accepts REJECTED with a route and starts last_seq at 0', async () => {
     const { err, rows } = await inRolledBackTx(match, [2, 'CUSTOM', null, 'REJECTED', 'OPERATOR']);
     expect(err).toBeUndefined();

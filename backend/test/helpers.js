@@ -51,8 +51,8 @@ export async function signJwt(sub, claims = {}, key = keys.privateKey) {
   return `${body}.${b64url(sig)}`;
 }
 
-// Calls the real Worker with the in-test public key as CLERK_JWT_KEY.
-export async function api(method, path, { user, token, body } = {}) {
+// Calls the real Worker with the in-test public key as CLERK_JWT_KEY; `env` overrides bindings.
+export async function api(method, path, { user, token, body, env: bindings } = {}) {
   const headers = {};
   const jwt = token ?? (user && (await signJwt(user)));
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
@@ -60,7 +60,7 @@ export async function api(method, path, { user, token, body } = {}) {
   const ctx = testCtx();
   const res = await worker.fetch(
     new Request(`http://example.com${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }),
-    { ...env, CLERK_JWT_KEY: jwtKeyPem },
+    { ...env, CLERK_JWT_KEY: jwtKeyPem, ...bindings },
     ctx,
   );
   await ctx.done();

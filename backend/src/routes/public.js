@@ -35,14 +35,8 @@ const MATCH_SELECT = `
 const cached = (c, fn) => withClient(c.env.HYPERDRIVE_CACHED, c.executionCtx, fn);
 
 async function latestSnapshot(client, matchId) {
-  try {
-    const { rows } = await client.query('SELECT data FROM match_snapshots WHERE match_id = $1', [matchId]);
-    return rows[0]?.data ?? null;
-  } catch (err) {
-    // shortcut: match_snapshots arrives with the scoring migration (task 9.1); until then no match has a snapshot.
-    if (err.code === '42P01') return null; // undefined_table
-    throw err;
-  }
+  const { rows } = await client.query('SELECT data FROM match_snapshots WHERE match_id = $1', [matchId]);
+  return rows[0]?.data ?? null;
 }
 
 export const publicRoutes = new Hono();
