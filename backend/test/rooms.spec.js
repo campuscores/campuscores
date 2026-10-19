@@ -133,6 +133,15 @@ describe('home room', () => {
   // The home room is one shared object; assert only on this test's match IDs.
   const ids = (msg) => msg.data.map((card) => card.id);
 
+  it('always sends a home list first, empty before any card', async () => {
+    const { ws, next } = await connect('home');
+    const msg = await next();
+    expect(msg).toMatchObject({ type: 'snapshot', room: 'home' });
+    expect(Array.isArray(msg.data)).toBe(true);
+    if (msg.seq === 0) expect(msg.data).toEqual([]);
+    ws.close(1000);
+  });
+
   it('adds, updates and removes a card on a non-live status', async () => {
     const home = stub('home');
     const viewer = await connect('home');

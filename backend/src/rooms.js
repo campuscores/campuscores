@@ -23,6 +23,8 @@ export class MatchRoom extends DurableObject {
     this.ctx.acceptWebSocket(server); // Hibernation API
     const message = await this.ctx.storage.get('message');
     if (message) server.send(message); // stored snapshot first, no database query
+    // An empty home room still answers, so viewers leave "Connecting" before the first score.
+    else if (this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
     return new Response(null, { status: 101, webSocket: client });
   }
 
