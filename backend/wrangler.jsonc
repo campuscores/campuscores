@@ -11,11 +11,21 @@
   },
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MatchRoom"] }],
+  "triggers": { "crons": ["* * * * *"] }, // Outbox_Sweep once per minute
   // Bindings are not inherited by environments, so each one repeats them.
-  // PLACEHOLDER Hyperdrive IDs: replace with the real config IDs from the manual prerequisite step before deploying.
+  // Hyperdrive IDs are config identifiers, not secrets. Each environment has its own cached and uncached (caching disabled) config.
   // Local `wrangler dev --env <env>` reads CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_<BINDING>; never commit a connection string.
+  // Clerk publishable keys are public. CLERK_SECRET_KEY and CLERK_JWT_KEY stay Worker secrets (`wrangler secret put --env <env>`).
   "env": {
     "staging": {
+      "workers_dev": true, // Clerk development instance; Clerk production refuses *.workers.dev
+      "vars": {
+        "ENABLE_TEST_ENGINE": "true", // staging scores with the Test_Engine; production must not set it
+        "CLERK_PUBLISHABLE_KEY": "pk_test_bmF0aW9uYWwtYWxwYWNhLTk2MDIuY2xlcmsuYWNjb3VudHMuZGV2JA",
+        "AUTHORIZED_PARTIES": "https://thaparlympics-staging.bhatiaarnav05.workers.dev",
+        "INVITE_REDIRECT_URL": "https://thaparlympics-staging.bhatiaarnav05.workers.dev/sign-up"
+      },
+      "triggers": { "crons": ["* * * * *"] },
       "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
       "hyperdrive": [
         { "binding": "HYPERDRIVE_CACHED", "id": "08bbe0e8c1ac44368a2c5dcbfe24752a" },
@@ -23,10 +33,19 @@
       ]
     },
     "production": {
+      "workers_dev": false,
+      // Set the fail-closed request-limit failure mode on this route in the Cloudflare dashboard (Requirement 20.2).
+      "routes": [{ "pattern": "campuscores.live/*", "zone_name": "campuscores.live" }],
+      "vars": {
+        "CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuY2FtcHVzY29yZXMubGl2ZSQ",
+        "AUTHORIZED_PARTIES": "https://campuscores.live",
+        "INVITE_REDIRECT_URL": "https://campuscores.live/sign-up"
+      },
+      "triggers": { "crons": ["* * * * *"] },
       "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "MatchRoom" }] },
       "hyperdrive": [
-        { "binding": "HYPERDRIVE_CACHED", "id": "PLACEHOLDER_PRODUCTION_CACHED_HYPERDRIVE_ID" },
-        { "binding": "HYPERDRIVE_UNCACHED", "id": "PLACEHOLDER_PRODUCTION_UNCACHED_HYPERDRIVE_ID" }
+        { "binding": "HYPERDRIVE_CACHED", "id": "a13d5906b4364ac4b8cfff20460921f4" },
+        { "binding": "HYPERDRIVE_UNCACHED", "id": "8ce22715ed884844b66f3b55b34e35bd" }
       ]
     }
   }

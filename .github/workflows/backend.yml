@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        # Neon Postgres major is not recorded yet; 17 is Neon's current default. Match it once recorded.
-        image: postgres:17
+        # Matches the Neon staging and production server major (18).
+        image: postgres:18
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci

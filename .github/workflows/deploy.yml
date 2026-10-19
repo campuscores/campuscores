@@ -16,7 +16,7 @@ jobs:
     services:
       postgres:
         # Same throwaway test database as backend.yml; it never holds environment data.
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
@@ -67,3 +67,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Smoke_Script against the environment origin (staging workers.dev URL or the production domain).
+      - run: node backend/scripts/smoke.js "$BASE_URL"
+        env:
+          BASE_URL: ${{ vars.VITE_API_BASE }}

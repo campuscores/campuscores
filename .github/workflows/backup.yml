@@ -1,0 +1,101 @@
+name: Nightly backup
+on:
+  schedule:
+    # 21:30 UTC = 03:00 IST. GitHub runs schedules from the default branch only.
+    - cron: '30 21 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: backup-production
+      cancel-in-progress: false
+    services:
+      postgres:
+        # Restore target. Same major as backend.yml and deploy.yml; it never leaves the runner.
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: restore_check
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci -d restore_check"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Must equal the Neon server major; the dump step fails on a mismatch.
+      PG_MAJOR: '18'
+      RESTORE_URL: postgres://ci:ci@localhost:5432/restore_check?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      # The runner's default client may be another major; install the matching one from PGDG.
+      - name: Install postgresql-client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q "postgresql-client-$PG_MAJOR"
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+      - name: Dump production
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$DATABASE_URL" ] || { echo "DATABASE_URL secret is not set" >&2; exit 1; }
+          client=$(pg_dump --version | grep -oE '[0-9]+' | head -n1)
+          server=$(psql "$DATABASE_URL" -X -At -c 'SHOW server_version_num')
+          server=$((server / 10000))
+          echo "pg_dump major $client, server major $server, expected $PG_MAJOR"
+          if [ "$client" != "$PG_MAJOR" ] || [ "$server" != "$PG_MAJOR" ]; then
+            echo "Postgres major mismatch" >&2
+            exit 1
+          fi
+          # Full dump (owners and grants kept for a real restore); the check below skips them.
+          pg_dump "$DATABASE_URL" --format=custom --file "$RUNNER_TEMP/backup.dump"
+      - name: Encrypt dump
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          [ -n "$BACKUP_PASSPHRASE" ] || { echo "BACKUP_PASSPHRASE secret is not set" >&2; exit 1; }
+          umask 077
+          mkdir -p "$RUNNER_TEMP/upload"
+          # Passphrase goes through a private file, never the command line or the log.
+          printf '%s' "$BACKUP_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
+          name="tlympics-production-$(date -u +%Y%m%dT%H%M%SZ).dump.gpg"
+          gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase-file "$RUNNER_TEMP/passphrase" \
+            --output "$RUNNER_TEMP/upload/$name" "$RUNNER_TEMP/backup.dump"
+          rm -f "$RUNNER_TEMP/backup.dump"
+      - name: Upload encrypted dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-backup-${{ github.run_id }}
+          # Only the .gpg file is in this folder; the plaintext dump is already deleted.
+          path: ${{ runner.temp }}/upload/*.gpg
+          retention-days: 14
+          if-no-files-found: error
+      - name: Restore check
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$RUNNER_TEMP/restore.dump"' EXIT
+          gpg --batch --yes --pinentry-mode loopback --decrypt \
+            --passphrase-file "$RUNNER_TEMP/passphrase" \
+            --output "$RUNNER_TEMP/restore.dump" "$RUNNER_TEMP"/upload/*.gpg
+          pg_restore --exit-on-error --no-owner --no-acl --dbname "$RESTORE_URL" "$RUNNER_TEMP/restore.dump"
+          # Every table created in db/migrations, plus dbmate's own table, must exist after restore.
+          expected=$( { grep -hoE '^CREATE TABLE [a-z_]+' db/migrations/*.sql | awk '{print $3}'; echo schema_migrations; } | sort -u)
+          actual=$(psql "$RESTORE_URL" -X -At -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" | sort -u)
+          missing=$(comm -23 <(echo "$expected") <(echo "$actual"))
+          [ -z "$missing" ] || { echo "Missing tables after restore: $missing" >&2; exit 1; }
+          echo "Restore check passed: $(echo "$expected" | wc -l) expected tables present"
+      - name: Remove local backup files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup.dump" "$RUNNER_TEMP/restore.dump" "$RUNNER_TEMP/passphrase" "$RUNNER_TEMP/upload"
