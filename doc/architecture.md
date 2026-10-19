@@ -243,7 +243,7 @@ No Postgres runs on any team device, including when the schema changes. All envi
 - **Golden rule:** change a hosted schema only through a CI migration. Never edit it through the Neon console SQL editor.
 - **Testing without a local database:** CI applies every migration to a throwaway Postgres service container on the GitHub Actions runner, runs integration tests, and discards it.
 - **Deploying:** only GitHub Actions applies migrations and deploys the Worker: merge to `develop` deploys staging, merge to `main` deploys production. Secrets live in GitHub Environments (`staging`, `production`).
-- **Deploy workflow:** [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs on push to `develop` (Environment `staging`) or `main` (Environment `production`). One run at a time per environment; a newer push waits and never cancels a running deploy. Order: `npm ci`; frontend lint; backend lint; backend tests against a throwaway Postgres with `REQUIRE_DB=1`; frontend Chromium and Pixel tests; `dbmate up` on the environment database; fake seed (staging only); `npm run build` with the environment `VITE_*` values; `wrangler deploy --env <env>` from `backend/`. Any failed step stops the run, so a failed migration never deploys the Worker. Migrations must stay compatible with the running Worker (expand, deploy, then contract).
+- **Deploy workflow:** [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) runs on push to `develop` (Environment `staging`) or `main` (Environment `production`). One run at a time per environment; a newer push waits and never cancels a running deploy. Order: `npm ci`; frontend lint; backend lint; backend tests against a throwaway Postgres with `REQUIRE_DB=1`; frontend Chromium and Pixel tests; `dbmate up` on the environment database; fake seed (staging only); `npm run build` with the environment `VITE_*` values; `wrangler deploy --env <env>` from `backend/`; the Smoke_Script [`backend/scripts/smoke.js`](../backend/scripts/smoke.js) against `VITE_API_BASE` (`GET /health` 200, `GET /api/tournaments` 200, first `/live/home` message within 10 s, `GET /api/me` 401 without a token; it exits 1 and names the failed check). Any failed step stops the run, so a failed migration never deploys the Worker. Migrations must stay compatible with the running Worker (expand, deploy, then contract).
 - **Per-environment settings** (set the same names in both GitHub Environments, with that environment's values):
 
   | Name | Kind | Value |
@@ -254,10 +254,11 @@ No Postgres runs on any team device, including when the schema changes. All envi
   | `VITE_API_BASE` | Variable | Public API base URL of that environment (public; sent to the browser) |
   | `VITE_CLERK_PUBLISHABLE_KEY` | Variable | Clerk publishable key of that environment's instance (public) |
 
-  `CLERK_SECRET_KEY` and `CLERK_JWT_KEY` are Worker secrets; `CLERK_PUBLISHABLE_KEY`, `AUTHORIZED_PARTIES` and `INVITE_REDIRECT_URL` (the sign-up page URL in invitation emails) are Worker vars. The Worker reads them for staff routes ([Sign-in setup](#sign-in-setup)); they are not yet in `wrangler.jsonc` or the deploy workflow.
-- **Known limit:** the Hyperdrive IDs in `backend/wrangler.jsonc` are placeholders. `wrangler deploy` fails until the real config IDs from the manual prerequisite step replace them. No deploy has run yet.
+  `CLERK_SECRET_KEY` and `CLERK_JWT_KEY` are Worker secrets; `CLERK_PUBLISHABLE_KEY`, `AUTHORIZED_PARTIES` and `INVITE_REDIRECT_URL` (the sign-up page URL in invitation emails) are Worker vars. The Worker reads them for staff routes ([Sign-in setup](#sign-in-setup)). The vars are set per environment in `backend/wrangler.jsonc`; set the secrets once per environment with `npx wrangler secret put <NAME> --env <env>`. They are never in the config or the deploy workflow.
+- **Wrangler environments:** `env.staging` uses `workers_dev` and the Clerk development instance, and sets `ENABLE_TEST_ENGINE`. `env.production` sets `workers_dev: false`, one zone route on the custom domain, the Clerk production instance vars and no `ENABLE_TEST_ENGINE`. Each environment repeats its DO, Hyperdrive and cron bindings. `backend/test/node/wrangler-config.spec.js` checks this. Set the route's fail-closed request-limit mode in the Cloudflare dashboard ([Rate limiting](#rate-limiting-and-quota-failure)).
+- **Environment addresses:** staging serves `https://thaparlympics-staging.bhatiaarnav05.workers.dev` (Clerk development instance); production serves `https://campuscores.live` through the zone route `campuscores.live/*` and a proxied `AAAA 100::` apex record (Clerk production instance; its DNS records stay DNS only). `www.campuscores.live` is not configured. Known limit: no deploy has run yet; the Clerk secrets, the route fail-closed mode and the rate-limit rule are set outside source.
 - **Seed data:** `db/seed/fake.sql` holds clearly fake data for CI and staging only; never seed production.
-- **Backups:** a nightly GitHub Actions workflow runs an encrypted `pg_dump` of production and checks that it restores. Neon Free keeps only 6 hours of restore history.
+- **Backups:** [`.github/workflows/backup.yml`](../.github/workflows/backup.yml) runs nightly at 21:30 UTC (03:00 IST) and on manual dispatch, in GitHub Environment `production`. Neon Free keeps only 6 hours of restore history. Order: install `postgresql-client-18` from PGDG; fail unless the `pg_dump` and Neon server majors both equal `PG_MAJOR` (18, the Neon staging and production major; change it, and the `postgres:18` images, if Neon's major changes); `pg_dump --format=custom`; `gpg --symmetric --cipher-algo AES256` with the passphrase from a private file; delete the plaintext dump; upload only the `.gpg` file as artifact `production-backup-<run id>` (14-day retention); decrypt, `pg_restore --exit-on-error --no-owner --no-acl` into a throwaway `postgres:18` service; fail if any table created in `db/migrations` or `schema_migrations` is missing. Any failed step fails the run. Secrets in Environment `production`: `DATABASE_URL` (above) and `BACKUP_PASSPHRASE` (long random passphrase; store a copy outside GitHub, because GitHub cannot show it again and without it no backup can be decrypted). To restore: download the artifact, run `gpg --decrypt` with the passphrase, then `pg_restore` into a new Neon branch or project.
 
 ```mermaid
 flowchart LR
@@ -283,7 +284,7 @@ Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No au
 - `GET /api/matches/:id` → `{ match }` with `snapshot` (the latest Match_Room snapshot data, or `null`)
 - An ID is a positive integer without a leading zero, up to 18 digits. Otherwise 400 `BAD_REQUEST`. An unknown or non-public ID returns 404 `NOT_FOUND`.
 - Every body and Room_Message goes through `toPublic(kind, obj)` in [`backend/src/http.js`](../backend/src/http.js). It copies only the allow-listed fields for `tournament`, `match`, `snapshot` and `card`. Database IDs are strings; dates are ISO text.
-- Current limits: `DRAFT` tournaments and `CUSTOM` matches are not public while the lifecycle and custom-match visibility questions in [memory.md](memory.md) are open. `snapshot` is `null` until the scoring migration adds `match_snapshots`.
+- Current limits: `DRAFT` tournaments and `CUSTOM` matches are not public while the lifecycle and custom-match visibility questions in [memory.md](memory.md) are open. `snapshot` is `null` until the match has a `match_snapshots` row (its first accepted score action).
 
 ### Sign-in setup
 
@@ -295,7 +296,14 @@ Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No au
 - `POST /api/invites/accept` (signed in, no staff role needed) → `{ role, status }`. It matches the caller's verified Clerk emails to the oldest pending, unexpired invitation and creates the account with the invited role and `invited_by` in one transaction. No match returns 404 `INVITE_NOT_FOUND`; a caller who already has an account (also a disabled one) gets 409 `ACCOUNT_EXISTS` and nothing changes.
 - `POST /api/accounts/:id/disable { reason }` (Super Admin; [`routes/accounts.js`](../backend/src/routes/accounts.js)) → `{ account: { id, status, revokedAssignmentIds } }`. One transaction sets `DISABLED`, revokes the account's `ACTIVE` assignments with the reason, deletes its scorer leases and writes an `ACCOUNT_DISABLED` audit row. An empty reason returns 409 `REASON_REQUIRED`; the last active Super Admin 409 `LAST_SUPER_ADMIN`; an unknown ID 404.
 - The Clerk secret key stays on the Worker as a secret. Only the publishable key reaches the browser.
-- Staging uses a Clerk development instance on `workers.dev`. Production needs our own domain, its own Clerk instance, our own Google OAuth credentials and a privacy policy URL. Clerk DNS records stay "DNS only".
+- Staging uses a Clerk development instance on `workers.dev`. Clerk's shared Google credentials are acceptable there.
+- **Production identity setup** (manual, outside source; do it before the first production deploy):
+  - The Clerk production instance serves `campuscores.live`. Its publishable key (`pk_live_…`) is `CLERK_PUBLISHABLE_KEY` and `AUTHORIZED_PARTIES` is `https://campuscores.live` in `env.production.vars` of `backend/wrangler.jsonc`. Set the same publishable key as `VITE_CLERK_PUBLISHABLE_KEY` in GitHub Environment `production`. These values are public.
+  - From `backend/`, set the two Worker secrets: `npx wrangler secret put CLERK_SECRET_KEY --env production` and `npx wrangler secret put CLERK_JWT_KEY --env production` (the instance's JWKS public key in PEM form). Never put them in config, the workflow or a GitHub secret.
+  - Google sign-in: create our own OAuth client in Google Cloud and enter its client ID and secret in the Clerk production instance. Clerk does not supply shared Google credentials for a production instance. Use the redirect URI that Clerk shows.
+  - Google consent screen: set the privacy policy URL to `https://campuscores.live/privacy` (the [`PrivacyPage`](../frontend/src/features/legal/PrivacyPage.jsx) route) and the home page to `https://campuscores.live`. Add `campuscores.live` as an authorized domain.
+  - DNS: add the CNAME records that the Clerk production instance lists to the `campuscores.live` zone in Cloudflare. Set each one to **DNS only** (grey cloud), not proxied. A proxied Clerk record breaks Clerk's domain and certificate checks.
+  - Known limit: the Worker secrets, the Google OAuth client, the consent screen and the DNS records are not confirmed as set. The privacy policy text still needs its owner's approval ([memory.md](memory.md)).
 
 ### Plan and limits
 
@@ -303,7 +311,21 @@ Free-tier limits and the paid gate are recorded in [memory.md](memory.md#backend
 
 - Viewers get the stored snapshot from the room on connect, so viewing never queries Neon.
 - The outbox sweep skips Neon when no score was written in the last 15 minutes, so Neon can sleep.
-- Public routes fail closed at the daily request cap. One rate-limit rule, counted per IP, covers API and sign-up paths, not live sockets.
+- Public routes fail closed at the daily request cap. One rate-limit rule, counted per IP, covers API and sign-up paths, not live sockets. See [Rate limiting and quota failure](#rate-limiting-and-quota-failure).
+
+### Rate limiting and quota failure
+
+These are Cloudflare and Clerk dashboard settings for the production zone. They are not in source. They are not set yet, because the Cloudflare account and production zone are manual prerequisites ([tasks.md](tasks.md#backend-manual-prerequisites-user)).
+
+- **One WAF rate-limit rule.** Cloudflare Free allows one rule on our own zone. Settings:
+  - Expression: `starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/sign-up")`.
+  - Counting characteristic: IP address.
+  - Period: 10 seconds. Block (mitigation timeout): 10 seconds.
+  - Threshold (requests per period): not decided. It is [memory.md](memory.md#backend-open-items) item 3 (Open). Do not create the rule with a guessed number.
+- **Not on `/live/`.** Campus Wi-Fi puts many viewers behind one IP address. A per-IP limit on live sockets would block them together. The expression above does not match `/live/`. Keep it that way.
+- **Clerk Frontend API.** Clerk serves it on its own DNS-only subdomain, so our zone rule cannot reach it. Clerk Bot protection (the suspicious-sign-up challenge, [Sign-in setup](#sign-in-setup)) covers it.
+- **Fail-closed route mode.** The production Worker route on the custom domain uses the request-limit failure mode **fail closed**. At the daily Worker request cap, requests get error 1027. They never bypass the Worker. API and live calls then fail, and the frontend shows that live scores are unavailable. Cloudflare documents that static assets keep loading at the cap; this is untested ([memory.md](memory.md#backend-open-items) item 7).
+- **Usage notifications.** Turn on Cloudflare usage notifications for Workers and Durable Objects. They warn the operations owner before the daily caps in [memory.md](memory.md#research-notes) are reached.
 
 ## Live updates and offline scoring
 

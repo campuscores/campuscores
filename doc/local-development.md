@@ -129,6 +129,24 @@ The backend is planned and not implemented. The stack is a Cloudflare Worker (Ho
 - Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
 - Only GitHub Actions applies migrations and deploys. Do not run them from a laptop.
 
+## Load test (Load_Harness)
+
+The Load_Harness opens simulated WebSocket viewers on Live_Rooms and measures connect success, publish-to-receive latency and duplicate or missing `seq`. Thresholds and results are in [tasks.md](tasks.md#load-test-pass-thresholds).
+
+**Gap: the script is not shared through Git.** Requirement 21.3 keeps it in the ignored `output/load/` folder, so it exists only on the machine that built it. A teammate must get the three files from that owner: `harness.mjs`, `shim.js` and `wrangler.jsonc`. If the team must share it, the proposed place is a committed `backend/scripts/load/` folder (like `smoke.js`), with raw results still written to `output/load/results/`. That changes Requirement 21.3 and needs the product owner's approval.
+
+The harness needs Node 22 or newer and no added dependency. Every setting is an environment variable; the defaults are the agreed thresholds (`CLIENTS` 3000, `PER_MATCH` 500, `RAMP_S` 300, `HOLD_S` 600, `BURST` 1000, `BURST_S` 10, `PUBLISH_MS` 2000). Each run writes `config.json`, `timeline.jsonl` (every 5 s, with generator event-loop lag and CPU) and `summary.json` to `output/load/results/<time>/`. A run below the thresholds reports the verdict `SMOKE`. A full run reports `PASS`, `FAIL` or `INVALID` when the generator was the bottleneck (event-loop p99 over 100 ms or CPU over 85%).
+
+Local small-scale check. The shim is a local-only Worker: it serves the real `src/index.js` plus one publish route. Never deploy it.
+
+```sh
+cd output/load && npx wrangler dev --config wrangler.jsonc --port 8788 --ip 127.0.0.1
+# second terminal, repository root
+BASE=http://127.0.0.1:8788 CLIENTS=120 RAMP_S=15 HOLD_S=30 BURST=40 SETTLE_S=10 node output/load/harness.mjs
+```
+
+The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Engine `POINT` actions to `/api/matches/:id/actions`. It needs a deployed staging Worker and a test operator; see the exact command and preconditions in [tasks.md](tasks.md#capacity-results-simulated-clients). Never put the secret key in a committed file or shell history that others can read.
+
 ## Common problems
 
 | Symptom | Check or action |

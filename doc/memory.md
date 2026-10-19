@@ -34,7 +34,7 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 2. **Open — Facebook sign-in.** Question: add Facebook later? It needs a Meta developer app, a privacy policy, a data-deletion request path with a contact email, and Live mode. Owner: user. Affects: sign-in only; the Clerk dashboard adds it without code. Accept when the user approves it and the Meta app is live.
 3. **Open — rate-limit threshold.** Question: what per-IP threshold avoids blocking many viewers behind one campus Wi-Fi address? Owner: user. Affects: the hardening task. Accept when the threshold is recorded and the rule stays off live-score sockets.
 4. **Open — privacy policy owner and contact.** Question: who owns the policy, and which contact email does it publish? Google's consent screen needs it. Owner: user/product owner. Affects: the privacy page and the Google sign-in setup. Accept when the owner and email are recorded.
-5. **Open — load-test thresholds.** Question: what ramp, duration, room distribution, update rate, reconnect burst, p95/p99 latency and tolerated errors define a pass for 3,000 simulated clients? Owner: user. Affects: the capacity test. Accept when the thresholds are recorded here before any run.
+5. **Closed (19 October 2026) — load-test thresholds.** Decision (user-confirmed): the ramp, hold, room distribution, update rate, reconnect burst and pass criteria for 3,000 simulated clients are recorded, before any run, in [tasks.md](tasks.md#load-test-pass-thresholds); that list is authoritative. The run still needs a staging deploy.
 6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when a follow-up feature is scoped and claimed in [tasks.md](tasks.md).
 7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
 8. **Closed (18 October 2026) — package details.** The Clerk React SDK is `@clerk/react`, pinned at 6.17.8 in `frontend/package.json`; `@clerk/clerk-react` is deprecated. Sign-in against a real Clerk instance is not yet verified. Earlier part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
@@ -117,7 +117,7 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Capacity demonstration target: 3,000 simulated concurrent WebSocket clients. This is not actual attendance and not a verified capacity claim until the benchmark is run and documented.
 - Live rooms: one Durable Object room per match plus the `home` room. Split a room across several objects only if a measurement shows it is needed.
 - PostgreSQL is the score source of truth. Each accepted score action is persisted transactionally with projection/outbox data, then published to its room. Reconnect delivers the stored snapshot; socket delivery alone is not replay/history.
-- Hosting: Cloudflare and Neon, with a free Student Pack domain. Production account ownership and capacity-test thresholds are not yet chosen.
+- Hosting: Cloudflare and Neon, with a free Student Pack domain. Production account ownership is not yet chosen. Capacity-test thresholds: [tasks.md](tasks.md#load-test-pass-thresholds).
 
 ## Research notes
 
@@ -179,7 +179,6 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - What expected number of matches, teams and operators should sizing target? The latest viewer estimate is approximately 1,000; confirm any change before capacity work.
 - Who owns production backups, privileged account recovery, and event-day support?
 - What are acceptable public update latency and availability targets?
-- Load-test thresholds: see backend open item 5.
 - What monitoring/load-generator setup will record Worker and Durable Object request counts and errors, socket connections, Neon compute and query time, event-to-screen latency, and sequence gaps?
 - Does the chosen React/Vite frontend need server-rendered social link previews/SEO? If yes, reassess UI framework while keeping API/socket/database boundaries.
 

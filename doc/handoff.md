@@ -41,11 +41,70 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | Sport page | [`frontend/src/features/sports/SportPage.jsx`](../frontend/src/features/sports/SportPage.jsx) | `sport` (from `sports.js`), `fixtures`. Owns Upcoming/Past date state, the open match and focus return. Sets `--match-background`, `--match-background-phone` and `--sport-color` on `main.sport-page`. `App.jsx` renders it for all six sport ids with `key={sport.id}`. |
 | Sport sections and cards | [`SportSection.jsx`](../frontend/src/features/sports/SportSection.jsx), [`SportMatchCard.jsx`](../frontend/src/features/sports/SportMatchCard.jsx) | Section: `sport, id, title, live, matches, dates, selectedDate, onSelectDate, onOpen`; renders chips, status text, the rail or an empty message. Card: `sport, match, onOpen(match, button)`; header-only, shows `match.score` or `VS`. |
 | Sport match dialog | [`SportMatchDialog.jsx`](../frontend/src/features/sports/SportMatchDialog.jsx) | `sport, scoring, match` (null = closed), `onClose`. Native `<dialog>` with `showModal()`; score table, legend, scorers and lineups (team sports), players or schedule, and match info. |
-| Match Operator dashboard | `frontend/src/features/operator/MyMatchesPage.jsx`, `OperatorMatchCard.jsx`, `operatorMatches.js`, `MyMatches.css` | "My Matches" for one scorer, reached from the header "My Matches" tab (`SiteHeader`, desktop + mobile nav). Shows only assigned matches in Live / Scheduled (date-filtered) / Completed sections; each card links to `/operator/matches/<id>/score`. Reuses `SiteHeader`, `HorizontalRail`, the `.match-card`/`.match-surface`/`.match-header` shell, date chips and `SportIcon`. `operatorMatches.js` resolves assignments against `sportFixtures` (display-only; no new scoring model). No auth: it does not gate by account; a real assignment list and sign-in replace the fixture later. The shared scoring console it links to is unbuilt. |
+| Match Operator dashboard and score console | `frontend/src/features/operator/MyMatchesPage.jsx`, `OperatorMatchCard.jsx`, `operatorMatches.js`, `ScoreConsole.jsx`, `queue.js`, `queueStore.js`, `MyMatches.css`; gate in `features/auth/AuthArea.jsx` | Both routes render inside the lazy Clerk area; a signed-out user sees a sign-in link, a keyless build shows Sign-in unavailable. My Matches lists `GET /api/operator/matches` and groups rows with `sectionOf` (map in [memory.md](memory.md), My Matches sections). `ScoreConsole` reads its row from the same list, acquires `POST /api/matches/:id/lease` (Take over scoring on `LEASE_HELD` or a `LEASE_REQUIRED` pause), saves each action to IndexedDB before showing it queued, then sends `POST /api/matches/:id/actions` one at a time. It shows a text status line, accepted score (with seq) beside the pending score, Test_Engine controls (Point to <side>, Undo last) or the `SPORT_RULES_OPEN` message. Initial accepted score comes from the cached public `GET /api/matches/:id` or the last stored synced response. |
 | Sport fixtures | `frontend/src/features/sports/<sport>/<camelId>Matches.js`, for example [`badmintonMatches.js`](../frontend/src/features/sports/badminton/badmintonMatches.js) | Each module exports `scoring` (`model` `set` or `period`, `unit`, `short`, `total`, `totalName`, optional `team`, `scorers`), `liveMatches`, `upcomingMatches`, `pastMatches`. Match: `id, status` (`live`/`ended`/`scheduled`/`completed`), `category, tournament, round, date, dateLabel, timeLabel, venue, clock, sides[{name, team, serving?, players[{name, serving?}]}], periods[]` (`{points, winner?, current?, tiebreak?, label?, name?}` or null), `score, winner`, optional `gamePoints` (live tennis) and `scorers[{side, player, detail}]`. Values are precomputed display data, not a scoring engine. |
 | Fixture registry and calendar | [`sportFixtures.js`](../frontend/src/features/sports/sportFixtures.js), [`sportCalendar.js`](../frontend/src/features/sports/sportCalendar.js) | `sportFixtures` maps each `sports.js` id to its fixture module. `upcomingDates` and `pastDates` supply the shared date chips for every sport. |
 | Shared styling | `frontend/src/styles/global.css` | Approved colors, font stack, content widths, section headings and accessibility helpers. Component styles sit with their components. |
 | Assets | `frontend/public/assets/`, `frontend/public/favicon.ico` | Local root-relative URLs. Phones use responsive portrait candidates and shared 640px textures. Sources/license stay in `doc/asset-sources.md`. |
+
+## Live snapshot-to-card contract
+
+State: **Confirmed by the user, 18 October 2026.** The defaults below are confirmed: an empty clock line, one "T" total column, `'TBD'` for a missing side name, and the existing status text with an empty rail when no match is live. The mapping is `toMatchProp` in [`liveCards.js`](../frontend/src/features/matches/liveCards.js). The shapes below are what the backend emits now; the source is [`rooms.js`](../backend/src/rooms.js), the `toPublic` allow-lists in [`http.js`](../backend/src/http.js) and the card build in [`routes/actions.js`](../backend/src/routes/actions.js).
+
+### Room_Message
+
+A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. Each message is a full snapshot, not a delta. The first message after connect is the stored snapshot. A room with no stored snapshot sends nothing until its first publish.
+
+```js
+{ type: 'snapshot', room: 'home' | 'match:<id>', seq, data }
+```
+
+`seq` is a positive integer. It increases for each message of that room. The client applies a message only when its `seq` is greater than the last applied `seq` of the same socket session; the first message of a new socket replaces the state.
+
+### Home_Room data
+
+`data` is an array of cards for live matches only (match `status` `LIVE`). A match leaves the array when a card with another status arrives. The order is not part of the contract (now it is usually ascending match ID); the client shows cards in the received order. An empty array means no live match.
+
+| Card field | Type and source |
+| --- | --- |
+| `id` | Match ID as a string (database IDs are strings). |
+| `sport` | One of the six ids in `frontend/src/data/sports.js`. |
+| `status` | `LIVE` in the array. |
+| `competition` | Tournament name (`tournaments.name`). |
+| `sides` | `[{ name }, { name }]`; `name` is the team label, or `null` when the match has no team on that side. |
+| `score` | `[number, number]`: points per side from the snapshot. |
+| `clock` | Always `null` now. No engine produces a clock. |
+| `seq` | The match `seq` of this card (not the room `seq`). |
+
+### Match_Room data
+
+`data` is the snapshot Public_DTO. With the Test_Engine:
+
+```js
+{ matchId, sport, status, sides: [{ name, points }, { name, points }], corrected }
+```
+
+`GET /api/matches/:id` returns the same shape as `match.snapshot` ([contract](architecture.md#public-read-api)). Production engines for the six sports are Blocked on [rules.md](rules.md); they can add fields only through the `snapshot` allow-list.
+
+### Card to `LiveMatchCard` `match` prop
+
+`features/matches` maps each card to the existing prop. The shell, the sport filter and the rail stay unchanged. The filter compares `match.sport` as now.
+
+| `match` prop field | From the card | Default when absent |
+| --- | --- | --- |
+| `id` | `id` | — |
+| `sport` | `sport` | — |
+| `sportLabel` | `label` of the `sports.js` entry for `sport` | — (the backend checks `sport`) |
+| `competition` | `competition` | `''` |
+| `sides[i].name` | `sides[i].name` | `'TBD'` |
+| `score` | `` `${score[0]}–${score[1]}` `` (en dash, as in the fixtures) | `'VS'` if `score` is not two numbers |
+| `clock` | `clock` | `''` (empty line) |
+| `columns` | One total column: `{ key: 'total', label: 'T', className: 'match-total', description: 'Total' }` | — |
+| `sides[i].values` | `[String(score[i])]` | `['—']` |
+
+Not in the card, so not shown from live data: per-period columns, serving marks, the period or set label and the clock text. The sport pages and the sport match dialog keep their display fixtures in this pass. Without `VITE_API_BASE` the homepage keeps `sampleMatches.js`.
+
+Known limit (accepted, no task yet): a card is published only after an accepted score action. A match that becomes `LIVE` appears after its first point, and a match that leaves `LIVE` disappears only when a later card carries its new status. No status-change route publishes a card yet.
 
 ## Routes
 
@@ -54,8 +113,8 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | `/` | Complete homepage with temporary card content | Homepage/shared UI team |
 | `/#tournaments` | Scrolls to the homepage tournament section | Homepage/shared UI team |
 | `/sports/<sport>/` | Shared sport page for all six sports: Live, Upcoming and Past matches from display fixtures, date chips and a match detail dialog | Respective sport teams |
-| `/operator/matches` | Match Operator "My Matches" dashboard: assigned matches only, in Live / Scheduled / Done sections, from display fixtures. No auth gate yet | Scorer / operator team |
-| `/operator/matches/:matchId/score` | Reserved blank: the shared admin + scorer scoring console is a later pass | Scorer / operator team |
+| `/operator/matches` | My Matches from `GET /api/operator/matches`, Live / Scheduled / Completed; inside the lazy Clerk area | Scorer / operator team |
+| `/operator/matches/:matchId/score` | Score console with lease, Offline_Queue and Test_Engine controls; inside the lazy Clerk area | Scorer / operator team |
 | `/sign-in/*`, `/sign-up/*` | Lazy Clerk sign-in and sign-up (email with verification, or Google) | Backend/auth team |
 | `/account/delete` | Lazy Clerk area: explains deletion; a signed-in user can delete the account | Backend/auth team |
 | `/privacy` | Privacy policy, no Clerk | Backend/auth team; policy owner (Open) |
@@ -79,4 +138,4 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend, database, authentication, scoring correctness, live/offline services and production hosting have not been implemented or verified. They are separate future tasks. The planned backend integration points are in [architecture.md](architecture.md#technology); the frontend contracts above do not change until a live-data contract is agreed here.
+Backend, database, authentication, scoring correctness, live/offline services and production hosting have not been implemented or verified. They are separate future tasks. The planned backend integration points are in [architecture.md](architecture.md#technology); the frontend contracts above do not change until the [live snapshot-to-card contract](#live-snapshot-to-card-contract) is confirmed.

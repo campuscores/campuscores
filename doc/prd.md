@@ -233,7 +233,7 @@ The homepage, global sport pages and reserved tournament routes are registered i
 - A Tournament Manager cannot create Tournament Managers or Super Admins.
 - A manager can correct an approved result and the new result version, audit record, re-approval, and public correction marker agree.
 - A complete first edition can be configured without code changes for its team list, match schedule, and chosen formats.
-- Staging load test reaches 3,000 simulated WebSocket clients under the agreed test profile without score-action loss/duplication; event-to-screen latency/error thresholds must be selected before the test.
+- Staging load test reaches 3,000 simulated WebSocket clients under the agreed test profile without score-action loss/duplication; the pass thresholds are in [tasks.md](tasks.md#load-test-pass-thresholds).
 - Load-test report distinguishes test clients from actual event viewers and captures Worker and Durable Object request counts, database, network, reconnect, and latency measurements.
 
 ## 9. Decisions still open
