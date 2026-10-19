@@ -164,12 +164,14 @@ test('5xx retries the same action; 403 and 409 pause with the code and keep late
   await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4', '#2 Point to Bravo · synced, seq 5', '#3 Point to Alpha · synced, seq 6']);
 });
 
-test('keyboard-only flow from My Matches to scoring, with 44px targets on phone and desktop', async ({ page }) => {
+test('keyboard-only flow from My Matches to scoring, with 44px targets on phone and desktop', async ({ page, browserName }) => {
+  // macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
+  const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
   const server = await mockApi(page);
   const focused = locator => locator.evaluate(el => el === document.activeElement);
   async function tabTo(locator) {
     for (let press = 0; press < 40; press++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press(tab);
       if (await focused(locator)) return;
     }
     throw new Error('Tab never reached the control');

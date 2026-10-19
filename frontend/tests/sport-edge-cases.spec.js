@@ -290,7 +290,9 @@ for (const sport of sports) {
       }
     });
 
-    test('keyboard-only flow through chips, rails and cards', async ({ page }) => {
+    test('keyboard-only flow through chips, rails and cards', async ({ page, browserName }) => {
+      // macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
+      const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(route);
       const describe = () => page.evaluate(() => {
@@ -304,16 +306,16 @@ for (const sport of sports) {
       const seen = [await describe()];
       const last = expected.at(-1);
       for (let press = 0; press < 60 && seen.at(-1) !== last; press++) {
-        await page.keyboard.press('Tab');
+        await page.keyboard.press(tab);
         const focused = page.locator(':focus');
         expect(await focused.evaluate(el => getComputedStyle(el).outlineStyle), await describe()).not.toBe('none');
         await expect(focused).toBeInViewport();
         seen.push(await describe());
       }
       expect(seen).toEqual(expected);
-      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press(`Shift+${tab}`);
       expect(await describe()).toBe(expected.at(-2));
-      await page.keyboard.press('Tab');
+      await page.keyboard.press(tab);
       await page.keyboard.press('Enter');
       await expect(dialog(page)).toBeVisible();
       await page.keyboard.press('Escape');
