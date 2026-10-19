@@ -199,3 +199,5 @@
   .sports-nav .sport-link { grid-column: auto; flex-direction: column; gap: 7px; min-height: 74px; padding: 10px 6px; font-size: 12px; }
   .sports-nav .sport-link:first-child { grid-column: 1 / -1; flex-direction: row; min-height: 48px; font-size: 14px; }
 }
+/* Live-row loading or unavailable text; same muted style as the sport pages' empty text. */
+.live-notice { margin: 0 0 18px; color: #50688c; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }

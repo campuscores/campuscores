@@ -1,34 +1,30 @@
-// Display fixtures only: the matches assigned to one Match Operator.
-// Reuses the existing sport fixture modules (sportFixtures) so no new scoring model is introduced.
-// Backend assignment, auth and sync are not implemented; this is the scorer's "My Matches" list only.
-// A real assignment list will replace this once accounts and match assignments exist (see doc/prd.md).
-import { sportFixtures } from '../sports/sportFixtures.js';
+// Pure helpers for rows from GET /api/operator/matches (Req 19.1). No fixtures: the list comes from the API.
+import { sports } from '../../data/sports.js';
 
-// Each assignment names a sport and a match id from that sport's fixtures, plus the scoring state
-// this operator sees: 'live' (continue scoring), 'scheduled' (start scoring), 'completed' (submitted, read-only).
-const assignments = [
-  { sport: 'football', matchId: 'live-m-cse-ece', state: 'live' },
-  { sport: 'badminton', matchId: 'live-ms-iyer-khan', state: 'live' },
-  { sport: 'basketball', matchId: 'up-w-cse-elec', state: 'scheduled' },
-  { sport: 'volleyball', matchId: 'up-m-civil-mech', state: 'scheduled' },
-  { sport: 'table-tennis', matchId: 'up-ms-saluja-anand', state: 'scheduled' },
-  { sport: 'lawn-tennis', matchId: 'up-ws-mann-kohli', state: 'scheduled' },
-  { sport: 'badminton', matchId: 'live-ms-mehta-bose', state: 'completed' },
-  { sport: 'table-tennis', matchId: 'live-md-walia-batra', state: 'completed' },
-];
+export const sportLabel = id => sports.find(sport => sport.id === id)?.label ?? id;
+export const sideName = (match, index) => match.sides?.[index]?.name ?? 'To be decided';
 
-const pools = {
-  live: fixtures => fixtures.liveMatches,
-  scheduled: fixtures => fixtures.upcomingMatches,
-  completed: fixtures => fixtures.liveMatches, // 'ended' matches live in the liveMatches list in the sport fixtures
-};
+/** Dashboard section for a match: the user-confirmed map in doc/memory.md ("My Matches sections"). */
+export function sectionOf({ status, correctionRoute }) {
+  if (status === 'SCHEDULED') return 'scheduled';
+  if (status === 'LIVE' || (status === 'REJECTED' && correctionRoute === 'OPERATOR')) return 'live';
+  return 'completed'; // PENDING_APPROVAL, APPROVED, REJECTED/MANAGER; read-only for operators
+}
 
-/** Resolve each assignment to its real fixture match, tagged with sport and scorer state. */
-export const assignedMatches = assignments
-  .map(({ sport, matchId, state }) => {
-    const match = pools[state](sportFixtures[sport]).find(m => m.id === matchId);
-    return match && { ...match, sport, state };
-  })
-  .filter(Boolean);
+/** Matches that accept no more score actions from anyone. */
+export const isClosed = ({ status }) => status === 'PENDING_APPROVAL' || status === 'APPROVED';
 
-export const assignedBy = state => assignedMatches.filter(match => match.state === state);
+// shortcut: dates use the browser's time zone; the event time zone is an open question in doc/memory.md.
+/** `{ date: 'YYYY-MM-DD', label: '12 Oct', time: '14:30' }` for a scheduled time, or null when unset. */
+export function dayOf(iso) {
+  const at = iso ? new Date(iso) : null;
+  if (!at || Number.isNaN(at.getTime())) return null;
+  return {
+    date: at.toLocaleDateString('en-CA'),
+    label: at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    time: at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
+export const stageLabel = ({ kind, stage }) =>
+  ({ SF1: 'Semifinal 1', SF2: 'Semifinal 2', FINAL: 'Final' })[stage] ?? (kind === 'CUSTOM' ? 'Custom match' : '');

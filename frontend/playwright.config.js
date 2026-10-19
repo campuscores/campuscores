@@ -25,9 +25,20 @@ export default defineConfig({
     { name: 'iphone', ...phone, use: { ...devices['iPhone 15'] } },
     { name: 'ipad', ...phone, use: { ...devices['iPad (gen 11)'] } },
   ],
-  webServer: {
-    command: 'npm run preview -- --port 4175',
-    url: 'http://127.0.0.1:4175',
-    reuseExistingServer: false,
-  },
+  webServer: [
+    {
+      command: 'npm run preview -- --port 4175',
+      url: 'http://127.0.0.1:4175',
+      reuseExistingServer: false,
+    },
+    {
+      // Live-mode build for live.spec.js and operator-console.spec.js. Tests mock every socket and API call, so the API host
+      // never resolves. The fake Clerk key points at an unresolvable host; operator-console.spec.js injects a stub Clerk.
+      command: 'npx vite build --outDir ../output/live-dist --emptyOutDir && npx vite preview --outDir ../output/live-dist --host 127.0.0.1 --port 4176 --strictPort',
+      url: 'http://127.0.0.1:4176',
+      env: { VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
+      reuseExistingServer: false,
+      timeout: 120000,
+    },
+  ],
 });

@@ -1,23 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useAuth, useClerk } from '@clerk/react';
+import { apiFetch } from '../../services/api.js';
 
-const apiBase = import.meta.env.VITE_API_BASE ?? '';
 // Users whose invitation was already checked in this page load; StrictMode runs effects twice.
 const inviteChecked = new Set();
 
-// shortcut: local fetch helper, replace with services/api.js when task 11.2 adds it.
-async function callApi(path, method, getToken) {
-  let res;
-  try {
-    res = await fetch(`${apiBase}/api${path}`, { method, headers: { Authorization: `Bearer ${await getToken()}` } });
-  } catch {
-    throw new Error('the server could not be reached');
-  }
-  if (res.ok) return;
-  const body = await res.json().catch(() => null);
-  throw Object.assign(new Error(body?.error?.message ?? `the server returned status ${res.status}`), { code: body?.error?.code });
-}
+const callApi = async (path, method, getToken) => apiFetch(path, { method, token: await getToken() });
 
 /** Landing page after sign-in or sign-up: accepts a pending staff invitation once (Req 12.5, 12.6). */
 export function AccountPage() {

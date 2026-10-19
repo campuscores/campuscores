@@ -14,7 +14,7 @@ export default function LiveMatchCard({ match }) {
         <div className="match-details">
           <table aria-label={`${match.sportLabel} score breakdown`}>
             <thead><tr><th scope="col"><span className="sr-only">Team or player</span></th>{match.columns.map(column => <th key={column.key} scope="col" className={column.className} aria-label={column.description}>{column.label}</th>)}</tr></thead>
-            <tbody>{match.sides.map(side => <tr key={side.name}><th scope="row">{side.name}</th>{side.values.map((value, index) => <td key={match.columns[index].key} className={match.columns[index].className}>{value === '—' ? <span aria-label="Not started">—</span> : value}</td>)}</tr>)}</tbody>
+            <tbody>{match.sides.map((side, sideIndex) => <tr key={sideIndex}><th scope="row">{side.name}</th>{side.values.map((value, index) => <td key={match.columns[index].key} className={match.columns[index].className}>{value === '—' ? <span aria-label="Not started">—</span> : value}</td>)}</tr>)}</tbody>
           </table>
         </div>
       </div>

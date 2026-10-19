@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
 import SportPage from '../features/sports/SportPage.jsx';
-import MyMatchesPage from '../features/operator/MyMatchesPage.jsx';
 import PrivacyPage from '../features/legal/PrivacyPage.jsx';
 import SignInUnavailable from '../features/auth/SignInUnavailable.jsx';
 import { sportFixtures } from '../features/sports/sportFixtures.js';
@@ -39,9 +38,9 @@ export default function App() {
       } replace />} />
       {/* Every sport gets the shared sport page with its display fixtures; key resets its state between sports. */}
       {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={<SportPage key={sport.id} sport={sport} fixtures={sportFixtures[sport.id]} />} />)}
-      <Route path="/operator/matches" element={<MyMatchesPage />} />
-      {/* Shared scoring console (admin + scorer) is designed in a later pass; route reserved so links resolve. */}
-      <Route path="/operator/matches/:matchId/score" element={<ReservedPage />} />
+      {/* Operator pages need sign-in, so they live in the lazy Clerk area with the account pages. */}
+      <Route path="/operator/matches" element={authPage} />
+      <Route path="/operator/matches/:matchId/score" element={authPage} />
       <Route path="/tournaments/:tournament" element={<ReservedPage />} />
       <Route path="/sign-in/*" element={authPage} />
       <Route path="/sign-up/*" element={authPage} />
