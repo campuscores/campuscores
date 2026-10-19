@@ -46,10 +46,10 @@ test('each card links to the scoring route with the right action label', async (
   const labels = { live: 'Continue scoring', scheduled: 'Start scoring', completed: 'View match' };
   for (const [state, matches] of [['live', live], ['scheduled', scheduled], ['completed', completed]]) {
     for (const match of matches) {
-      const link = card(page, match.id).getByRole('link');
+      const link = card(page, match.key).getByRole('link');
       await expect(link).toHaveText(labels[state]);
-      await expect(link).toHaveAttribute('href', `/operator/matches/${match.id}/score`);
-      await expect(card(page, match.id)).toContainText(sportLabel(match.sport));
+      await expect(link).toHaveAttribute('href', `/operator/matches/${match.key}/score`);
+      await expect(card(page, match.key)).toContainText(sportLabel(match.sport));
     }
   }
 });
@@ -63,7 +63,7 @@ test('scheduled date chips filter in place', async ({ page }) => {
   await scheduledSection.locator('.date-chip', { hasText: new RegExp(`^${day.label}$`) }).click();
   const onDay = scheduled.filter(match => match.date === day.date);
   await expect(scheduledSection.locator('.operator-card')).toHaveCount(onDay.length);
-  for (const match of onDay) await expect(card(page, match.id)).toBeVisible();
+  for (const match of onDay) await expect(card(page, match.key)).toBeVisible();
 });
 
 test('layout fits phones to large screens with 44px actions', async ({ page }) => {
@@ -93,10 +93,10 @@ test('the header My Matches tab navigates from the home page to the dashboard', 
   await expect(tab).toHaveAttribute('aria-current', 'page');
 });
 
-test('an unknown operator route still renders the dashboard, scoring route is reserved blank', async ({ page }) => {
+test('the dashboard renders and the scoring route opens a page', async ({ page }) => {
   await page.goto(route);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('My Matches');
-  // The reserved scoring route renders nothing yet (shared console is a later pass).
-  await page.goto(`/operator/matches/${(live[0] ?? scheduled[0]).id}/score`);
-  await expect(page.locator('main')).toHaveCount(0);
+  // The scoring route now resolves to a sport page (badminton built) or a "coming soon" page.
+  await page.goto(`/operator/matches/${(live[0] ?? scheduled[0]).key}/score`);
+  await expect(page.locator('main')).toHaveCount(1);
 });

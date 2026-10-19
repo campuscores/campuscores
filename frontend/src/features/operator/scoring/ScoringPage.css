@@ -1,0 +1,276 @@
+.scoring-page {
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto 64px;
+  --sport-accent: #526780; /* fallback; the page sets this per sport from sports.js */
+}
+
+/* Top bar: back, meta, sync chip. */
+.scoring-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 20px;
+}
+.scoring-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+}
+.scoring-meta { margin: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; color: #50688c; }
+.scoring-sport { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; font-weight: 800; }
+.scoring-sport-icon { width: 16px; height: 16px; color: var(--sport-accent); }
+.scoring-sync {
+  justify-self: end;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a5a00;
+  background: #fff3dc;
+  white-space: nowrap;
+}
+.scoring-sync[data-state="online"] { color: #0a7d34; background: #e4f6e9; }
+
+/* Scoreboard. */
+.score-board {
+  padding: 20px 16px;
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(rgb(7 18 39 / 42%), rgb(7 18 39 / 42%)), var(--board-bg) center / cover;
+  box-shadow: 0 6px 18px rgb(35 65 110 / 10%);
+}
+.score-game-no { margin: 0 0 10px; text-align: center; font-size: 12px; font-weight: 700; opacity: .92; }
+.score-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.score-side { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.score-side-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
+.score-points { font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.score-games { font-size: 13px; font-weight: 700; opacity: .92; font-variant-numeric: tabular-nums; }
+.score-games-label { font-weight: 600; opacity: .8; }
+.score-side[data-winner] .score-points { color: #9fe3ff; }
+.score-board .serve-dot { width: 9px; height: 9px; background: #ffd43b; }
+
+/* First-serve prompt. */
+.serve-prompt { margin: 16px 0; text-align: center; }
+.serve-prompt p { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+.serve-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.score-btn {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #cdddf5;
+  border-radius: 16px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  background: #fff;
+  cursor: pointer;
+}
+.score-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* Primary +1 point controls. */
+.score-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+.point-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 96px;
+  border: 0;
+  border-radius: 20px;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  background: var(--blue);
+  box-shadow: 0 8px 22px rgb(7 85 255 / 20%);
+  transition: background .16s ease, transform .08s ease;
+}
+.point-btn:hover { background: #064ae0; }
+.point-btn:active { transform: scale(.98); }
+.point-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.point-plus { font-size: 34px; font-weight: 800; line-height: 1; }
+.point-name { font-size: 13px; font-weight: 700; text-transform: uppercase; opacity: .95; overflow-wrap: anywhere; }
+
+/* Secondary actions. */
+.scoring-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 12px; }
+.scoring-action {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #cdddf5;
+  border-radius: 14px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  background: #fff;
+  cursor: pointer;
+}
+.scoring-action:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.scoring-action:disabled { opacity: .45; cursor: not-allowed; }
+.scoring-action.is-primary { flex-basis: 100%; color: #fff; border-color: transparent; background: var(--blue); box-shadow: 0 6px 18px rgb(7 85 255 / 18%); }
+.scoring-action.is-primary:hover:not(:disabled) { color: #fff; background: #064ae0; }
+
+.serve-override { margin: 0 0 12px; font-size: 13px; color: #50688c; }
+.serve-override strong { color: var(--ink); }
+.serve-swap { border: 0; background: none; color: var(--blue); font: inherit; font-weight: 700; cursor: pointer; padding: 0; min-height: 44px; }
+.scoring-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eaf2ff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.scoring-result .scoring-action.is-primary { flex: 0 0 auto; }
+
+/* Game table reuses the public dialog look. */
+.scoring-detail { margin: 8px 0 24px; }
+.score-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.score-table th, .score-table td { padding: 10px 2px; text-align: center; font-size: 14px; font-weight: 700; }
+.score-table th:first-child { width: 34%; text-align: left; overflow-wrap: anywhere; }
+.score-table thead th { color: #607697; font-size: 11px; font-weight: 600; }
+.score-table thead tr { border-bottom: 1px solid #e9eef6; }
+.score-table tbody td { font-weight: 500; }
+.score-table tbody td strong { font-weight: 800; }
+.score-table .is-current { color: #d5203e; }
+.score-table .match-total { color: var(--blue); font-weight: 800; }
+
+/* Timeline: a clean list of rows, action on the left, running score on the right. */
+.scoring-timeline h2 { margin: 0 0 12px; font-size: 16px; font-weight: 800; }
+.timeline-list { margin: 0; padding: 0; list-style: none; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 4px 16px rgb(35 65 110 / 5%); }
+.timeline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  border-top: 1px solid #eef3fa;
+}
+.timeline-row:first-child { border-top: 0; }
+.timeline-row.is-game { background: #f3f8ff; font-weight: 700; }
+.timeline-what { min-width: 0; overflow-wrap: anywhere; }
+.timeline-score { flex-shrink: 0; color: var(--blue); font-weight: 800; font-variant-numeric: tabular-nums; }
+.timeline-dash { margin: 0 2px; color: #9fb3d4; }
+.scoring-empty { margin: 0; padding: 14px 16px; border-radius: 16px; background: #fff; color: #50688c; font-size: 14px; box-shadow: 0 4px 16px rgb(35 65 110 / 5%); }
+
+/* In-page dialogs for Finish game and the match-point confirmation. */
+.scoring-dialog {
+  width: min(400px, calc(100% - 32px));
+  margin: auto;
+  padding: 22px;
+  border: 0;
+  border-radius: 22px;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 24px 60px rgb(7 18 39 / 24%);
+}
+.scoring-dialog::backdrop { background: rgb(7 18 39 / 56%); }
+.scoring-dialog-title { margin: 0 0 6px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.scoring-dialog-text { margin: 0 0 16px; font-size: 14px; color: #50688c; }
+.scoring-radios { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.scoring-radio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #cdddf5;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scoring-radio:has(input:checked) { border-color: var(--blue); background: #eaf2ff; color: var(--blue); }
+.scoring-radio input { width: 20px; height: 20px; accent-color: var(--blue); }
+.scoring-dialog-actions { display: flex; gap: 10px; }
+.scoring-dialog-actions .scoring-action { flex: 1; }
+.scoring-dialog-actions .scoring-action.is-primary { flex-basis: auto; }
+
+@media (max-width: 767px) {
+  .scoring-top { grid-template-columns: auto 1fr; row-gap: 8px; }
+  .scoring-sync { grid-column: 1 / -1; justify-self: start; }
+  .score-points { font-size: 56px; }
+}
+
+/* ---- Period-model sports (football, basketball) ---- */
+
+/* Period tabs */
+.period-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.period-tab {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #cdddf5;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+}
+.period-tab:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.period-tab[aria-pressed="true"] { color: #fff; border-color: transparent; background: var(--blue); }
+.period-tab:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Event controls: a wrap grid of large action buttons */
+.event-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 8px 0 12px; }
+.event-btn {
+  min-height: 64px;
+  border: 1px solid #cdddf5;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .16s ease, color .16s ease;
+}
+.event-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.event-btn:disabled { opacity: .5; cursor: not-allowed; }
+.event-btn.is-score { color: #fff; border-color: transparent; background: var(--blue); box-shadow: 0 6px 18px rgb(7 85 255 / 18%); }
+.event-btn.is-score:hover:not(:disabled) { color: #fff; background: #064ae0; }
+.event-btn.is-yellow { border-color: #e3b600; }
+
+/* Score value chooser inside the score dialog */
+.score-value-row { display: flex; gap: 10px; margin-bottom: 16px; }
+.score-value-btn {
+  flex: 1;
+  min-height: 52px;
+  border: 1px solid #cdddf5;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+}
+.score-value-btn[aria-pressed="true"] { color: #fff; border-color: transparent; background: var(--blue); }
+
+/* Per-player contributions */
+.player-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.player-stat-col h3 { margin: 0 0 8px; font-size: 14px; font-weight: 800; }
+.player-stat-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.player-stat-col li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.player-stat-col li.is-off { color: #90a2bd; }
+.player-bits { color: var(--blue); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 767px) {
+  .player-stats { grid-template-columns: 1fr; }
+}

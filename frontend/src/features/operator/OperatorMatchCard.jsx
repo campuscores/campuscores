@@ -25,10 +25,10 @@ function stateLine(match) {
 
 /** One assigned match: textured header, meta, score/VS, status, then the scoring action. */
 export default function OperatorMatchCard({ match }) {
-  const headingId = `op-${match.sport}-${match.id}`;
+  const headingId = `op-${match.key}`;
   const theme = { '--match-background': `url('/assets/${match.sport}-background.webp')`, '--match-background-phone': `url('/assets/${match.sport}-background-640.webp')` };
   return (
-    <article className="match-card operator-card" data-status={match.status} data-state={match.state} data-date={match.date} data-match-id={match.id} style={theme} aria-labelledby={headingId}>
+    <article className="match-card operator-card" data-status={match.status} data-state={match.state} data-date={match.date} data-match-id={match.key} style={theme} aria-labelledby={headingId}>
       <div className="match-surface">
         <header className="match-header">
           <div className="match-meta"><span className="operator-sport"><SportIcon sport={match.sport} className="operator-sport-icon" />{sportLabel(match.sport)}</span><span>{match.round}</span></div>
@@ -37,7 +37,7 @@ export default function OperatorMatchCard({ match }) {
         </header>
         <div className="operator-foot">
           <p className="operator-venue">{match.venue}</p>
-          <Link className="operator-score-link" to={`/operator/matches/${match.id}/score`} data-state={match.state} aria-label={`${action[match.state]}: ${sportLabel(match.sport)}, ${match.sides[0].name} versus ${match.sides[1].name}`}>
+          <Link className="operator-score-link" to={`/operator/matches/${match.key}/score`} data-state={match.state} aria-label={`${action[match.state]}: ${sportLabel(match.sport)}, ${match.sides[0].name} versus ${match.sides[1].name}`}>
             {action[match.state]}
           </Link>
         </div>
