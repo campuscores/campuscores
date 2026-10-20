@@ -1,9 +1,10 @@
 name: Frontend checks
 on:
-  push:
-    paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+  # Full matrix runs once per release PR (develop -> main) or by manual run; deploy.yml gates every develop push.
   pull_request:
+    branches: [main]
     paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

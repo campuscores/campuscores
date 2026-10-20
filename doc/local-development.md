@@ -123,6 +123,20 @@ Add feature and regression specs to `frontend/tests/` in the same change as the 
 
 [deferred-tests.md](deferred-tests.md) lists the required checks that have not passed yet, their exact commands and which ones a Windows machine can run. CI clears them.
 
+### Before you push to develop
+
+Pushes to `develop` do not run the CI matrix. Run the checks locally first, then push directly to `develop`; `deploy.yml` tests and deploys staging. The full matrix runs on the release pull request to `main`. The rules are in [AGENTS.md](../AGENTS.md#verify-before-marking-complete).
+
+```sh
+npm run lint
+npm run build
+npm test -- tests/<changed-area>.spec.js   # all of npm test when shared UI or contracts change
+npm run lint:backend                      # when the backend changes
+npm run test:backend                      # when the backend changes
+```
+
+To run the full matrix before a release pull request, use **Run workflow** on the Frontend checks or Backend checks workflow in GitHub Actions.
+
 ## Backend (planned)
 
 The backend is planned and not implemented. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).
@@ -178,7 +192,7 @@ They solve different problems:
 
 | Tool | Purpose | This project |
 | --- | --- | --- |
-| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, `shared/**`, root package files or the workflow. It does not deploy. |
+| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium` and `pixel` on Windows. It runs on pull requests to `main` that affect `frontend/**`, `shared/**`, root package files or the workflow, and on manual dispatch. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
 An Actions job can run Docker containers. They can work together; neither replaces the other. Backend CI (`backend.yml`) and the deploy workflow run a temporary `postgres:18` service container on the runner. Team devices do not need local Postgres.

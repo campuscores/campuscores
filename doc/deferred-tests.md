@@ -18,10 +18,11 @@ Commands are copied from the workflow files. Run them from the repository root.
 | --- | --- | --- | --- | --- | --- | --- |
 | 7 | Nightly backup and restore check ([`backup.yml`](../.github/workflows/backup.yml)) | Schedule 21:30 UTC, or manual dispatch | Ubuntu; its own GitHub Environment (for example `production-backup`) | Workflow disabled: artifacts in a public repository are downloadable by any signed-in GitHub user | Production data; follow-up F12 in [tasks.md](tasks.md#follow-up-tasks) | Blocked: private R2 storage first; start only on Arnav's explicit command, planned before launch |
 | 8 | Windows Firefox job (option D) | `npx playwright install --with-deps firefox`; `npm test -- --project=firefox --workers=1` | Windows: `firefox`, as a separate parallel job | Not in CI; needs a workflow change | Windows desktop Firefox coverage | Deferred: start only on Arnav's explicit command ([memory](memory.md#public-repository-and-ci--20-october-2026)) |
+| 9 | Full frontend matrix ([`frontend.yml`](../.github/workflows/frontend.yml)) and backend CI ([`backend.yml`](../.github/workflows/backend.yml)) for `develop` commits after `c1629dc` | Release pull request `develop` → `main`, or **Run workflow** (manual dispatch) | Frontend: Ubuntu and macOS all six projects, Windows `chromium` and `pixel`. Backend: Ubuntu with Postgres 18, `REQUIRE_DB=1` | CI runs on release pull requests to `main` only ([memory](memory.md#public-repository-and-ci--20-october-2026)). On `develop`, `deploy.yml` runs only lint, backend tests and `chromium` + `pixel` on Ubuntu | Every `develop` commit after `c1629dc` | Deferred to the next release pull request |
 
 ## Deploy merges
 
-- `develop` deploys staging and `main` deploys production through `deploy.yml`. The ruleset on both branches requires a pull request, so a deploy starts when a pull request merges. The release flow is in [memory.md](memory.md#public-repository-and-ci--20-october-2026).
+- `develop` deploys staging and `main` deploys production through `deploy.yml`. A direct push to `develop` starts the staging deploy. `main` requires a pull request, so the production deploy starts when the release pull request merges. The release flow is in [memory.md](memory.md#public-repository-and-ci--20-october-2026).
 - Some earlier commits on `integration/matchscorer-scoring` have `[skip ci]` in the subject. GitHub skips `push` and `pull_request` workflows when the head commit message contains it ([GitHub docs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)). A squash message lists the branch commit subjects by default, so remove that text from the merge or squash message before you merge. Otherwise the deploy does not run.
 
 ## Run the deferred checks locally
@@ -34,3 +35,4 @@ Set `CI=true` to match CI: one retry, traces on the first retry, and `test.only`
 | --- | --- |
 | 7 | Not reproducible locally. |
 | 8 | A local Windows Firefox run is investigation only. It is not the Windows runner result that the acceptance needs. |
+| 9 | Not cleared locally. The macOS runner and the backend database suite need CI. |
