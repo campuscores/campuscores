@@ -8,7 +8,7 @@
     "dev": "npm run dev --workspace @thaparlympics/frontend --",
     "build": "npm run build --workspace @thaparlympics/frontend",
     "preview": "npm run preview --workspace @thaparlympics/frontend --",
-    "lint": "npm run lint --workspace @thaparlympics/frontend",
+    "lint": "npm run lint --workspace @thaparlympics/frontend && eslint shared",
     "test": "npm run test --workspace @thaparlympics/frontend --",
     "dev:backend": "npm run build && npm run dev --workspace @thaparlympics/backend --",
     "lint:backend": "npm run lint --workspace @thaparlympics/backend",

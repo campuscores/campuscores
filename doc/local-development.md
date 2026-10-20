@@ -25,8 +25,8 @@ The homepage needs no database, account, environment file, Docker or agent conne
 Clone the repository once, or pull the agreed branch into an existing checkout:
 
 ```sh
-git clone https://github.com/Kush-Saharan/t-lympics.git
-cd t-lympics
+git clone https://github.com/campuscores/campuscores.git
+cd campuscores
 npm ci
 npm run dev
 ```
@@ -68,6 +68,8 @@ npm test
 ```
 
 Install the browsers once per machine. Re-run the browser install when a Playwright update requires it. Linux also needs system libraries: use `npx playwright install --with-deps chromium firefox webkit`, or run `sudo npx playwright install-deps webkit` when WebKit reports missing libraries. CI uses `--with-deps`.
+
+`npm run lint` also checks `shared/scoring.mjs`. Backend lint includes the shared calculations. Backend checks run the pure format suite in Node and transaction tests against CI’s temporary database. No hosted schema change is part of the scoring integration.
 
 `npm test` runs six Playwright projects:
 
@@ -118,6 +120,8 @@ Use the repository tests for repeatable evidence. Use an installed Playwright CL
 Review phone and desktop rendering after UI/asset changes. Record tested cases, results and limitations in [tasks.md](tasks.md). Do not mark a feature verified when required checks failed or could not run.
 
 Add feature and regression specs to `frontend/tests/` in the same change as the implementation. `npm test` discovers matching test files in that folder. Add applicable edge, failure and integration cases; preserve existing coverage. When other application layers are built, extend their commands and CI jobs/path triggers. Follow the shared verification policy in [AGENTS.md](../AGENTS.md).
+
+[deferred-tests.md](deferred-tests.md) lists the required checks that have not passed yet, their exact commands and which ones a Windows machine can run. CI clears them.
 
 ## Backend (planned)
 
@@ -174,7 +178,7 @@ They solve different problems:
 
 | Tool | Purpose | This project |
 | --- | --- | --- |
-| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium`, `firefox` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, root package files or the workflow. It does not deploy. |
+| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, `shared/**`, root package files or the workflow. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
 An Actions job can run Docker containers. They can work together; neither replaces the other. Backend CI (`backend.yml`) and the deploy workflow run a temporary `postgres:18` service container on the runner. Team devices do not need local Postgres.

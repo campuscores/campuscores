@@ -1,3 +1,4 @@
+import { toPublic } from '../http.js';
 import { Hono } from 'hono';
 import { clerkAuth, loadAccount, requireRole } from '../auth.js';
 import { withClient, withTx } from '../db.js';
@@ -125,7 +126,8 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
     client.query(
       `SELECT m.id, ts.tournament_id AS "tournamentId", ts.sport, m.kind, m.stage, m.status,
               m.correction_route AS "correctionRoute", to_json(m.scheduled_at) #>> '{}' AS "scheduledAt",
-              m.venue, m.last_seq AS seq,
+              m.venue, m.last_seq AS seq, m.config_snapshot->'format' AS format,
+              (m.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date AS "isToday",
               json_build_array(json_build_object('name', ta.label), json_build_object('name', tb.label)) AS sides,
               a.id AS "assignmentId", to_json(a.valid_from) #>> '{}' AS "validFrom",
               to_json(a.valid_until) #>> '{}' AS "validUntil", a.valid_from, a.valid_until, now() AS now
@@ -145,4 +147,20 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
     validNow: isWithinWindow(now, valid_from, valid_until),
   }));
   return c.json({ matches });
+});
+
+// Private, uncached scoring state, including the accepted log needed to project offline reversals.
+assignmentRoutes.get('/operator/matches/:id/scoring', clerkAuth, loadAccount, requireRole('staff'), async c => {
+  const matchId = idParam(c);
+  const result = await uncached(c, client => withTx(client, async tx => {
+    // Same match lock as writers: snapshot and action log describe one committed revision.
+    const { rows: [match] } = await tx.query('SELECT id FROM matches WHERE id = $1 FOR UPDATE', [matchId]);
+    if (!match) throw new AppError(404, 'NOT_FOUND', 'Match not found');
+    const { rows: [assignment] } = await tx.query("SELECT id FROM match_operator_assignments WHERE match_id = $1 AND account_id = $2 AND status = 'ACTIVE'", [matchId, c.get('account').id]);
+    if (!assignment) throw new AppError(403, 'NOT_ASSIGNED', 'This match is not assigned to you');
+    const { rows: [stored] } = await tx.query('SELECT seq, data FROM match_snapshots WHERE match_id = $1', [matchId]);
+    const { rows: actions } = await tx.query('SELECT seq, action_id AS "actionId", type, payload, reverses_action_id AS "reversesActionId" FROM score_actions WHERE match_id = $1 ORDER BY seq', [matchId]);
+    return { seq: stored?.seq ?? 0, snapshot: stored ? toPublic('snapshot', stored.data) : null, actions };
+  }));
+  return c.json(result);
 });

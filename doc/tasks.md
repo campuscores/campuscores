@@ -15,8 +15,8 @@
 - Only Super Admins create Tournament Managers and Super Admins. Managers can invite `MATCH_OPERATOR` accounts only.
 - Match-scoped operator assignments (`match_operator_assignments`) are required. Operators score only matches with an effectively valid assignment; managers who score assign themselves first. One active assignment per match; `scorer_leases` picks the one active device.
 - Every scoring HTTP/socket command runs the authorization chain against the database (token → active account → active assignment → time window by server time → `SCORE` → match accepting scores → lease). Unassigned match = 403; locked match = 409.
-- A completed score is provisional until approved. Only an approved result is final. The submitter can never approve their own result, except via an audited Super Admin override with a reason. Rejection chooses `correction_route` `OPERATOR` or `MANAGER`. Keep live score updates visible while the match is in progress.
-- Live undo by the assigned operator is unlimited, needs no reason, is stored as reversal actions, and shows no public marker. Corrections after submission/approval need a reason and show a public marker.
+- The assigned operator confirms the final score; it immediately becomes final and locked (`APPROVED`). No separate manager review or post-final editing (confirmed 20 October 2026). Keep live score updates visible before confirmation.
+- Live undo by the assigned operator is unlimited, needs no reason, is stored as reversal actions, and shows no public marker. Final confirmation permanently locks later edits.
 - Use the Thapar logo site-wide when the user supplies the official asset. Do not fabricate or substitute an unofficial mark. Build a replaceable logo asset slot; logo file is intentionally pending.
 - Implement in JavaScript, not TypeScript. PostgreSQL is the durable source of truth; Durable Object rooms are transport only.
 - Never change a hosted database schema outside CI; every schema change is a `dbmate` migration deployed by CI.
@@ -31,7 +31,7 @@
 5. Enforce permissions server-side. Anonymous spectator APIs are read-only and return only approved public fields.
 6. Persist an accepted score action, projection update, audit record, and outbox event in a transaction. Broadcast only committed data.
 7. Test every protected path per role: Super Admin, Tournament Manager, Match Operator (assigned, unassigned, not yet valid, expired, revoked, locked match), and anonymous Spectator.
-8. Maintain clear states: `LIVE` (provisional), `PENDING_APPROVAL`, `APPROVED/FINAL`, `REJECTED/CORRECTION`. Rejected or pending results must not be reported as final.
+8. Use SCHEDULED → LIVE (provisional) → APPROVED/FINAL for new scoring. Preserve legacy pending/rejected row compatibility; do not create new review/reopening endpoints.
 9. Update affected docs and this task list when requirements change; don't silently fork behavior between PRD, architecture, and rules.
 10. Follow [AGENTS.md](../AGENTS.md) for tools, ownership, decision gates, final documentation and publication evidence. Use `handoff.md` for integration and `local-development.md` for setup. Keep one current task entry; do not append an execution diary.
 
@@ -42,7 +42,7 @@ The homepage, frontend CI, badminton page (`9a22720`) and all-sports change (`df
 | Area | Final implementation | Current status |
 | --- | --- | --- |
 | Homepage | React/Vite JavaScript, approved responsive UI, local artwork, filters, native card rails and reserved detail routes. Use [handoff.md](handoff.md) for integration and [design.md](design.md) for visual contracts. Tournament cards remain temporary; the live row reads the `home` room when `VITE_API_BASE` is set. | On `origin/main`; Ubuntu CI passed on `4405c8b`. |
-| Frontend CI | Same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects; Windows runs `chromium`, `firefox` and `pixel`. Each OS reports independently. | On `origin/main`. `4405c8b`: Ubuntu 491 passed; macOS 3 failed, Windows 1 failed ([known failures](#known-failures--20-october-2026)). |
+| Frontend CI | Same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects; Windows runs `chromium` and `pixel`. Each OS reports independently. | On `origin/main`. `4405c8b`: Ubuntu 491 passed; macOS 3 failed, Windows 1 failed ([known failures](#known-failures--20-october-2026)). |
 | Shared docs | Existing canonical docs describe final contracts, durable decisions and current task state. Follow [AGENTS.md](../AGENTS.md) for documentation and completion rules. | Backend stack decisions recorded 11 October 2026. |
 
 ### Latest verification
@@ -63,10 +63,18 @@ Use one row per active task: owner, scope/files, dependencies, state and branch/
 
 | Owner | Scope / files | Dependencies | State | Branch / PR |
 | --- | --- | --- | --- | --- |
+| Arnav | Integrate real operator scoring from `matchscorer-scoring` into `develop`: shared sport calculations, API transactions/DTOs, scoring UI, live/completed cards, tests and canonical docs | Confirmed 20 October format controls, operator final lock and Asia/Kolkata eligibility in rules/memory; preserve auth, assignment, lease and queue | CI verified on head `9ca68b3` (2026-10-20, `pull_request` runs): Backend checks `backend` passed, 221 of 221 tests (34 files) with `REQUIRE_DB=1` on Postgres 18 ([run](https://github.com/campuscores/campuscores/actions/runs/39459678721)). Frontend checks ([run](https://github.com/campuscores/campuscores/actions/runs/39459678727)): `homepage (ubuntu-latest)` passed, 604 passed, 28 skipped, 1 flaky; `homepage (macos-latest)` passed, 605 passed, 28 skipped; `homepage (windows-latest)` passed, `chromium` + `pixel` 211 passed. The Ubuntu flaky case is `[firefox] operator-console.spec.js:158` keyboard-only flow: the first attempt failed with "Tab never reached the control" and the retry passed (known failure 5, F6). Deferred rows 1–4 are cleared; rows 5–8 stay open ([deferred-tests.md](deferred-tests.md)). The homepage rail test runs one case per width with a 15 s assertion budget; traces record on the first retry only. Windows CI no longer runs Firefox; option D is Open ([memory](memory.md#public-repository-and-ci--20-october-2026)). Gaps: the Windows Firefox stall cause is unproven; no physical-device check. Next: merge into `develop`, Arnav's staging check, then a pull request into `main`. Acceptance covers formats, derived winners, undo/final lock, queue/reload, permissions, public delivery and phone/keyboard access | [PR #2](https://github.com/campuscores/campuscores/pull/2), `integration/matchscorer-scoring` → `develop`; `9ca68b3` CI-verified; draft, not merged |
+| Arnav | Public repository release: visibility, GitHub security settings, backup workflow, docs | Readiness check found no secret in history, refs or Actions logs | Applied 20 October 2026 and confirmed by API read: repository public; secret scanning, push protection and Dependabot alerts on; ruleset `protect-main-develop` on `main` and `develop` (pull request required, 0 approvals, no force push, no deletion); Environment `production` reviewer `arnavbhatia2003`; fork pull request workflows need approval for all external contributors; `backup.yml` disabled and its artifact deleted. Decisions: no license, public commit emails accepted, fixture names invented, images left as they are, option D Open ([memory](memory.md#public-repository-and-ci--20-october-2026)). Remaining: R2 backups before launch (F12) | `integration/matchscorer-scoring`, [PR #2](https://github.com/campuscores/campuscores/pull/2) |
 | Kiro agent (for the user) | Cross-browser, phone-emulation and edge-case tests: `frontend/playwright.config.js` (six projects), `tests/sport-edge-cases.spec.js`, `tests/mobile.spec.js`, `tests/helpers.js`, small edits to `tests/homepage.spec.js`, `.github/workflows/frontend.yml`, two CSS fixes (`SportPage.css`, `HorizontalRail.css`) and docs | The sport-pages change | Locally verified (all six projects; WebKit needed side-loaded libraries, see below); frontend CI on `4405c8b`: Ubuntu passed; macOS and Windows have [known failures](#known-failures--20-october-2026) 2–5 | `origin/main`, `dfe54f5`; no PR |
 | Kiro agent (for the user) | Sport pages for all six sports: `frontend/src/features/sports/*`, `App.jsx` (sport routes), `global.css` (section container selector), `tests/sport-pages.spec.js` (replaces `badminton.spec.js`), `tests/homepage.spec.js` (sport routes built), README and docs | None. Formats stay open in `rules.md`; fixtures are display only. Open items in `memory.md`: ended-match label, detail URL. | Locally verified; frontend CI on `4405c8b`: Ubuntu passed; macOS and Windows have [known failures](#known-failures--20-october-2026) 2–5 | `origin/main`, `dfe54f5`; no PR |
 | Kiro agent (for the user) | Backend live platform, spec tasks 1–16 (`backend/`, `db/`, backend workflows, live client, operator console, sign-in and privacy pages) | — | Published and deployed; see [Backend live platform](#backend-live-platform--published-20-october-2026). Follow-ups: [Follow-up tasks](#follow-up-tasks) | `origin/main` and `origin/develop`, `4405c8b`; no PR |
 | Kiro agent (for the user) | Match Operator "My Matches" dashboard, frontend only: `frontend/src/features/operator/{MyMatchesPage.jsx,OperatorMatchCard.jsx,operatorMatches.js,MyMatches.css}`, `App.jsx` (`/operator/matches` + reserved `/operator/matches/:matchId/score`), `SiteHeader.jsx` (My Matches nav tab, desktop + mobile), `tests/operator-matches.spec.js`, docs. Shows only this scorer's assigned matches in Live (Continue scoring) / Scheduled (Start scoring, date-filtered) / Completed (View, read-only) sections. Reuses `SiteHeader`, `HorizontalRail`, date chips, `SportIcon`, card shell and design tokens. No auth, no login indicator, no backend. | Scoring console page is a later pass (shared admin + scorer). Match formats stay admin-decided and open in `rules.md`; `operatorMatches.js` reuses existing sport display fixtures. | Locally verified on `matchscorer`; now wired to `GET /api/operator/matches` by the backend live platform (fixture `operatorMatches.js` kept only for the section map tests); frontend CI on `4405c8b`: Ubuntu passed; macOS and Windows have [known failures](#known-failures--20-october-2026) 2–5 | `matchscorer` `6a0517e`, merged into `develop`; no PR |
+
+### Scoring integration verification — 20 October 2026
+
+Local checks: `npm run lint`, `npm run lint:backend`, `npm run build` and the staging Wrangler dry-run passed. Backend local suite: 126 passed, 94 database cases skipped. GitHub CI on `8eca8ad`: all 220 passed against temporary Postgres 18 with REQUIRE_DB=1 ([run](https://github.com/campuscores/campuscores/actions/runs/39390450293)). The final shared rule suite has 29 passing cases, including blocked football tie resolution. The shared format suite covers six presets, custom formats, deuce/caps/deciding sets, tennis advantage/tie-break service, period totals, invalid actions, undo and final lock. Connected browser coverage includes all six sports, format freeze, early set winners, final retry/reload, cards/substitutions, offline queue, public live/final cards and India dates. The complete local Windows browser set on `8eca8ad` passed 362, skipped 13. Final Chromium/Firefox checks passed 28, including each independent click/refresh/Back journey, repeated Home scroll and blocked football tie resolution. Repeated Home and dialog keyboard checks passed all 48 Chromium/Firefox cases across three repeats after waiting for menu and dialog close state. Phone/desktop score and format captures were reviewed; the UI detector reported no findings.
+
+The complete frontend matrix remains required in CI. Windows WebKit has a local viewport/DPI mismatch; the existing CI policy runs WebKit on Ubuntu/macOS instead. No physical-device, screen-reader, live deployment or load verification is claimed. New formats do not convert existing played Test_Engine matches. Management UI, bracket advancement, standings, football shoot-outs and exceptional whole-match awards remain separate/Open as recorded in rules/memory.
 
 ## Backend live platform — published 20 October 2026
 
@@ -96,7 +104,7 @@ Verification, 19–20 October 2026 (spec task 16):
 
 Data state: production has no seed and no tournaments or matches, so its homepage live row is empty. Staging has the fake seed. The homepage tournament row (`sampleTournaments.js`) and the `/sports/*` pages (`sportFixtures.js`) still show display fixtures in every environment. `/tournaments/:tournament` is blank on purpose.
 
-Limits: no physical-device or branded-Safari check; the load test ran only at small local scale ([Capacity results](#capacity-results-simulated-clients)); the nightly backup has not run on GitHub yet.
+Limits: no physical-device or branded-Safari check; the load test ran only at small local scale ([Capacity results](#capacity-results-simulated-clients)); the nightly backup is disabled until F12.
 
 ### Known failures — 20 October 2026
 
@@ -105,8 +113,8 @@ Limits: no physical-device or branded-Safari check; the load test ran only at sm
 | 1 | Deploy `main` → production smoke step: `GET /health: expected 200, got 522` | The step ran seconds before the `campuscores.live` route served the new Worker. The deploy itself succeeded; a manual smoke run passed. | Open; follow-up F5 |
 | 2 | macOS `[chromium] homepage.spec.js:223` repeat Home and Tournaments navigation scrolls and closes phone menus | Scroll timing on macOS runners. Also fails on branch `matchscorer-scoring`, so it pre-dates this work. | Open; F6 |
 | 3 | macOS `[iphone]` and `[ipad] mobile.spec.js:74` rails and date chips are native touch scroll containers | ArrowRight on a focused rail leaves `scrollLeft` 0 on emulated WebKit. Pre-dates this work. | Open; F6 |
-| 4 | Windows `[firefox] homepage.spec.js:76` sport filters change only live cards and support keyboard input | Timeout waiting for 5 `.tournament-card`. Pre-dates this work. | Open; F6 |
-| 5 | Flaky: macOS `[chromium] sport-pages.spec.js:218` Volleyball keyboard; Windows `[firefox] homepage.spec.js:107` DPR test (can hang to the 45 s timeout); Windows `[chromium]` sport-pages basketball keyboard and `live.spec.js` reconnect; Ubuntu `[firefox] auth-pages.spec.js:51` `networkidle` timeout (once) | Runner timing. | Open; F6 |
+| 4 | Windows `[firefox] homepage.spec.js:76` sport filters change only live cards and support keyboard input | Timeout waiting for 5 `.tournament-card`. Pre-dates this work. | Closed: Windows CI no longer runs Firefox |
+| 5 | Flaky: macOS `[chromium] sport-pages.spec.js:218` Volleyball keyboard; Windows `[firefox] homepage.spec.js:107` DPR test (can hang to the 45 s timeout); Windows `[chromium]` sport-pages basketball keyboard and `live.spec.js` reconnect; Ubuntu `[firefox] auth-pages.spec.js:51` `networkidle` timeout (once); Ubuntu `[firefox] operator-console.spec.js:158` keyboard-only flow, "Tab never reached the control", passed on retry (`9ca68b3`) | Runner timing. | Open; F6 |
 | 6 | Local WebKit, iPhone and iPad projects do not launch | Host lacks `libavif.so.16`. Fix: `sudo npx playwright install-deps webkit`. CI is not affected. | Local only |
 | 7 | Local Node v22.21.1 is below `engines` `>=22.22.0` | Machine setup. | Local only |
 
@@ -117,8 +125,8 @@ Failures 2–5 are not deploy gates: the deploy workflow runs the Chromium and P
 | # | Task | Owner | State / blocker |
 | --- | --- | --- | --- |
 | F1 | Admin and manager screens for the built endpoints: invite (`POST /api/invites`), assign scorer (`POST /api/matches/:id/assignments`), revoke (`POST /api/assignments/:id/revoke`), disable account (`POST /api/accounts/:id/disable`) | Engineering | Open; needs scope and claim ([memory.md](memory.md#backend-open-items) item 6) |
-| F2 | Endpoints and UI to create tournaments, teams, rosters and matches; result review (approve/reject); bracket advancement; standings. Then replace `sampleTournaments.js`, `sportFixtures.js` and build `/tournaments/:tournament` | Engineering | Open; item 6, phases 4–9 below |
-| F3 | Production sport engines (production scoring now returns `SPORT_RULES_OPEN`) | Engineering | Blocked on [rules.md](rules.md) formats (user) |
+| F2 | Endpoints and UI to create tournaments, teams, rosters and matches; bracket advancement; standings. Then replace `sampleTournaments.js`, `sportFixtures.js` and build `/tournaments/:tournament` | Engineering | Open; item 6, phases 4–9 below |
+| F3 | Real sport scoring with presets/custom formats and operator final lock | Arnav | Implemented, checks in progress on `integration/matchscorer-scoring`; see current task claim. Standings and management remain separate. |
 | F4 | Full 3,000-client load run on staging | Engineering | Blocked: needs a test operator Clerk account with 4 `LIVE` assigned matches (user) |
 | F5 | Make `backend/scripts/smoke.js` retry `/health` for about 30 s, or re-run the production job | Engineering | Open |
 | F6 | Fix or stabilize the macOS and Windows frontend failures 2–5 | Engineering | Open |
@@ -127,7 +135,7 @@ Failures 2–5 are not deploy gates: the deploy workflow runs the Chromium and P
 | F9 | Cloudflare: route fail-closed mode, usage notifications, WAF rate-limit rule ([architecture.md](architecture.md#rate-limiting-and-quota-failure)) | User | Rule Blocked on item 3 threshold; the rest Open |
 | F10 | Lower Neon autoscaling maximum from 2 CU to 0.5 CU on both projects | User | Open |
 | F11 | Run "Bootstrap Super Admin" (`bootstrap.yml`) per environment with the Clerk `user_` ID | User | Open; not confirmed run |
-| F12 | Confirm the first nightly backup run (`backup.yml`, from `main`) and keep a copy of `BACKUP_PASSPHRASE` outside GitHub | User | Open |
+| F12 | Store backups in a private Cloudflare R2 bucket, then re-enable `backup.yml` with its own GitHub Environment (for example `production-backup`, `main` only). Keep a copy of `BACKUP_PASSPHRASE` outside GitHub | Arnav | Scheduled right after the final feature, before launch. Launch blocker ([Current blockers](#current-blockers)) |
 | F13 | Privacy policy owner and contact | User | Open; item 4 |
 
 Usage estimate and Workers Paid gate, 18 October 2026 (**user-confirmed inputs**). The Usage_Calculator is a local script in ignored `output/usage/`. `node output/usage/usage.mjs` reproduces the results below; its self-check passes. Cost model: each socket connect is 1 Worker + 1 DO request; each score action is 1 Worker request, 3 DO requests (`noteWrite`, `publish`, `publishCard`), about 5 DO row writes and about 6 Hyperdrive queries; each staff request is 1 Worker request and about 2 queries; each public `/api/*` read is 1 Worker request and 1 cached query; each sweep is 1 Worker + 1 DO request (queries counted as an upper bound). Static assets are not counted.
@@ -170,7 +178,7 @@ The four skips are touch-swipe tests. Playwright has touch-drag input only throu
 
 Fixes found by these tests: long side names overflowed 320px cards (`overflow-wrap: anywhere` on card side names in `SportPage.css`). WebKit snapped the last rail card under the end fade (`HorizontalRail.css` snaps the last card's end to the end padding; Chromium and Firefox positions are unchanged). The homepage rail test is marked slow on WebKit, because headless WebKit renders the 3840px rails about 3× slower.
 
-CI matrix: Windows runs `chromium`, `firefox` and `pixel` only. Safari does not exist on Windows, and Playwright's Windows WebKit port is the least representative; Ubuntu and macOS cover WebKit. CI results are pending until the change is pushed.
+CI matrix: Windows runs `chromium` and `pixel` only. Safari does not exist on Windows, and Playwright's Windows WebKit port is the least representative; Ubuntu and macOS cover WebKit and Firefox ([memory](memory.md)). CI results are pending until the change is pushed.
 
 Limits: emulated devices only. No physical phone, branded Safari or screen-reader check. Use the manual checklist in [local-development.md](local-development.md#check-on-a-real-phone). Firefox has no phone emulation. WebKit touch swipe and system text size are manual checks only. On emulated iPhone and iPad, one ArrowRight press on a rail snaps back to the start; three presses scroll it. The homepage cards have no long-name test. The empty-cell `—` marks in the dialog keep their pending screen-reader fix. The LAN preview command was not started in this run.
 
@@ -196,7 +204,7 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
 - [ ] Confirm tournament name, dates/timezone, lifecycle/status labels, venue metadata, and whether multiple tournaments can be active concurrently.
 - [ ] Confirm branch/year/division categories and team naming conventions.
 - [x] Role model and invite rules decided: Super Admin creates managers/Super Admins; managers invite operators only; no sport-scoped roles.
-- [x] Approver policy decided: submitter ≠ approver, with audited Super Admin override.
+- [x] Finalization policy: operator confirmation immediately publishes the final result and locks editing (20 October 2026).
 - [x] Invitation email decided: Clerk sends invitation and verification email; no custom SMTP provider is needed.
 - [ ] Decide whether invited emails must be Thapar addresses, and the account recovery policy.
 - [ ] Decide whether the Assign Scorer form suggests a default time window.
@@ -212,7 +220,7 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
   - Badminton: singles/doubles, games per match, target points, win-by/cap, and any alternate scoring.
 - [ ] Specify which point/rule values a manager can change at tournament creation and which must remain fixed by the sport engine. Validate configurations so impossible combinations cannot be saved.
 - [ ] Decide which match statistics and player contributions must be captured for each sport; avoid collecting unused events.
-- [ ] Decide result rules for ties, abandonments, forfeits, walkovers, and official correction after approval.
+- [ ] Decide exceptional result rules for ties, abandonments, forfeits and walkovers. No post-final editing is authorized.
 - [ ] Decide whether custom-match results are public and whether they count toward player statistics or standings. They never fill bracket slots.
 - [ ] Decide standings columns, points, tie-break order, and treatment of pending/rejected/custom matches.
 - [ ] Confirm roster/team limits, player eligibility, match-day squad rules, and substitute movement after match start.
@@ -255,29 +263,29 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
   - `tournament_brackets` and `bracket_slots`: exactly two semifinal matches and one final per tournament sport; final participant slots reference the approved semifinal winner.
   - `admin_accounts`: Clerk user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No sport or tournament scope column.
   - `match_operator_assignments`: `id`, `match_id`, `user_id`, `assigned_by`, `permission` (`'SCORE'` default, only value), nullable `valid_from`/`valid_until`, `status` (`ACTIVE` | `REVOKED`), `created_at`, `revoked_at`, `revoked_by`, `revoke_reason`.
-  - `match_result_reviews`: result version, `submitted_by`, `reviewed_by`, `decision`, `reason`, `correction_route` (`OPERATOR` | `MANAGER`), `self_approval_override`, `override_reason`.
+  - `match_result_reviews`: retained legacy schema only; no new result-review endpoints.
   - `score_actions` (including linked reversal actions), `match_snapshots`, `player_match_stats`, `sport_standings`, `scorer_leases`, `admin_audit_log`, and `outbox_events`.
 - [ ] Add foreign keys, check constraints, uniqueness rules, timestamps, status constraints, and indexes for tournament/sport/match public reads and for assignment lookups by `(match_id, user_id, status)`.
 - [ ] Assignment constraints: check `valid_until > valid_from` when both are set; partial unique index on `match_id` where `status = 'ACTIVE'`; revoked rows require `revoked_at` and `revoked_by`.
-- [ ] Review constraint: `reviewed_by <> submitted_by` unless `self_approval_override` is true with a non-empty `override_reason`; rejection requires `reason` and `correction_route`.
+- [ ] Preserve legacy review-table constraints without treating them as a current product workflow.
 - [ ] Grant database access only to the Worker's role; no browser or public API connects to the database.
 - [ ] Add constraints/tests preventing a custom match from occupying a bracket slot and preventing the bracket from having extra semifinal/final slots.
 - [ ] Ensure one team cannot be assigned to both sides of the same semifinal unless an explicitly approved special rule supports it.
 - [ ] Store immutable-at-match-start format config snapshots so changing tournament defaults cannot reinterpret an in-progress match.
 - [ ] Seed synthetic data in `db/seed/fake.sql` for CI and staging only. Clearly mark seeded users, teams, and scores as fake; never seed production.
 
-**Exit criteria:** migrations build the schema from scratch in CI, constraints reject invalid bracket/match/assignment/review rows, and seeds create a tournament with multiple enabled sports, assigned operators, and pending/approved sample results.
+**Exit criteria:** migrations build the schema from scratch in CI, constraints reject invalid bracket/match/assignment rows, and seeds create a tournament with multiple enabled sports, assigned operators, and live/final sample results.
 
 ## Phase 3 — Authentication, roles, match assignment authorization, and audit
 
 - [ ] Configure Clerk: open sign-up, required email verification, the suspicious-sign-up challenge, Google as the only social provider, and allowed redirect URLs.
 - [ ] Verify Clerk session tokens in the Worker with `@clerk/backend` and an `authorizedParties` allow-list. Keep the secret key on the Worker only.
 - [ ] Load the `admin_accounts` row on every protected request; reject disabled or missing accounts with 403. Do not trust role or assignment data from token claims.
-- [ ] Implement role middleware for non-scoring routes: manager-or-above for tournaments, sports, teams, matches, assignments, and reviews; Super Admin only for manager/Super Admin account administration.
+- [ ] Implement role middleware for non-scoring routes: manager-or-above for tournaments, sports, teams, matches and assignments; Super Admin only for manager/Super Admin account administration.
 - [ ] Implement invite flows: Super Admin invites managers/Super Admins; managers invite operators only (server rejects any other role). Use the Clerk Invitations API server-side; audit every account change. Sign-up without an invitation stays a Viewer.
-- [ ] Implement the scoring chain from `architecture.md`: token → active account → active assignment → server-time window → SCORE → role-aware match state → device lease. LIVE and REJECTED/OPERATOR use the valid assigned scorer. REJECTED/MANAGER requires a self-assigned Tournament Manager or Super Admin; operators remain locked out. Retain the documented 401/403/409 responses, reasons and audit.
+- [ ] Preserve the implemented scoring chain in `architecture.md`, including current-day START/live commands, account/assignment window, SCORE permission and device lease. Keep legacy rejected-state compatibility; add no new correction/review workflow.
 - [ ] Never rely only on hidden UI buttons or room membership. Viewer sockets accept no commands.
-- [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason. Audit assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
+- [ ] Implement audit helpers storing actor, action, entity, timestamp, request/correlation ID, before/after summary, and reason. Audit assignments, revocations, reassignments, self-assignments, reversals, match start and final confirmation.
 - [ ] Add authorization tests (HTTP; viewer sockets are receive-only):
   - anonymous public GET allowed; anonymous mutation denied;
   - operator scoring an unassigned match → 403; before `valid_from` → 403; after `valid_until` → 403; revoked → 403 on the next command; submitted/approved match → 409; no lease → 409;
@@ -285,7 +293,7 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
   - manager cannot invite managers or Super Admins; manager can manage every tournament and sport;
   - disabled account denied.
   - rejected OPERATOR route permits the valid assigned scorer; rejected MANAGER route denies operators and permits only a valid self-assigned manager/Super Admin; missing, expired or revoked assignment and missing lease still fail;
-  - manager takeover revokes the old assignment and creates the self-assignment in one audited transaction; resubmission and independent approval remain required.
+  - manager takeover revokes the old assignment and creates the self-assignment in one audited transaction; finalized results remain locked.
 - [ ] Redact tokens, credentials, and unnecessary player personal data from logs.
 
 **Exit criteria:** permission tests cover every role, including a signed-in Viewer; revocation takes effect on the next request; no sport-scoped admin logic exists; every privileged mutation produces an auditable record.
@@ -312,7 +320,7 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
 - [ ] Prevent destructive deletion of a player/team referenced by match history; use archived/inactive state instead.
 - [ ] Implement scheduled match creation and custom match creation outside the bracket. Require sport, teams/sides, format snapshot, match label/type, date/time/venue as applicable.
 - [ ] Clearly mark custom matches in admin and public UI; guarantee no custom match triggers bracket progression.
-- [ ] Add match lifecycle transitions (`SCHEDULED → LIVE → PENDING_APPROVAL → APPROVED/FINAL`, or `REJECTED/CORRECTION`) with server-side validation.
+- [ ] Add match lifecycle transitions (`SCHEDULED → LIVE → APPROVED/FINAL`) with server-side validation.
 - [ ] Add duplicate fixture warnings, unavailable-team validation, missing roster warnings, and schedule overlap warnings without blocking intentional overlaps across sports.
 - [ ] Implement assignment API and Assign Scorer UI: assign by email (inviting new operators), optional window, revoke with reason, reassign as revoke + insert in one transaction, and "assign myself" for managers. Audit each action.
 - [ ] Implement scorer lease acquisition/release/takeover for the assigned user's device; a second device sees "scoring active on another device".
@@ -328,61 +336,39 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
 - [ ] Create the two semifinal match records and the final with participant slots linked to semifinal winners.
 - [ ] Keep final slots unresolved until the corresponding semifinal result is approved; a merely live or submitted result must not advance a team.
 - [ ] On semifinal approval, transactionally set the corresponding final participant and write an audit/outbox event.
-- [ ] On rejection, keep the bracket unchanged and return the semifinal result to correction workflow.
-- [ ] On correction/reversal of an already approved semifinal, mark downstream final slot/match as requiring manager review; never silently swap participants in a live or finalized final.
-- [ ] Lock bracket team assignment once a semifinal starts. Provide audited manager correction/reopen flow for exceptional cases.
-- [ ] Build accessible bracket UI for public and admin, including empty, pending, approved, rejected, live, and final states.
+- [ ] Resolve downstream bracket conflicts through a separately agreed policy; never modify a finalized result or silently swap live final participants.
+- [ ] Lock bracket team assignment once a semifinal starts. Exceptional cases need an agreed policy; final score editing remains locked.
+- [ ] Build accessible bracket UI for public and admin, including empty, scheduled, live and final states.
 
 **Exit criteria:** only the approved winner of each semifinal fills the final; the bracket contains no other rounds and custom matches remain separate.
 
 ## Phase 7 — Sport scoring engines and configurable point systems
 
-### Shared score-command infrastructure
+Implemented on the current integration branch; verification/publication is recorded in the current task claim. The authoritative format and event scope is [rules.md](rules.md#10-accepted-scoring-feature-and-limits).
 
-- [ ] Define a common versioned score-action envelope: action ID, match ID, sport key, rules/config version, client sequence, action type/payload, actor/device metadata, and server acceptance metadata.
-- [ ] Run the scoring authorization chain before validation of every action.
-- [ ] Validate action payload against the specific sport's runtime schema and the match's frozen configuration.
-- [ ] Enforce idempotency, monotonic server sequence per match, legal state transitions, and atomic action/projection/audit/outbox persistence.
-- [ ] Implement deterministic rebuild of score snapshot and player-match contributions from accepted actions.
-- [ ] Implement live undo: the assigned operator can reverse any number of prior actions while `LIVE`, with no reason and no extra permission. Store each as a linked reversal action with actor and server time; do not set the public correction marker.
-- [ ] Implement post-submission/post-approval correction as linked compensating/replacement actions that require a reason, set the public correction marker, and never erase accepted history.
+- Shared pure calculations in `shared/scoring.mjs` validate frozen formats and replay accepted actions for six sports.
+- Backend commands preserve authorization, lease, idempotency, sequence and atomic action/snapshot/audit/outbox writes.
+- Phone-first operator controls select presets/custom formats, record team points, end sets early with an explicit winner, undo live mistakes and show pending actions separately.
+- Football cards/substitutions and basketball fouls/substitutions use public display text. No running clock or individual goal/basket attribution.
+- Coaches' roster, disciplinary and exceptional-outcome policies remain separate. Management UI, bracket advancement, standings and player statistics are unbuilt.
 
-### Sport-specific engines (build only after rules are confirmed)
+## Phase 8 — Operator final confirmation
 
-- [ ] Football: configurable team size/periods/clock; goals, own goals if required, cards, substitutions, optional scorer/assist, configured tie procedure; derive score and result.
-- [ ] Volleyball: rally points by set; configured sets-to-win, target/win-by/cap and deciding set; optional lineup/rotation, substitutions, timeout/fault detail as agreed.
-- [ ] Basketball: configurable periods/clock; configurable scoring values (e.g. 1/2/3 as confirmed), player attribution, team/player fouls and timeouts only if required; overtime/tie rule.
-- [ ] Table tennis: point/rally and game progression; configured target/win-by, games-to-win, singles/doubles; server/end tracking and team-tie orchestration only if selected.
-- [ ] Lawn tennis: point → game → set → match progression; configurable advantage/no-ad, set and tiebreak/final-set variants; singles/doubles participants.
-- [ ] Badminton: rally scoring; configured game target, win-by/cap, games-to-win; singles/doubles and alternative scoring when explicitly selected.
-- [ ] For each configured scoring value, validate allowed values and derive results from actions; do not allow manual total edits to bypass the event log.
-- [ ] Add boundary tests for deuce/win-by/cap, period/set transitions, tiebreaks, tied outcomes, invalid player/team/action, undo/replay, correction, and config-version mismatch.
-- [ ] Build sport-specific scorer consoles with laptop-first controls and responsive mobile fallback; make rapid input touch-safe and keyboard-operable; undo has no reason prompt while live.
-- [ ] Show local pending/offline score separately from server-accepted live score.
+Implemented on the current integration branch, replacing the earlier manager-review proposal.
 
-**Exit criteria:** each enabled sport has a tested scoring engine for the organizer-confirmed format; score totals, match result, and match-only player stats are reproducible from action history including undos.
+- A computed winner stays provisional until the assigned operator confirms it.
+- FINALIZE saves final status/snapshot, audit and outbox atomically. It publishes immediately after acceptance and locks all later edits.
+- Exact lost-response retries return the original acceptance after current permission checks. No reopening, reviewer, rejection or self-approval override endpoint is authorized.
+- Final results remain visible on public homepage/sport cards and read-only operator routes.
 
-## Phase 8 — Result submission and approval
-
-- [ ] Add "finish and submit result" for the assigned operator; persist the result version with `submitted_by`, move the match to `PENDING_APPROVAL`, and lock ordinary scoring.
-- [ ] Build the review queue with tournament/sport/match, teams, final scorecard, event summary, submitter, corrections, and relevant match metadata.
-- [ ] Implement approve and reject for managers and Super Admins. Approval records reviewer and timestamp; rejection requires a reason and a `correction_route`.
-- [ ] Enforce submitter ≠ reviewer in the service and the database check. Allow a Super Admin override only with `self_approval_override = true` and a non-empty `override_reason`; audit it.
-- [ ] On rejection with `OPERATOR`, reopen scoring for the still-active assignment until resubmission; with `MANAGER`, keep the operator locked out and let a manager (self-assigned) correct.
-- [ ] Ensure only approval moves a result to `APPROVED/FINAL` and enables final-result-dependent standings/bracket progression.
-- [ ] Ensure pending/rejected results remain visibly non-final to spectators and do not populate final bracket outcomes.
-- [ ] On changes after approval, require an explicit correction that creates a new result version and a new approval; display the public correction marker.
-- [ ] Make approval idempotent and transaction-safe; concurrent approve/reject attempts must not both succeed.
-- [ ] Add tests: approved advancement, rejected no-advancement, pending visibility, self-approval blocked for every role, Super Admin override with and without reason, both correction routes, duplicate review requests, correction after approval, and reviewer audit data.
-
-**Exit criteria:** no result becomes final, advances the bracket, or enters confirmed standings before approval by someone other than the submitter (or an audited override).
+**Exit criteria:** applicable local and CI checks pass, including database transaction/concurrency tests, final retry/lock, offline recovery and public visibility; record the pushed revision and branch before marking shared verification complete.
 
 ## Phase 9 — Public spectator experience
 
 - [ ] Build public tournament index with status/date and live/upcoming/recent match summaries.
 - [ ] Build tournament detail with enabled sports, bracket summary, and tournament matches.
 - [ ] Build one page per enabled sport with match filters, custom-match labeling, bracket, and configured standings.
-- [ ] Build match detail with sport-specific scorecard, provisional/final/review status, timeline, approved player contributions, and correction marker (post-submission corrections only).
+- [ ] Build match detail with sport-specific scorecard, provisional/final status, timeline and approved display events.
 - [ ] Ensure pending/rejected result states are unambiguous and never styled as final.
 - [ ] Keep player data to approved display fields; no personal profiles or login in this release. Never expose operator identities or assignments publicly.
 - [ ] Add responsive mobile viewing, keyboard navigation, accessible labels, contrast, loading/empty/error states, and freshness/reconnecting indicator.
@@ -400,17 +386,17 @@ Phases 0–12 are the full product backlog; their checkboxes are not updated ite
 - [ ] Add visible realtime connected/stale/reconnecting states and low-frequency snapshot fallback.
 - [ ] Let the operator download the assigned match snapshot; persist scorer actions to IndexedDB before showing local queued acknowledgement; distinguish local queue from published score.
 - [ ] Sync actions sequentially per match with same idempotency key on retry; validate each against the assignment by server receipt time.
-- [ ] Pause sync on expiry, revocation, sequence/config/review conflicts; surface the paused state to the operator and the conflict to managers, who can extend the window or resolve.
+- [ ] Pause sync on expiry, revocation, sequence/config/final-lock conflicts; surface the paused state to the operator and the conflict to managers, who can extend the window or resolve.
 - [ ] Test network loss, browser refresh/restart, duplicate delivery, stale client, action rejection, sync after `valid_until`, and sync after revocation; document storage quota/device-loss limitations.
-- [ ] Verify score updates, result submissions, approvals, bracket advancement, and standings all propagate consistently to active spectators.
+- [ ] Verify score updates, final confirmations, and future bracket/standings changes all propagate consistently to active spectators.
 
 **Exit criteria:** connected clients converge on the authoritative approved state; offline retries do not duplicate score actions, bypass assignment checks, or falsely mark results finalized.
 
 ## Phase 11 — Quality, security, and operational readiness
 
 - [ ] Add unit tests for all six configured score engines and bracket/result state transitions.
-- [ ] Add integration tests (in CI against the throwaway Postgres) for DB constraints, transactions, per-role authorization, assignment validity, review workflow, idempotency, outbox retries, and projection rebuild.
-- [ ] Add browser tests for tournament create, sport config, roster/match setup, scorer assignment/revocation, operator My Matches, scoring and undo, approval/rejection, public updates, mobile layouts, and offline recovery.
+- [ ] Add integration tests (in CI against the throwaway Postgres) for DB constraints, transactions, per-role authorization, assignment validity, final lock, idempotency, outbox retries, and projection rebuild.
+- [ ] Add browser tests for tournament create, sport config, roster/match setup, scorer assignment/revocation, operator My Matches, scoring and undo, final confirmation, public updates, mobile layouts, and offline recovery.
 - [ ] Add security checks for public data minimization, database access through the Worker only, admin/operator route protection, input validation, CORS/origin, rate limits, secret handling, and log redaction.
 - [ ] Add backup/restore rehearsal (nightly encrypted `pg_dump` from CI), health checks, structured logs, error reporting, and an event-day runbook (check Workers usage and the paid gate, verify migrations deployed, verify Clerk sign-in).
 - [ ] Confirm all domain statuses have accessible text/icon labels and do not depend on color alone.
@@ -432,7 +418,7 @@ User-confirmed, 19 October 2026, before any run ([memory.md](memory.md#backend-o
 - [ ] Measure room delivery with one Durable Object per room; split a room across objects only if the measurement requires it.
 - [ ] Build a synthetic viewer harness with plain WebSocket clients; monitor the generator to avoid a client-side bottleneck.
 - [ ] Run ramp tests (e.g. 100 → 500 → 1,000 → 3,000), stable soak, all-viewers-one-match hotspot, distribution across tournament sports, and reconnect burst.
-- [ ] During load, issue representative score events and result approvals; verify delivery ordering, no loss/duplication, and no unauthorized mutation path.
+- [ ] During load, issue representative score events and final confirmations; verify delivery ordering, no loss/duplication, and no unauthorized mutation path.
 - [ ] Record connect success, p50/p95/p99 update latency, errors, sequence gaps, Worker and Durable Object request counts, Neon compute and slow queries, outbox lag, and egress.
 - [ ] Record build SHA, topology, region, instance sizes, workload, duration, results, failures and limits in the capacity section of this file after the run. Keep raw measurements outside shared source. Do not add a separate report by default.
 - [ ] Do not claim 3,000-viewer capacity until results and thresholds are measured and reported; keep synthetic clients separate from actual audience figures.
@@ -464,12 +450,12 @@ Free-plan cost of one full run (estimate, not measured): about 8,500 Worker requ
 - [ ] Match sport config is validated, versioned, and frozen into the match at start.
 - [ ] Bracket contains exactly two semifinals and one final; only approved semifinal results advance.
 - [ ] Custom matches never affect bracket progression.
-- [ ] Final result requires approval by someone other than the submitter (or an audited Super Admin override); pending/rejected results are not final standings inputs.
+- [ ] Final result requires assigned-operator confirmation; acceptance locks editing and publishes the result.
 - [ ] HTTP inputs are runtime-validated and authorized; viewer sockets accept no commands; audit records identify actors and transitions, including assignments and overrides.
 - [ ] Score event, projections, audit, and outbox are consistent and recoverable.
 - [ ] All schema changes are migrations deployed by CI; only the Worker connects to the database.
-- [ ] UI covers loading, empty, error, pending review, rejected, approved, stale, assignment, and responsive states.
-- [ ] Tests cover scoring boundaries, undo, approvals, bracket progression, reconnects, idempotent retries, and per-role authorization.
+- [ ] UI covers loading, empty, error, provisional, final, stale, assignment, and responsive states.
+- [ ] Tests cover scoring boundaries, undo, final lock, future bracket progression, reconnects, idempotent retries, and per-role authorization.
 - [ ] Existing docs describe final accepted contracts and concise verification/publication evidence. Applicable checks pass, and the remote commit/PR is confirmed before a feature is marked shared and complete. No abandoned attempts, duplicate summaries or local scratch references are included.
 
 ## Deferred scope
@@ -488,12 +474,13 @@ The homepage, fixed bracket shape, role model and common assignment gate are dec
 
 | Dependent work | Missing decision | State and decision owner |
 | --- | --- | --- |
-| Production sport engines and standings | Event format, scoring values, ties, standings policy | Blocked; user/authorized event organizer, recorded in rules/memory. |
+| Event defaults, exceptional outcomes and standings | Coaches choose event presets/custom values; tie/award/standings policy remains Open | Scoring controls implemented on integration branch; dependent exceptional outcomes and standings stay Blocked. |
 | Custom-match statistics and public visibility | Whether custom results contribute, and where they appear | Blocked; user/authorized product owner. |
 | Final roster validation and public fields | Eligibility, limits, squads and approved display data | Blocked; user/authorized event organizer. |
 | Final shared API/lifecycle implementation | Exact payload/error schemas, machine states and transitions | Blocked until scoped contract review; implementing teams agree with the product owner. |
 | Account recovery for staff | Recovery policy | Blocked; authorized account owner. |
 | Event readiness in production (deployed 20 October 2026) | Management features ([memory.md](memory.md#backend-open-items) item 6); privacy contact and rate-limit threshold (items 4, 3); account ownership | Blocked; user/authorized product owner. See [Follow-up tasks](#follow-up-tasks). |
 | Capacity claims | A measured 3,000-client run against the [agreed thresholds](#load-test-pass-thresholds) | Blocked on a test operator account (F4). |
+| Launch | Private R2 backup storage and `backup.yml` re-enabled with its own environment (F12). The workflow is disabled and its artifact is deleted ([memory](memory.md#public-repository-and-ci--20-october-2026)) | Blocked; Arnav. Scheduled right after the final feature, before launch. Deferred row 7 in [deferred-tests.md](deferred-tests.md). |
 
 These blocks apply to the dependent behavior, not every independent task. Record decisions in memory and update the existing authoritative contract before implementation. Record failed/untested cases honestly. Keep the handoff and task evidence current after agreed tests pass.

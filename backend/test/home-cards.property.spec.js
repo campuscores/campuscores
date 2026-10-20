@@ -4,7 +4,7 @@ import { env, runInDurableObject } from 'cloudflare:test';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-// Independent model: per match, the latest accepted { card, seq }; the list holds only live entries.
+// Independent model: per match, the latest accepted { card, seq }; the list holds live and final entries.
 function model(ops) {
   const latest = new Map();
   let seq = 0;
@@ -16,7 +16,7 @@ function model(ops) {
     }
     return ok;
   });
-  const list = [...latest.values()].filter((e) => e.card.status === 'LIVE').map((e) => ({ ...e.card, seq: e.seq }));
+  const list = [...latest.values()].filter((e) => ['LIVE', 'APPROVED'].includes(e.card.status)).map((e) => ({ ...e.card, seq: e.seq }));
   return { accepted, seq, list };
 }
 
@@ -29,7 +29,7 @@ const op = fc.integer({ min: 1, max: 4 }).chain((matchId) =>
     seq: fc.oneof(fc.integer({ min: -1, max: 6 }), fc.constant(1.5)),
     // Plain prototype: Workers RPC cannot serialize fast-check's null-prototype records.
     card: fc.record(
-      { id: fc.constant(matchId), status: fc.constantFrom('LIVE', 'SCHEDULED', 'FINISHED'), score: fc.nat(30) },
+      { id: fc.constant(matchId), status: fc.constantFrom('LIVE', 'SCHEDULED', 'APPROVED', 'FINISHED'), score: fc.nat(30) },
       { noNullPrototype: true },
     ),
   }),

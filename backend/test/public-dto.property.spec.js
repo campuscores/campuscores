@@ -6,7 +6,9 @@ import { toPublic } from '../src/http.js';
 
 // Approved public fields from the design (`true` = primitive leaf, object = nested shape).
 const SIDE = { name: true };
-const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true, points: true }, corrected: true };
+const FORMAT = { model: true, bestOf: true, target: true, winBy: true, cap: true, decidingTarget: true, firstServe: true, gamesPerSet: true, gameWinBy: true, advantage: true, tiebreakAt: true, tiebreakTo: true, tiebreakWinBy: true, periodCount: true, scoreValues: true };
+const PERIOD = { points: true, winner: true, current: true, manual: true, tiebreak: true };
+const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true, points: true }, corrected: true, format: FORMAT, periods: PERIOD, currentPoints: true, gamePoints: true, serve: true, winner: true, finalized: true, finalizedAt: true, tiebreak: true, fouls: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } };
 const MATCH = {
   id: true, tournamentId: true, sport: true, kind: true, stage: true, status: true,
   scheduledAt: true, venue: true, seq: true, sides: SIDE, snapshot: SNAPSHOT,
@@ -14,7 +16,7 @@ const MATCH = {
 const SPECS = {
   snapshot: SNAPSHOT,
   match: MATCH,
-  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true },
+  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true, format: FORMAT, periods: PERIOD, winner: true, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
   tournament: {
     id: true, slug: true, name: true, startsOn: true, endsOn: true, status: true,
     venue: true, description: true, sports: true, matches: MATCH,

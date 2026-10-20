@@ -22,7 +22,9 @@ test('section map follows the confirmed My Matches rule (doc/memory.md)', ({ bro
   expect([isClosed({ status: 'PENDING_APPROVAL' }), isClosed({ status: 'APPROVED' }), isClosed({ status: 'REJECTED' })]).toEqual([true, true, false]);
   expect(dayOf(null)).toBeNull();
   expect(dayOf('not a date')).toBeNull();
-  expect(dayOf('2026-10-12T09:30:00.000Z')).toMatchObject({ date: expect.stringMatching(/^2026-10-1[12]$/), label: expect.stringMatching(/Oct$/) });
+  expect(dayOf('2026-10-12T09:30:00.000Z')).toEqual({ date: '2026-10-12', label: '12 Oct', time: '15:00' });
+  expect(dayOf('2026-10-20T18:29:59Z')).toEqual({ date: '2026-10-20', label: '20 Oct', time: '23:59' });
+  expect(dayOf('2026-10-20T18:30:00Z')).toEqual({ date: '2026-10-21', label: '21 Oct', time: '00:00' });
 });
 test('operator routes need sign-in and load no Clerk code without a key', async ({ page }) => {
   const requests = [];

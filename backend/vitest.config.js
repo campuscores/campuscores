@@ -16,7 +16,7 @@ const clerk = {
   // Fills process.env.NODE_ENV (nodejs_compat), so @clerk/backend reads the global fetch per call
   // and test/helpers.js stubClerk can intercept Clerk API calls.
   NODE_ENV: 'test',
-  ENABLE_TEST_ENGINE: 'true', // CI scores with the Test_Engine only
+  ENABLE_TEST_ENGINE: 'true', // legacy cases use Test_Engine; real-format cases turn it off
 };
 const miniflare = { bindings: clerk, ...(db ? { hyperdrives: { HYPERDRIVE_CACHED: db, HYPERDRIVE_UNCACHED: db } } : {}) };
 

@@ -15,7 +15,7 @@ function stateLine(match) {
     return day ? `${day.label} · ${day.time}` : 'Time not set';
   }
   if (match.status === 'PENDING_APPROVAL') return 'Submitted · awaiting approval';
-  if (match.status === 'APPROVED') return 'Approved';
+  if (match.status === 'APPROVED') return 'Final · editing locked';
   return 'A manager is correcting the result'; // REJECTED/MANAGER
 }
 /** One assigned match from GET /api/operator/matches: textured header, meta, sides, status, then the scoring action. */

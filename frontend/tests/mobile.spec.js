@@ -44,7 +44,7 @@ for (const sport of sports) {
         await expectTarget(closeButton(page));
         await closeButton(page).tap();
         await expect(page.locator('dialog[open]')).toHaveCount(0);
-        expect(await focusedMatch(page)).toBe(live.id);
+        await expect.poll(() => focusedMatch(page)).toBe(live.id);
       }
     });
 
@@ -92,10 +92,11 @@ test('rails and date chips are native touch scroll containers', async ({ page })
     expect(overflowing, `${viewport.width}px: at least one row scrolls`).toBeGreaterThan(0);
     const rail = page.locator('#past-results');
     await rail.focus();
-    // Mobile WebKit scrolls one arrow step less than the snap proximity, so a single press snaps back to 0.
-    for (let press = 0; press < 3; press++) await page.keyboard.press('ArrowRight');
+    await expect(rail).toBeFocused();
+    await page.keyboard.press('ArrowRight');
     await expect.poll(() => rail.evaluate(el => el.scrollLeft), 'ArrowRight on the focused rail').toBeGreaterThan(0);
-    await rail.evaluate(el => { el.scrollLeft = 0; });
+    await page.keyboard.press('ArrowLeft');
+    await expect.poll(() => rail.evaluate(el => el.scrollLeft), 'ArrowLeft returns to the first card').toBe(0);
     const lastChip = page.locator('#upcoming .date-chip').last();
     await lastChip.tap();
     await expect(lastChip).toHaveAttribute('aria-pressed', 'true');

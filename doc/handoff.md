@@ -35,13 +35,13 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | Header | `frontend/src/components/SiteHeader.jsx` | Homepage links and six sport destinations; filter buttons are separate. One `Sign in` link to `/sign-in` (desktop nav end, phone menu last item) renders only when the build sets `VITE_CLERK_PUBLISHABLE_KEY`. It reuses the existing nav link styles and 44px targets. |
 | Sign-in area | `frontend/src/features/auth/` (lazy chunk) | `/sign-in/*`, `/sign-up/*` and `/account/delete`. `ClerkProvider` exists only inside this chunk, so public pages load no Clerk code. After sign-in or sign-up it calls `POST /api/invites/accept` once (404 `INVITE_NOT_FOUND` is ignored). `/account/delete` calls `DELETE /api/me`, then signs out. API base: `VITE_API_BASE`. Without a Clerk key the routes show a "sign-in unavailable" message. |
 | Privacy page | `frontend/src/features/legal/PrivacyPage.jsx` | `/privacy`, plain page, no Clerk. Contact stays "to be confirmed" until the Open item in [memory.md](memory.md#backend-open-items) closes. |
-| Native card rail | `frontend/src/components/HorizontalRail.jsx` | Receives card children, label, class, optional ID/reset key. Observes stable outer slots; scales inner surfaces only. |
+| Native card rail | `frontend/src/components/HorizontalRail.jsx` | Receives card children, label, class, optional ID/reset key. Observes stable outer slots; scales inner surfaces only. Keyboard behavior: [design.md](design.md#horizontal-rails-and-spotlight). |
 | Match card | `frontend/src/features/matches/LiveMatchCard.jsx` | Receives `match`: ID, sport, display metadata, two sides and detail columns. Presentational; calculates no scores. Replace the white detail rendering when integrating sport-specific cards. |
 | Tournament card | `frontend/src/features/tournaments/TournamentCard.jsx` | Receives `event`: ID, title, local image/alt/crop, date values and labels. Links to the event route. |
 | Sport page | [`frontend/src/features/sports/SportPage.jsx`](../frontend/src/features/sports/SportPage.jsx) | `sport` (from `sports.js`), `fixtures`. Owns Upcoming/Past date state, the open match and focus return. Sets `--match-background`, `--match-background-phone` and `--sport-color` on `main.sport-page`. `App.jsx` renders it for all six sport ids with `key={sport.id}`. |
 | Sport sections and cards | [`SportSection.jsx`](../frontend/src/features/sports/SportSection.jsx), [`SportMatchCard.jsx`](../frontend/src/features/sports/SportMatchCard.jsx) | Section: `sport, id, title, live, matches, dates, selectedDate, onSelectDate, onOpen`; renders chips, status text, the rail or an empty message. Card: `sport, match, onOpen(match, button)`; header-only, shows `match.score` or `VS`. |
 | Sport match dialog | [`SportMatchDialog.jsx`](../frontend/src/features/sports/SportMatchDialog.jsx) | `sport, scoring, match` (null = closed), `onClose`. Native `<dialog>` with `showModal()`; score table, legend, scorers and lineups (team sports), players or schedule, and match info. |
-| Match Operator dashboard and score console | `frontend/src/features/operator/MyMatchesPage.jsx`, `OperatorMatchCard.jsx`, `operatorMatches.js`, `ScoreConsole.jsx`, `queue.js`, `queueStore.js`, `MyMatches.css`; gate in `features/auth/AuthArea.jsx` | Both routes render inside the lazy Clerk area; a signed-out user sees a sign-in link, a keyless build shows Sign-in unavailable. My Matches lists `GET /api/operator/matches` and groups rows with `sectionOf` (map in [memory.md](memory.md), My Matches sections). `ScoreConsole` reads its row from the same list, acquires `POST /api/matches/:id/lease` (Take over scoring on `LEASE_HELD` or a `LEASE_REQUIRED` pause), saves each action to IndexedDB before showing it queued, then sends `POST /api/matches/:id/actions` one at a time. It shows a text status line, accepted score (with seq) beside the pending score, Test_Engine controls (Point to <side>, Undo last) or the `SPORT_RULES_OPEN` message. Initial accepted score comes from the cached public `GET /api/matches/:id` or the last stored synced response. |
+| Match Operator dashboard and score console | `frontend/src/features/operator/MyMatchesPage.jsx`, `OperatorMatchCard.jsx`, `operatorMatches.js`, `ScoreConsole.jsx`, `queue.js`, `queueStore.js`, `MyMatches.css`; gate in `features/auth/AuthArea.jsx` | Both routes render inside the lazy Clerk area; a signed-out user sees a sign-in link, a keyless build shows Sign-in unavailable. My Matches lists `GET /api/operator/matches` and groups rows with `sectionOf` (map in [memory.md](memory.md), My Matches sections). `ScoreConsole` reads its row from the same list, acquires `POST /api/matches/:id/lease` (Take over scoring on `LEASE_HELD` or a `LEASE_REQUIRED` pause), saves each action to IndexedDB before showing it queued, then sends `POST /api/matches/:id/actions` one at a time. It shows a text status line, accepted score (with seq) beside the pending score, Connected `scoring/ScoringPage.jsx` selects/fixes a real format, enters sport scores, ends sets early, records team cards/substitutions, undoes live actions and confirms a locked final. Real scoring restores uncached private action history before syncing. Existing live matches without a format retain the legacy Test_Engine UI. |
 | Sport fixtures | `frontend/src/features/sports/<sport>/<camelId>Matches.js`, for example [`badmintonMatches.js`](../frontend/src/features/sports/badminton/badmintonMatches.js) | Each module exports `scoring` (`model` `set` or `period`, `unit`, `short`, `total`, `totalName`, optional `team`, `scorers`), `liveMatches`, `upcomingMatches`, `pastMatches`. Match: `id, status` (`live`/`ended`/`scheduled`/`completed`), `category, tournament, round, date, dateLabel, timeLabel, venue, clock, sides[{name, team, serving?, players[{name, serving?}]}], periods[]` (`{points, winner?, current?, tiebreak?, label?, name?}` or null), `score, winner`, optional `gamePoints` (live tennis) and `scorers[{side, player, detail}]`. Values are precomputed display data, not a scoring engine. |
 | Fixture registry and calendar | [`sportFixtures.js`](../frontend/src/features/sports/sportFixtures.js), [`sportCalendar.js`](../frontend/src/features/sports/sportCalendar.js) | `sportFixtures` maps each `sports.js` id to its fixture module. `upcomingDates` and `pastDates` supply the shared date chips for every sport. |
 | Shared styling | `frontend/src/styles/global.css` | Approved colors, font stack, content widths, section headings and accessibility helpers. Component styles sit with their components. |
@@ -63,16 +63,16 @@ A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. E
 
 ### Home_Room data
 
-`data` is an array of cards for live matches only (match `status` `LIVE`). A match leaves the array when a card with another status arrives. The order is not part of the contract (now it is usually ascending match ID); the client shows cards in the received order. An empty array means no live match.
+`data` contains LIVE and APPROVED cards. The homepage separates Live Matches and Final Results; sport pages separate Live and Past. Other statuses leave the array. The order is not part of the contract (now it is usually ascending match ID); the client shows cards in the received order. An empty array means no live match.
 
 | Card field | Type and source |
 | --- | --- |
 | `id` | Match ID as a string (database IDs are strings). |
 | `sport` | One of the six ids in `frontend/src/data/sports.js`. |
-| `status` | `LIVE` in the array. |
+| `status` | `LIVE` or `APPROVED` in the array. |
 | `competition` | Tournament name (`tournaments.name`). |
 | `sides` | `[{ name }, { name }]`; `name` is the team label, or `null` when the match has no team on that side. |
-| `score` | `[number, number]`: points per side from the snapshot. |
+| `score` | `[number, number]`: team points for period sports or sets won for set/tennis sports. |
 | `clock` | Always `null` now. No engine produces a clock. |
 | `seq` | The match `seq` of this card (not the room `seq`). |
 
@@ -84,7 +84,7 @@ A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. E
 { matchId, sport, status, sides: [{ name, points }, { name, points }], corrected }
 ```
 
-`GET /api/matches/:id` returns the same shape as `match.snapshot` ([contract](architecture.md#public-read-api)). Production engines for the six sports are Blocked on [rules.md](rules.md); they can add fields only through the `snapshot` allow-list.
+`GET /api/matches/:id` returns the same shape as `match.snapshot` ([contract](architecture.md#public-read-api)). Real scoring adds `format`, `periods[{points,winner,current,manual,tiebreak?}]`, `currentPoints`, `gamePoints`, `serve`, `winner`, `finalized`, `finalizedAt`, `fouls` and public display `events`. Raw action history and staff/device IDs are private. Cards add `format`, `periods`, `winner`, `finalizedAt`, `gamePoints`, `serve` and the latest 20 safe display `events`. See [rules.md](rules.md) for presets and limits.
 
 ### Card to `LiveMatchCard` `match` prop
 
@@ -98,13 +98,13 @@ A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. E
 | `competition` | `competition` | `''` |
 | `sides[i].name` | `sides[i].name` | `'TBD'` |
 | `score` | `` `${score[0]}–${score[1]}` `` (en dash, as in the fixtures) | `'VS'` if `score` is not two numbers |
-| `clock` | `clock` | `''` (empty line) |
-| `columns` | One total column: `{ key: 'total', label: 'T', className: 'match-total', description: 'Total' }` | — |
-| `sides[i].values` | `[String(score[i])]` | `['—']` |
+| `clock` | Final winner or current set/period label for configured matches; legacy `clock` otherwise | `''` (empty line) |
+| `columns` | Set/period columns when `format` and `periods` exist, followed by total `T` | — |
+| `sides[i].values` | Per-set/period values, then `String(score[i])` | `['—']` |
 
-Not in the card, so not shown from live data: per-period columns, serving marks, the period or set label and the clock text. The sport pages and the sport match dialog keep their display fixtures in this pass. Without `VITE_API_BASE` the homepage keeps `sampleMatches.js`.
+`useHomeCards.js` supplies the receive-only feed to homepage and sport pages. `liveCards.js` maps set/period values and bold winners to homepage cards. `liveSportMatches.js` maps safe game/serve/event data to the existing sport dialog. Wide custom score tables scroll horizontally. In API mode, Upcoming stays empty until a schedule read API exists. Without `VITE_API_BASE`, both pages retain display fixtures.
 
-Known limit (accepted, no task yet): a card is published only after an accepted score action. A match that becomes `LIVE` appears after its first point, and a match that leaves `LIVE` disappears only when a later card carries its new status. No status-change route publishes a card yet.
+START and FINALIZE publish committed cards through the same outbox as points. Legacy formatless matches appear after an accepted Test_Engine action. New real formats cannot be attached after existing actions; no played seed match is reset by this integration. Final cards are retained; pagination/history retention is not implemented.
 
 ## Routes
 
@@ -114,7 +114,7 @@ Known limit (accepted, no task yet): a card is published only after an accepted 
 | `/#tournaments` | Scrolls to the homepage tournament section | Homepage/shared UI team |
 | `/sports/<sport>/` | Shared sport page for all six sports: Live, Upcoming and Past matches from display fixtures, date chips and a match detail dialog | Respective sport teams |
 | `/operator/matches` | My Matches from `GET /api/operator/matches`, Live / Scheduled / Completed; inside the lazy Clerk area | Scorer / operator team |
-| `/operator/matches/:matchId/score` | Score console with lease, Offline_Queue and Test_Engine controls; inside the lazy Clerk area | Scorer / operator team |
+| `/operator/matches/:matchId/score` | Score console with lease, durable queue, frozen real format and final lock; inside the lazy Clerk area | Scorer / operator team |
 | `/sign-in/*`, `/sign-up/*` | Lazy Clerk sign-in and sign-up (email with verification, or Google) | Backend/auth team |
 | `/account/delete` | Lazy Clerk area: explains deletion; a signed-in user can delete the account | Backend/auth team |
 | `/privacy` | Privacy policy, no Clerk | Backend/auth team; policy owner (Open) |
@@ -138,4 +138,12 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Not built: management screens, tournament/team/match creation, result review, bracket, standings and production sport engines. Backend contracts are in [architecture.md](architecture.md#technology).
+Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Real scoring is integrated on the current branch; publication/checks are in tasks.md. Not built: management screens, tournament/team/match creation, bracket advancement and standings. Manager result review is superseded. Backend contracts are in [architecture.md](architecture.md#technology).
+
+### Assigned scoring read/write contract
+
+`GET /api/operator/matches` supplies `format`, `isToday` (database time in Asia/Kolkata) and `validNow`. Operator schedule chips and card times also use Asia/Kolkata. `GET /api/operator/matches/:id/scoring` requires an active assigned staff account and returns `{seq,snapshot,actions}` from one uncached transaction. Actions include only sequence, action ID, type, payload and reversal reference. A completed assigned match remains readable.
+
+Real commands are START (`format`), POINT (`side`, optional period `value`), END_SET (`winner`), END_PERIOD, EXTRA_PERIOD (basketball only; football tie policy stays Open), CARD (`side,player,card`), SUB (`side,off,on`), FOUL (`side`), REVERSE (linked action ID), and FINALIZE. All use the existing action/client sequence and lease envelope. The server computes totals and winners; it never accepts client-declared totals. START freezes the format; FINALIZE requires a computed winner.
+
+The IndexedDB queue saves before display, sends serially and retries the same action ID. Reload reads accepted history and reconciles already accepted commands before sending. Only server acceptance marks the final result locked. Opening the scoring page still needs an API read; cold offline page loading is not supported. CUSTOM/DRAFT real matches remain outside anonymous delivery and reads. The legacy staging Test_Engine boundary is unchanged.

@@ -1,3 +1,5 @@
+import { activeActions, checkReversal, scoreMatch, validateFormat } from '../../../../shared/scoring.mjs';
+import ScoringPage from './scoring/ScoringPage.jsx';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { apiFetch } from '../../services/api.js';
@@ -47,6 +49,8 @@ export default function ScoreConsole({ matchId, getToken }) {
   const [queue, dispatch] = useReducer(reducer, emptyQueue);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [scoringLoaded, setScoringLoaded] = useState(false);
   useEffect(() => {
     const on = () => { setOnline(true); setLeaseError(err => (err?.status ? err : null)); }; // retry a lease lost to the network
     const off = () => setOnline(false);
@@ -54,27 +58,42 @@ export default function ScoreConsole({ matchId, getToken }) {
     addEventListener('offline', off);
     return () => { removeEventListener('online', on); removeEventListener('offline', off); };
   }, []);
-  // The assignment row, the device ID and the stored queue; the queue works offline once restored.
+  // Restore durable actions before reading the same committed server revision and sending anything.
   useEffect(() => {
     let stopped = false;
-    Promise.all([deviceId(), loadActions(matchId)]).then(([id, records]) => {
-      if (stopped) return;
-      setDevice(id);
-      dispatch({ type: 'RESTORE', records });
-      setAccepted(a => records.reduce((best, r) => newer(best, r.snapshot && { seq: r.seq, sides: r.snapshot.sides }), a));
-      setReady(true);
-    }, () => { if (!stopped) setStoreError('This browser cannot store the offline queue, so scoring is not available here. Try another browser, or leave private browsing.'); });
-    (async () => apiFetch('/operator/matches', { token: await getToken() }))().then(data => {
-      if (stopped) return;
-      const found = data?.matches?.find(m => String(m.id) === matchId);
-      if (found) setMatch(found);
-      else setLoadError({ message: 'This match is not assigned to you.' });
-    }, err => { if (!stopped) setLoadError(err); });
-    // shortcut: the public match read is cached and skips custom matches; switch to the match Live_Room if the accepted score lags.
-    apiFetch(`/matches/${matchId}`).then(data => {
-      const { seq, snapshot } = data?.match ?? {};
-      if (!stopped && snapshot?.sides) setAccepted(a => newer(a, { seq, sides: snapshot.sides }));
-    }, () => {}); // no snapshot yet or not public: the console starts from zero
+    async function load() {
+      try {
+        const [id, records] = await Promise.all([deviceId(), loadActions(matchId)]);
+        if (stopped) return;
+        setDevice(id);
+        dispatch({ type: 'RESTORE', records });
+        setAccepted(a => records.reduce((best, r) => newer(best, r.snapshot && { ...r.snapshot, seq: r.seq }), a));
+        setReady(true);
+      } catch { if (!stopped) setStoreError('This browser cannot store the offline queue, so scoring is not available here. Try another browser, or leave private browsing.'); return; }
+      try {
+        const data = await apiFetch('/operator/matches', { token: await getToken() });
+        if (stopped) return;
+        const found = data?.matches?.find(m => String(m.id) === matchId);
+        if (!found) { setLoadError({ message: 'This match is not assigned to you.' }); return; }
+        setMatch(found);
+        if (found.status === 'SCHEDULED' || found.format) {
+          const result = await apiFetch(`/operator/matches/${matchId}/scoring`, { token: await getToken() });
+          const records = await loadActions(matchId);
+          if (stopped) return;
+          const byId = new Map(result.actions.map(a => [a.actionId, a]));
+          dispatch({ type: 'RESTORE', records: records.map(r => byId.has(r.actionId) ? { ...r, status: 'synced', seq: byId.get(r.actionId).seq } : r) });
+          setAccepted(a => !a || result.seq >= a.seq ? { ...result.snapshot, seq: result.seq, actions: result.actions } : a);
+        } else {
+          try {
+            const result = await apiFetch(`/matches/${matchId}`);
+            const { seq, snapshot } = result?.match ?? {};
+            if (!stopped && snapshot?.sides) setAccepted(a => newer(a, { ...snapshot, seq }));
+          } catch { /* Legacy/custom matches can have no public snapshot yet. */ }
+        }
+        if (!stopped) setScoringLoaded(true);
+      } catch (err) { if (!stopped) setLoadError(err); }
+    }
+    load();
     return () => { stopped = true; };
   }, [matchId, getToken]);
   /** Requests the scorer lease; `takeover` moves it from this account's other device (Req 14.6–14.8). */
@@ -91,7 +110,7 @@ export default function ScoreConsole({ matchId, getToken }) {
   }, [scoring, device, online, lease, leaseError, acquire]);
   // Send loop: one action at a time, head of the queue first, same actionId on every retry (Req 19.3, 19.5–19.7).
   useEffect(() => {
-    const item = online && lease ? nextToSend(queue) : null;
+    const item = online && lease && scoringLoaded ? nextToSend(queue) : null;
     if (!item) return;
     const timer = setTimeout(async () => {
       dispatch({ type: 'SEND_START', actionId: item.actionId });
@@ -109,14 +128,26 @@ export default function ScoreConsole({ matchId, getToken }) {
       }
       dispatch({ type: 'SEND_OK', seq: result.seq });
       setLease(l => ({ ...l, lastClientSeq: Math.max(l?.lastClientSeq ?? 0, clientSeq) })); // mirrors the server lease
-      setAccepted(a => newer(a, { seq: result.seq, sides: result.snapshot.sides }));
+      setAccepted(a => newer(a, { ...result.snapshot, seq: result.seq, actions: [...(a?.actions ?? []), { ...item, seq: result.seq }] }));
+      if (result.snapshot.format) setMatch(m => ({ ...m, status: result.snapshot.status, format: result.snapshot.format }));
       // A failed write only means a reload resends this action; the server replays the same seq.
       saveAction({ ...item, status: 'synced', seq: result.seq, snapshot: result.snapshot }).catch(() => {});
     }, retryDelay(queue));
     return () => clearTimeout(timer);
-  }, [queue, online, lease, matchId, getToken]);
+  }, [queue, online, lease, scoringLoaded, matchId, getToken]);
   async function record(type, payload, reversesActionId = null) {
-    if (saving.current) return; // one write at a time, so two taps never share a clientSeq
+    if (saving.current) return false; // one write at a time, so two taps never share a clientSeq
+    setActionError('');
+    const format = type === 'START' ? payload.format : accepted?.format ?? match?.format ?? queue.items.find(i => i.type === 'START')?.payload.format;
+    if (format) {
+      try {
+        validateFormat(match.sport, format);
+        const history = [...(accepted?.actions ?? []), ...unsynced(queue.items).filter(i => !(accepted?.actions ?? []).some(a => a.actionId === i.actionId))];
+        const command = { type, payload, reversesActionId, actionId: 'pending-validation' };
+        checkReversal(history, command);
+        scoreMatch({ matchId, sport: match.sport, sides: match.sides, format, actions: [...history, command] });
+      } catch (err) { setActionError(err.message); return false; }
+    }
     saving.current = true;
     setBusy(true);
     // With the lease, the server expects lastClientSeq + 1; offline without it, continue after the stored actions.
@@ -125,8 +156,10 @@ export default function ScoreConsole({ matchId, getToken }) {
     try {
       await saveAction(item); // stored before the console shows it as queued (Req 19.2)
       dispatch({ type: 'ENQUEUE', item });
+      return true;
     } catch {
       setStoreError('The action could not be saved on this device. Try again.');
+      return false;
     } finally {
       saving.current = false;
       setBusy(false);
@@ -142,6 +175,46 @@ export default function ScoreConsole({ matchId, getToken }) {
     );
   }
   if (!match) return <main className="text-page"><h1>Score match</h1><p role="status">Loading the match…</p></main>;
+  const notices = <>
+      {scoring && leaseError && (
+        <div className="console-notice" role="alert">
+          <p className="text-error">{leaseError.code === 'LEASE_HELD' ? 'Another device is scoring this match. Your actions stay queued on this device.'
+            : `Could not get scoring access: ${leaseError.code ?? leaseError.message}.`}</p>
+          <div className="text-actions">
+            {leaseError.code === 'LEASE_HELD'
+              ? <button type="button" onClick={takeOver}>Take over scoring</button>
+              : <button type="button" onClick={() => acquire(false)}>Try again</button>}
+          </div>
+        </div>
+      )}
+      {queue.paused && queue.paused !== 'SPORT_RULES_OPEN' && (
+        <div className="console-notice">
+          <p>Sync stopped with <strong>{queue.paused}</strong>. Your queued actions are kept. Ask a Tournament Manager to fix the cause, then retry.</p>
+          <div className="text-actions">
+            {/* Another device took the lease: only a takeover lets this device sync again. */}
+            {queue.paused === 'LEASE_REQUIRED'
+              ? <button type="button" onClick={takeOver}>Take over scoring</button>
+              : <button type="button" onClick={() => dispatch({ type: 'RESUME' })}>Retry sync</button>}
+          </div>
+        </div>
+      )}
+
+  </>;
+  const format = accepted?.format ?? match.format ?? queue.items.find(i => i.type === 'START')?.payload.format;
+  if (match.status === 'SCHEDULED' || format) {
+    const history = [...(accepted?.actions ?? []), ...unsynced(queue.items).filter(i => !(accepted?.actions ?? []).some(a => a.actionId === i.actionId))];
+    let projection = null;
+    let projectionError = '';
+    if (format) {
+      try { projection = scoreMatch({ matchId, sport: match.sport, sides: match.sides, format, actions: history }); }
+      catch (err) { projectionError = err.message; }
+    }
+    const undo = activeActions(history).findLast(a => !['START', 'FINALIZE'].includes(a.type));
+    return <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || !match.isToday || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={statusLine(queue, online)} error={actionError || projectionError || storeError}>
+      {notices}
+      {!scoringLoaded && <p role="status">Loading accepted scoring actions…</p>}
+    </ScoringPage>;
+  }
   const reversed = new Set(queue.items.map(i => i.reversesActionId).filter(Boolean));
   const undoTarget = queue.items.findLast(i => i.type === 'POINT' && !reversed.has(i.actionId));
   const pending = pendingPoints(accepted, queue.items);
@@ -168,28 +241,7 @@ export default function ScoreConsole({ matchId, getToken }) {
             <button type="button" disabled={!canRecord} onClick={() => record('POINT', { side: 1 })}>Point to {sideName(match, 1)}</button>
             <button type="button" className="console-secondary" disabled={!canRecord || !undoTarget} onClick={() => record('REVERSE', {}, undoTarget.actionId)}>Undo last</button>
           </div>}
-      {scoring && leaseError && (
-        <div className="console-notice" role="alert">
-          <p className="text-error">{leaseError.code === 'LEASE_HELD' ? 'Another device is scoring this match. Your actions stay queued on this device.'
-            : `Could not get scoring access: ${leaseError.code ?? leaseError.message}.`}</p>
-          <div className="text-actions">
-            {leaseError.code === 'LEASE_HELD'
-              ? <button type="button" onClick={takeOver}>Take over scoring</button>
-              : <button type="button" onClick={() => acquire(false)}>Try again</button>}
-          </div>
-        </div>
-      )}
-      {queue.paused && queue.paused !== 'SPORT_RULES_OPEN' && (
-        <div className="console-notice">
-          <p>Sync stopped with <strong>{queue.paused}</strong>. Your queued actions are kept. Ask a Tournament Manager to fix the cause, then retry.</p>
-          <div className="text-actions">
-            {/* Another device took the lease: only a takeover lets this device sync again. */}
-            {queue.paused === 'LEASE_REQUIRED'
-              ? <button type="button" onClick={takeOver}>Take over scoring</button>
-              : <button type="button" onClick={() => dispatch({ type: 'RESUME' })}>Retry sync</button>}
-          </div>
-        </div>
-      )}
+      {notices}
       {queue.items.length > 0 && (
         <>
           <h2>Recent actions</h2>

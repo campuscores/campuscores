@@ -1,5 +1,6 @@
 import { test, expect, devices } from '@playwright/test';
 import { sports } from '../src/data/sports.js';
+import { sampleTournaments } from '../src/features/tournaments/sampleTournaments.js';
 import { swipe } from './helpers.js';
 
 async function settleScroll(rail) {
@@ -104,8 +105,8 @@ test('sport filters change only live cards and support keyboard input', async ({
   await expect(rail.locator('.match-card')).toHaveCount(6);
 });
 
-test('cold phone loads use smaller local portraits and textures at DPR 1, 2 and 3', async ({ browser }) => {
-  for (const [width, deviceScaleFactor] of [[390, 1], [390, 2], [390, 3], [768, 1]]) {
+for (const [width, deviceScaleFactor] of [[390, 1], [390, 2], [390, 3], [768, 1]]) {
+  test(`cold phone loads use smaller local portraits and textures at ${width}px, DPR ${deviceScaleFactor}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width, height: 844 }, deviceScaleFactor });
     try {
       const page = await context.newPage();
@@ -137,42 +138,45 @@ test('cold phone loads use smaller local portraits and textures at DPR 1, 2 and 
       for (const texture of textures) expect(texture).toMatch(width < 768 ? /-background-640\.webp$/ : /-background\.webp$/);
       if (width < 768) expect(requested.filter(path => /-background\.webp$/.test(path))).toEqual([]);
     } finally { await context.close(); }
-  }
-});
+  });
+}
 
-test('both rails spotlight visible cards and scroll without arrow controls', async ({ page, browserName }) => {
-  test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
-  await page.goto('/');
-  for (const width of [390, 820, 1440, 2560, 3840]) {
+// One test per width keeps each rail journey inside its own timeout budget on slower runners.
+// Loaded Firefox runners can stall one automation round trip for over 5 s while the page state is already correct.
+const railExpect = expect.configure({ timeout: 15000 });
+for (const width of [390, 820, 1440, 2560, 3840]) {
+  test(`both rails spotlight visible cards and scroll without arrow controls at ${width}px`, async ({ page, browserName }) => {
+    test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
+    await page.goto('/');
     await page.setViewportSize({ width, height: 1000 });
     for (const selector of ['.match-scroll', '.tournament-scroll']) {
       const rail = page.locator(selector);
       await rail.evaluate(el => { el.scrollLeft = 0; });
-      await expect.poll(() => rail.evaluate(el => [...el.children].every(card => {
+      await railExpect.poll(() => rail.evaluate(el => [...el.children].every(card => {
         const box = card.getBoundingClientRect(), root = el.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(box.right, root.right) - Math.max(box.left, root.left)) / box.width;
         return card.classList.contains('is-peek') === (ratio < .9);
       }))).toBe(true);
       const peek = rail.locator('.is-peek').first().locator('.match-surface, .tournament-surface');
-      await expect(peek).toHaveCSS('opacity', '0.66');
+      await railExpect(peek).toHaveCSS('opacity', '0.66');
       await rail.scrollIntoViewIfNeeded();
       await rail.hover();
       await page.mouse.wheel(380, 0);
-      await expect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+      await railExpect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
       await settleScroll(rail);
       await rail.focus();
       await page.keyboard.press('ArrowRight');
       await settleScroll(rail);
       await rail.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-      await expect(rail.locator(':scope > :last-child')).not.toHaveClass(/is-peek/);
-      await expect.poll(() => rail.evaluate(el => el.lastElementChild.getBoundingClientRect().right <= el.getBoundingClientRect().right - 52)).toBe(true);
+      await railExpect(rail.locator(':scope > :last-child')).not.toHaveClass(/is-peek/);
+      await railExpect.poll(() => rail.evaluate(el => el.lastElementChild.getBoundingClientRect().right <= el.getBoundingClientRect().right - 52)).toBe(true);
     }
-  }
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
-});
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await railExpect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
+  });
+}
 
-test('menu, reserved routes, refresh, back navigation and old links work', async ({ page }) => {
+test('menus and legacy links navigate and close correctly', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -180,22 +184,6 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
   await expect(page.locator('.desktop-nav .sports-options a')).toHaveCount(6);
   await page.keyboard.press('Escape');
   await expect(page.locator('.desktop-nav .sports-dropdown')).not.toHaveAttribute('open');
-  const links = await page.locator('.desktop-nav .sports-options a, .tournament-card').evaluateAll(anchors => anchors.map(a => a.getAttribute('href')));
-  for (const destination of links) {
-    if (destination.startsWith('/sports/')) await page.locator('.desktop-nav .sports-dropdown summary').click();
-    await page.locator(`a[href="${destination}"]`).first().click();
-    await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    // Every sport destination has its page; tournament destinations stay reserved and blank.
-    const sport = sports.find(item => destination === `/sports/${item.id}/`);
-    const built = Boolean(sport);
-    if (destination.startsWith('/sports/')) expect(sport, destination).toBeTruthy();
-    const ready = () => built ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
-    await ready();
-    expect((await page.reload()).status()).toBe(200);
-    await ready();
-    await page.goBack();
-    await expect(page.locator('.hero')).toBeVisible();
-  }
   await page.goto('/tournament.html?event=racquet-open');
   await expect(page).toHaveURL(/\/tournaments\/racquet-open$/);
   await page.goto('/index.html?preview=rectangular');
@@ -220,6 +208,21 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
   expect(errors).toEqual([]);
 });
 
+// Keep each click/refresh/back journey inside its own timeout budget on slower runners.
+const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id }))];
+for (const { destination, sport } of destinations) {
+  test('homepage destination ' + destination + ' opens, refreshes and returns with Back', async ({ page }) => {
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto('/');
+    if (sport) await page.locator('.desktop-nav .sports-dropdown summary').click();
+    await page.locator('a[href="' + destination + '"]').first().click();
+    await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
+    const ready = () => sport ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    await ready(); expect((await page.reload()).status()).toBe(200); await ready();
+    await page.goBack(); await expect(page.locator('.hero')).toBeVisible(); expect(errors).toEqual([]);
+  });
+}
+
 test('repeat Home and Tournaments navigation scrolls and closes phone menus', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const width of [1440, 390]) {
@@ -236,20 +239,24 @@ test('repeat Home and Tournaments navigation scrolls and closes phone menus', as
       await expect(page.locator('#tournaments')).toBeInViewport();
       if (width < 768) await expect(menu).not.toHaveAttribute('open');
     }
-    await page.evaluate(() => window.scrollTo(0, 0));
-    if (width < 768) await menu.locator(':scope > summary').click();
     const home = navigation.getByRole('link', { name: 'Home', exact: true });
-    await home.click();
-    await expect(page).toHaveURL(/\/$/);
-    if (width < 768) await menu.locator(':scope > summary').click();
-    await home.focus();
-    await page.evaluate(() => window.scrollTo(0, 200));
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
-    // Keyboard activation avoids Playwright scrolling an offscreen link into view first.
-    await page.keyboard.press('Enter');
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page).toHaveURL(/\/$/);
-    if (width < 768) await expect(menu).not.toHaveAttribute('open');
+    for (let repeat = 0; repeat < 2; repeat++) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      if (width < 768) {
+        await expect(menu).not.toHaveAttribute('open');
+        await menu.locator(':scope > summary').click();
+        await expect(menu).toHaveAttribute('open');
+      }
+      await home.evaluate(el => el.focus({ preventScroll: true }));
+      await expect(home).toBeFocused();
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY), { message: 'Home starts scrolled at ' + width + 'px' }).toBe(200);
+      // A keyboard activation leaves the setup scroll in place until the route effect resets it.
+      await page.keyboard.press('Enter');
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await expect(page).toHaveURL(/\/$/);
+      if (width < 768) await expect(menu).not.toHaveAttribute('open');
+    }
   }
 });
 

@@ -39,3 +39,15 @@ export function replaceLiteral(text, from, to) {
   }
   return { text, count };
 }
+
+/** Signed-in Clerk stub used only by isolated browser tests. */
+export function stubClerk(token) {
+  const user = { id: 'user_operator', organizationMemberships: [] };
+  const session = { id: 'sess_operator', status: 'active', user, actor: null, factorVerificationAge: null, lastActiveToken: { jwt: { claims: { sub: user.id, sid: 'sess_operator' } } }, getToken: async () => token };
+  const resources = { client: { sessions: [session], signedInSessions: [session], lastActiveSessionId: session.id }, session, user, organization: null };
+  window.Clerk = {
+    loaded: true, isSignedIn: true, user, session, client: resources.client, organization: null,
+    __internal_lastEmittedResources: resources,
+    addListener(listener, options) { if (!options?.skipInitialEmit) listener(resources); return () => {}; },
+  };
+}
