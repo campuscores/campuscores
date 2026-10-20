@@ -166,7 +166,7 @@ The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Eng
 
 `node_modules/`, `frontend/dist/`, `frontend/test-results/` and `frontend/playwright-report/` are local generated output. They are ignored by Git. Keep source, local assets, tests, configs, manifests, the lockfile and docs in the shared repository.
 
-Hosting must serve `frontend/dist/` and return `index.html` for app routes such as `/sports/football`. This is the single-page application (SPA) fallback. The planned host is Cloudflare Workers static assets; it is not deployed yet. Local preview is not a deployment.
+Hosting must serve `frontend/dist/` and return `index.html` for app routes such as `/sports/football`. This is the single-page application (SPA) fallback. The host is Cloudflare Workers static assets: staging `https://thaparlympics-staging.bhatiaarnav05.workers.dev`, production `https://campuscores.live`, both deployed by `deploy.yml`. Local preview is not a deployment.
 
 ## GitHub Actions and Docker
 
@@ -177,7 +177,7 @@ They solve different problems:
 | GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium`, `firefox` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, root package files or the workflow. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
-An Actions job can run Docker containers. They can work together; neither replaces the other. Planned database CI may use a temporary database on the runner. That workflow is not implemented, and team devices do not need local Postgres.
+An Actions job can run Docker containers. They can work together; neither replaces the other. Backend CI (`backend.yml`) and the deploy workflow run a temporary `postgres:18` service container on the runner. Team devices do not need local Postgres.
 
 The OS matrix checks installation, build and browser behavior on three runner systems. It covers the Chromium, Firefox and WebKit engines and emulated phones. WebKit does not run on Windows: Safari does not exist there, and Playwright's Windows WebKit port is the least representative. Ubuntu and macOS cover WebKit. CI does not test branded Safari or physical phones. Each OS reports its result; a failure on one does not cancel the others. All required jobs must pass before the change is marked Verified.
 

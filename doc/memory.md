@@ -10,7 +10,7 @@ These decisions replace the earlier Express, Socket.IO, Redis, Supabase Postgres
 - **Frontend hosting:** Cloudflare Workers static assets serve `frontend/dist/` with the single-page application (SPA) fallback.
 - **API:** one Cloudflare Worker with Hono, in JavaScript. Staff commands, including scoring, use HTTPS.
 - **Live delivery:** SQLite-backed Durable Objects with the WebSocket Hibernation API. One room per match plus one `home` room for the homepage live row. Viewer sockets are receive-only. A viewer gets the stored public snapshot on connect, so viewers never wait for the database. Plain WebSockets replace Socket.IO; Redis is not needed.
-- **Database:** Neon Postgres Free. One project for staging and one for production. Autoscaling is capped at 0.5 CU. PostgreSQL stays the score source of truth.
+- **Database:** Neon Postgres Free. One project for staging and one for production. Autoscaling is capped at 0.5 CU (the projects are currently at 2 CU; see [tasks.md](tasks.md#follow-up-tasks)). PostgreSQL stays the score source of truth.
 - **Database connection:** Cloudflare Hyperdrive with the `pg` driver. The cached configuration serves public reads only. The uncached configuration serves sign-in, roles, assignments, leases and writes, so a revocation takes effect on the next request.
 - **Migrations:** plain SQL files in `db/migrations/`, applied with `dbmate`. Only GitHub Actions applies them: merge to `develop` deploys staging, merge to `main` deploys production. CI tests every migration on a throwaway Postgres on the runner. No team device runs Postgres or Docker.
 - **Backups:** a nightly encrypted `pg_dump` from GitHub Actions. Neon Free keeps only 6 hours of restore history.
@@ -26,6 +26,10 @@ Rationale the next team needs:
 - The outbox sweep runs every minute. It reads the last score-write time from the `home` room first and skips Neon when no score was written in the last 15 minutes. A query every minute would keep Neon awake and exceed its 100 free compute hours per month.
 - Durable Object CPU is not the broadcast limit: each request or WebSocket message gets 30 seconds of CPU. Daily request counts are the limit. Outgoing WebSocket messages are free.
 
+### Postgres major version — 20 October 2026
+
+Neon staging and production run Postgres 18. CI service containers (`backend.yml`, `deploy.yml`, `backup.yml`), the backup `PG_MAJOR` and `postgresql-client` are 18. If Neon's major changes, change all of them together; `backup.yml` fails when the client and server majors differ from `PG_MAJOR`.
+
 ### Backend open items
 
 Items marked **Open** are deferred for now. Independent backend work continues. Do not build the dependent behavior until the decision is recorded here. Closed items keep their numbers so that references stay valid.
@@ -35,7 +39,7 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 3. **Open — rate-limit threshold.** Question: what per-IP threshold avoids blocking many viewers behind one campus Wi-Fi address? Owner: user. Affects: the hardening task. Accept when the threshold is recorded and the rule stays off live-score sockets.
 4. **Open — privacy policy owner and contact.** Question: who owns the policy, and which contact email does it publish? Google's consent screen needs it. Owner: user/product owner. Affects: the privacy page and the Google sign-in setup. Accept when the owner and email are recorded.
 5. **Closed (19 October 2026) — load-test thresholds.** Decision (user-confirmed): the ramp, hold, room distribution, update rate, reconnect burst and pass criteria for 3,000 simulated clients are recorded, before any run, in [tasks.md](tasks.md#load-test-pass-thresholds); that list is authoritative. The run still needs a staging deploy.
-6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when a follow-up feature is scoped and claimed in [tasks.md](tasks.md).
+6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. No admin or manager screen exists for the built invite, assignment, revoke and disable endpoints. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when the follow-up feature is scoped and claimed; see follow-ups F1 and F2 in [tasks.md](tasks.md#follow-up-tasks).
 7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
 8. **Closed (18 October 2026) — package details.** The Clerk React SDK is `@clerk/react`, pinned at 6.17.8 in `frontend/package.json`; `@clerk/clerk-react` is deprecated. Sign-in against a real Clerk instance is not yet verified. Earlier part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
 

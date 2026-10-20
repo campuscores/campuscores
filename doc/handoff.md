@@ -31,7 +31,7 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | Responsibility | File or folder | Contract |
 | --- | --- | --- |
 | Routes and app entry | `frontend/src/app/App.jsx`, `frontend/src/main.jsx` | Central React Router routes. Each navigation entry restores section/top scrolling, including a repeat click to the same destination. |
-| Homepage composition | `frontend/src/features/home/HomePage.jsx` | Owns selected sport and composes sections; no backend calls. |
+| Homepage composition | `frontend/src/features/home/HomePage.jsx` | Owns selected sport and composes sections. Without `VITE_API_BASE` it shows `sampleMatches.js`; with it, the live row subscribes to the `home` room ([contract](#live-snapshot-to-card-contract)). The tournament row always shows `sampleTournaments.js`. |
 | Header | `frontend/src/components/SiteHeader.jsx` | Homepage links and six sport destinations; filter buttons are separate. One `Sign in` link to `/sign-in` (desktop nav end, phone menu last item) renders only when the build sets `VITE_CLERK_PUBLISHABLE_KEY`. It reuses the existing nav link styles and 44px targets. |
 | Sign-in area | `frontend/src/features/auth/` (lazy chunk) | `/sign-in/*`, `/sign-up/*` and `/account/delete`. `ClerkProvider` exists only inside this chunk, so public pages load no Clerk code. After sign-in or sign-up it calls `POST /api/invites/accept` once (404 `INVITE_NOT_FOUND` is ignored). `/account/delete` calls `DELETE /api/me`, then signs out. API base: `VITE_API_BASE`. Without a Clerk key the routes show a "sign-in unavailable" message. |
 | Privacy page | `frontend/src/features/legal/PrivacyPage.jsx` | `/privacy`, plain page, no Clerk. Contact stays "to be confirmed" until the Open item in [memory.md](memory.md#backend-open-items) closes. |
@@ -53,13 +53,13 @@ State: **Confirmed by the user, 18 October 2026.** The defaults below are confir
 
 ### Room_Message
 
-A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. Each message is a full snapshot, not a delta. The first message after connect is the stored snapshot. A room with no stored snapshot sends nothing until its first publish.
+A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. Each message is a full snapshot, not a delta. The first message after connect is the stored snapshot. When nothing is stored, the `home` room sends `{ type: 'snapshot', room: 'home', seq: 0, data: [] }` first, so viewers leave "Connecting to live scores…" before the first score ([`rooms.js`](../backend/src/rooms.js)). A match room with no stored snapshot sends nothing until its first publish.
 
 ```js
 { type: 'snapshot', room: 'home' | 'match:<id>', seq, data }
 ```
 
-`seq` is a positive integer. It increases for each message of that room. The client applies a message only when its `seq` is greater than the last applied `seq` of the same socket session; the first message of a new socket replaces the state.
+`seq` is a positive integer, except `0` in the empty `home` message above. It increases for each message of that room. The client applies a message only when its `seq` is greater than the last applied `seq` of the same socket session; the first message of a new socket replaces the state.
 
 ### Home_Room data
 
@@ -138,4 +138,4 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend, database, authentication, scoring correctness, live/offline services and production hosting have not been implemented or verified. They are separate future tasks. The planned backend integration points are in [architecture.md](architecture.md#technology); the frontend contracts above do not change until the [live snapshot-to-card contract](#live-snapshot-to-card-contract) is confirmed.
+Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Not built: management screens, tournament/team/match creation, result review, bracket, standings and production sport engines. Backend contracts are in [architecture.md](architecture.md#technology).
