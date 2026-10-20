@@ -25,8 +25,8 @@ The homepage needs no database, account, environment file, Docker or agent conne
 Clone the repository once, or pull the agreed branch into an existing checkout:
 
 ```sh
-git clone https://github.com/Kush-Saharan/t-lympics.git
-cd t-lympics
+git clone https://github.com/campuscores/campuscores.git
+cd campuscores
 npm ci
 npm run dev
 ```
@@ -121,7 +121,7 @@ Review phone and desktop rendering after UI/asset changes. Record tested cases, 
 
 Add feature and regression specs to `frontend/tests/` in the same change as the implementation. `npm test` discovers matching test files in that folder. Add applicable edge, failure and integration cases; preserve existing coverage. When other application layers are built, extend their commands and CI jobs/path triggers. Follow the shared verification policy in [AGENTS.md](../AGENTS.md).
 
-GitHub Actions minutes are exhausted, so CI does not run. [deferred-tests.md](deferred-tests.md) lists the deferred checks, their exact commands and which ones a Windows machine can run.
+[deferred-tests.md](deferred-tests.md) lists the required checks that have not passed yet, their exact commands and which ones a Windows machine can run. CI clears them.
 
 ## Backend (planned)
 

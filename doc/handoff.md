@@ -138,7 +138,7 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). New deploys are paused while GitHub Actions minutes are exhausted ([deferred-tests.md](deferred-tests.md)). Real scoring is integrated on the current branch; publication/checks are in tasks.md. Not built: management screens, tournament/team/match creation, bracket advancement and standings. Manager result review is superseded. Backend contracts are in [architecture.md](architecture.md#technology).
+Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Real scoring is integrated on the current branch; publication/checks are in tasks.md. Not built: management screens, tournament/team/match creation, bracket advancement and standings. Manager result review is superseded. Backend contracts are in [architecture.md](architecture.md#technology).
 
 ### Assigned scoring read/write contract
 

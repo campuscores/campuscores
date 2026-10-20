@@ -22,7 +22,7 @@ Open [http://127.0.0.1:4174/](http://127.0.0.1:4174/) and keep the command runni
 - [AGENTS.md](AGENTS.md): shared skill/tool policy, file ownership, decision gates, code technique and documentation style.
 - [Handoff](doc/handoff.md): the implemented homepage's integration points and fixed boundaries.
 - [Tasks](doc/tasks.md): claimed work, dependencies, state and actual verification.
-- [Deferred checks](doc/deferred-tests.md): CI checks that wait for GitHub Actions minutes or a full local run.
+- [Deferred checks](doc/deferred-tests.md): required checks that have not passed yet in CI or a full local run.
 - [Memory](doc/memory.md): confirmed decisions, changes and open questions.
 - [Requirements](doc/prd.md), [architecture](doc/architecture.md), [design language](doc/design.md) and [sport rules](doc/rules.md): agreed product and implementation contracts.
 - [Asset sources](doc/asset-sources.md): local artwork, responsive variants and license records.
@@ -49,4 +49,4 @@ frontend/
 doc/                      shared requirements, decisions, tasks and guides
 ```
 
-Keep generated dependencies/build/test output out of Git. Deployment needs SPA route fallback. The planned host is Cloudflare; the backend stack is in [architecture](doc/architecture.md). GitHub Actions runs the checks and deploys (`develop` → staging, `main` → production). Its minutes are exhausted, so checks and deploys wait; see [deferred checks](doc/deferred-tests.md).
+Keep generated dependencies/build/test output out of Git. Deployment needs SPA route fallback. The planned host is Cloudflare; the backend stack is in [architecture](doc/architecture.md). GitHub Actions runs the checks and deploys (`develop` → staging, `main` → production). The repository is public, so its standard GitHub-hosted runners are free. Checks that have not passed yet are in [deferred checks](doc/deferred-tests.md).
