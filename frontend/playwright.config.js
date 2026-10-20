@@ -15,7 +15,9 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:4175',
-    trace: 'retain-on-failure',
+    // Recording every first attempt slowed Windows Firefox until context.close timed out. CI retries once with a trace;
+    // use --trace on locally when you need one.
+    trace: 'on-first-retry',
   },
   projects: [
     { name: 'chromium', ...desktop, use: { ...devices['Desktop Chrome'], launchOptions: channel } },

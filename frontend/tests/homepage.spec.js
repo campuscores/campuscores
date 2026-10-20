@@ -141,37 +141,40 @@ for (const [width, deviceScaleFactor] of [[390, 1], [390, 2], [390, 3], [768, 1]
   });
 }
 
-test('both rails spotlight visible cards and scroll without arrow controls', async ({ page, browserName }) => {
-  test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
-  await page.goto('/');
-  for (const width of [390, 820, 1440, 2560, 3840]) {
+// One test per width keeps each rail journey inside its own timeout budget on slower runners.
+// Loaded Firefox runners can stall one automation round trip for over 5 s while the page state is already correct.
+const railExpect = expect.configure({ timeout: 15000 });
+for (const width of [390, 820, 1440, 2560, 3840]) {
+  test(`both rails spotlight visible cards and scroll without arrow controls at ${width}px`, async ({ page, browserName }) => {
+    test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
+    await page.goto('/');
     await page.setViewportSize({ width, height: 1000 });
     for (const selector of ['.match-scroll', '.tournament-scroll']) {
       const rail = page.locator(selector);
       await rail.evaluate(el => { el.scrollLeft = 0; });
-      await expect.poll(() => rail.evaluate(el => [...el.children].every(card => {
+      await railExpect.poll(() => rail.evaluate(el => [...el.children].every(card => {
         const box = card.getBoundingClientRect(), root = el.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(box.right, root.right) - Math.max(box.left, root.left)) / box.width;
         return card.classList.contains('is-peek') === (ratio < .9);
       }))).toBe(true);
       const peek = rail.locator('.is-peek').first().locator('.match-surface, .tournament-surface');
-      await expect(peek).toHaveCSS('opacity', '0.66');
+      await railExpect(peek).toHaveCSS('opacity', '0.66');
       await rail.scrollIntoViewIfNeeded();
       await rail.hover();
       await page.mouse.wheel(380, 0);
-      await expect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+      await railExpect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
       await settleScroll(rail);
       await rail.focus();
       await page.keyboard.press('ArrowRight');
       await settleScroll(rail);
       await rail.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-      await expect(rail.locator(':scope > :last-child')).not.toHaveClass(/is-peek/);
-      await expect.poll(() => rail.evaluate(el => el.lastElementChild.getBoundingClientRect().right <= el.getBoundingClientRect().right - 52)).toBe(true);
+      await railExpect(rail.locator(':scope > :last-child')).not.toHaveClass(/is-peek/);
+      await railExpect.poll(() => rail.evaluate(el => el.lastElementChild.getBoundingClientRect().right <= el.getBoundingClientRect().right - 52)).toBe(true);
     }
-  }
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
-});
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await railExpect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
+  });
+}
 
 test('menus and legacy links navigate and close correctly', async ({ page }) => {
   const errors = [];

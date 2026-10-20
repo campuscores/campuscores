@@ -66,7 +66,7 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 ## Homepage decisions — 8 October 2026
 
-- The React + Vite JavaScript homepage is implemented. Backend, database, authentication and live delivery remain planned. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
+- The React + Vite JavaScript homepage and backend live platform are implemented. See [tasks.md](tasks.md) for deployed scope and the scoring integration status. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
 - Phone users are the priority; tablets, desktops and larger screens remain supported. Preserve the full-width rectangular header, heavy Helvetica/Arial wordmark, icon-only phone menu, six-athlete diagonal gallery and original blue hero dot matrix. Reuse the exact visual language in [design.md](design.md).
 - Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. Tournament detail UI remains unbuilt. Sport pages follow the sport page decisions above.
 - Keep native horizontal match and tournament rails. Partial cards become smaller and less opaque until they enter the spotlight. Do not add pause controls, View All or scrolling arrows.
@@ -75,9 +75,9 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 ## Confirmed direction
 
-The product and service decisions below are confirmed requirements. Scoring, backend, database, authentication and live delivery remain planned; they are not implemented or verified by the homepage.
+The product and service decisions below are confirmed requirements. Implementation and verification status are recorded in [tasks.md](tasks.md); a requirement alone is not proof of implementation.
 
-- Shared repository: `Kush-Saharan/t-lympics`. Each teammate may use a different local checkout path; app and test code must stay portable.
+- Shared repository: `campuscores/campuscores`. Each teammate may use a different local checkout path; app and test code must stay portable.
 - Event label: **Thaparlympics** for now. Product/site name is undecided.
 - Site type: responsive website, not a native app.
 - Primary users: public spectators (anonymous or with an optional Viewer account), Super Admins, Tournament Managers, and Match Operators. No player login/profile in initial release.
@@ -179,7 +179,7 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 ### Delivery and operations
 
 - Who owns the production Cloudflare, Neon and Clerk accounts and the domain?
-- Is the existing GitHub repository the intended long-term project repository; confirm the develop → staging, main → production branch workflow.
+- Is the existing GitHub repository the intended long-term project repository? The develop → staging, main → production workflow is confirmed; keep their environment values separate.
 - What expected number of matches, teams and operators should sizing target? The latest viewer estimate is approximately 1,000; confirm any change before capacity work.
 - Who owns production backups, privileged account recovery, and event-day support?
 - What are acceptable public update latency and availability targets?
