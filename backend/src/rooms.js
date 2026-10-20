@@ -5,8 +5,8 @@ export const ROOM_PATTERN = /^(home|match:[1-9][0-9]{0,17})$/;
 export const parseRoom = (s) => (typeof s === 'string' && ROOM_PATTERN.test(s) ? s : null);
 export const shouldAccept = (storedSeq, seq) => Number.isSafeInteger(seq) && seq > (storedSeq ?? 0);
 
-// Home list: per-match seq. Non-live cards stay stored (so a late resend stays stale) but leave the list.
-export const LIVE_STATUSES = new Set(['LIVE']);
+// Home list: per-match seq; live and final cards are visible in separate frontend sections.
+export const LIVE_STATUSES = new Set(['LIVE', 'APPROVED']);
 export function applyCard(state, matchId, card, seq) {
   if (!shouldAccept(state.cards[matchId]?.seq, seq)) return null;
   return { seq: state.seq + 1, cards: { ...state.cards, [matchId]: { ...card, seq } } };

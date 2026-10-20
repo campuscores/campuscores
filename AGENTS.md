@@ -12,6 +12,10 @@ Keep one current entry per task in `doc/tasks.md`: owner, scope/files, dependenc
 
 Git shares these records across machines. Other teams see an edit only after its branch is pushed and pulled. Check the remote register and coordinate claims with the team. Markdown is not an automatic distributed lock.
 
+## Git naming and authorship
+
+Use descriptive branch names, such as `integration/matchscorer-scoring`, without tool or agent prefixes. Keep commit subjects and bodies focused on the change and its checks, without tool or agent attribution. Use the requesting contributor's verified Git author and committer identity. Do not add extra author or co-author trailers. Preserve each teammate's existing authorship.
+
 ## Keep local output out of GitHub
 
 **Local logs, generated output and agent scratch work must never enter a commit or push.** Keep them outside the checkout. If a tool needs a local output folder, use the ignored root `output/` folder or its ignored tool folder.
@@ -30,7 +34,7 @@ Confirmed user instructions override older plans. A proposal does not override a
 
 Mark unclear requirements **Open** in `doc/memory.md`. Record the question, decision owner, affected tasks and acceptance criteria. Mark dependent tasks **Blocked** in `doc/tasks.md`. Obtain the user or authorized product owner's decision before building that behavior. Independent work may continue. Sample scores and professional sport rules do not decide event rules.
 
-Current code is the React + Vite **JavaScript** frontend. Backend, database, authentication and live delivery are planned. Create folders only for actual implementation.
+Current code includes the React + Vite **JavaScript** frontend and Hono Worker, Neon database integration, Clerk authentication and live delivery. Check `doc/tasks.md` for implemented and published scope. Create folders only for actual implementation.
 
 ## Code technique: Ponytail
 
@@ -76,7 +80,9 @@ Define acceptance cases first. Cover normal, boundary, invalid and failure cases
 
 For frontend changes, run `npm run lint`, `npm run build` and `npm test`. Use focused checks while debugging, then required integration checks after changes settle. Review phone and desktop captures. Desktop automation does not prove physical-device behavior or every possible case.
 
-Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs Chromium, Firefox and an emulated Pixel on Ubuntu, Windows and macOS, plus WebKit and emulated iPhone and iPad on Ubuntu and macOS. WebKit is the engine behind Safari, not branded Safari, and emulation does not replace physical-device checks.
+Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs Chromium and an emulated Pixel on Ubuntu, Windows and macOS, plus Firefox, WebKit and emulated iPhone and iPad on Ubuntu and macOS. WebKit is the engine behind Safari, not branded Safari, and emulation does not replace physical-device checks.
+
+GitHub Actions runs CI on each push and pull request. The repository is public, so standard GitHub-hosted runners are free. Add every required check that has not passed yet, in CI or locally, to [doc/deferred-tests.md](doc/deferred-tests.md). Do not mark a feature Verified while a row there covers it.
 
 When a new application layer needs other checks, add its test commands, dependencies, CI jobs and path triggers in the same change. Cover implemented behavior; do not add empty jobs for planned services. Record new coverage and remaining gaps in `doc/tasks.md` before marking the feature Verified.
 
@@ -103,6 +109,7 @@ During work, keep only the ownership/dependency/status entry and decisions that 
 | [doc/memory.md](doc/memory.md) | Current durable decisions, necessary rationale and open questions. |
 | [doc/tasks.md](doc/tasks.md) | Current task ownership/state and concise final verification/publication evidence. |
 | [doc/handoff.md](doc/handoff.md) | Current integration points and boundaries for the next team. |
+| [doc/deferred-tests.md](doc/deferred-tests.md) | Required checks that have not passed yet. Remove a row when its check passes. |
 | [doc/asset-sources.md](doc/asset-sources.md) | Asset mapping, derived variants, sources and licenses. |
 | `AGENTS.md` | Shared agent workflow and tool policy. |
 

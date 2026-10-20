@@ -21,14 +21,15 @@ export const acceptsScores = (match, account) =>
 
 // Returns [status, code] for the first failed check, or null when scoring is allowed.
 // ctx comes from one SELECT inside the write transaction (match FOR UPDATE, lease FOR UPDATE).
-export function evaluateChain(ctx) {
+export function evaluateChain(ctx, { starting = false, finalReplay = false, requireToday = false } = {}) {
   if (!ctx.userId) return [401, 'UNAUTHENTICATED'];
   if (!ctx.account) return [403, 'NOT_STAFF'];
   if (ctx.account.status !== 'ACTIVE') return [403, 'ACCOUNT_DISABLED'];
   if (!ctx.assignment) return [403, 'NOT_ASSIGNED'];
   if (!isWithinWindow(ctx.now, ctx.assignment.validFrom, ctx.assignment.validUntil)) return [403, 'OUTSIDE_WINDOW'];
   if (ctx.assignment.permission !== 'SCORE') return [403, 'PERMISSION_DENIED'];
-  if (!acceptsScores(ctx.match, ctx.account)) return [409, 'SCORING_LOCKED'];
+  if (!acceptsScores(ctx.match, ctx.account) && !(starting && ctx.match.status === 'SCHEDULED') && !finalReplay) return [409, 'SCORING_LOCKED'];
+  if (requireToday && !ctx.match.isToday) return [403, 'NOT_TODAY'];
   if (!ctx.lease || ctx.lease.deviceId !== ctx.deviceId || ctx.lease.accountId !== ctx.account.id) {
     return [409, 'LEASE_REQUIRED'];
   }
@@ -47,11 +48,13 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
     `WITH m AS (SELECT * FROM matches WHERE id = $1 FOR UPDATE),
           l AS (SELECT * FROM scorer_leases WHERE match_id = $1 FOR UPDATE)
      SELECT m.id, m.tournament_sport_id, m.status, m.correction_route, m.config_snapshot, m.config_version, m.last_seq,
-            ts.sport, t.name AS tournament_name, sa.label AS side_a, sb.label AS side_b,
+            ts.sport, t.name AS tournament_name, t.status AS tournament_status, m.kind,
+            (m.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date AS is_today,
+            sa.label AS side_a, sb.label AS side_b,
             a.id AS account_id, a.status AS account_status, a.role,
             moa.valid_from, moa.valid_until, moa.permission,
             l.account_id AS lease_account_id, l.device_id, l.last_client_seq,
-            e.seq AS existing_seq, e.payload_hash AS existing_hash, e.result AS existing_result,
+            e.type AS existing_type, e.seq AS existing_seq, e.payload_hash AS existing_hash, e.result AS existing_result,
             s.data AS snapshot,
             tg.type AS target_type, tg.payload AS target_payload,
             EXISTS (SELECT 1 FROM score_actions r WHERE r.match_id = m.id AND r.reverses_action_id = tg.action_id) AS target_reversed,
@@ -84,12 +87,15 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
       last_seq: r.last_seq,
       sport: r.sport,
       tournamentName: r.tournament_name,
+      tournamentStatus: r.tournament_status,
+      kind: r.kind,
+      isToday: r.is_today,
       sides: [r.side_a, r.side_b],
     },
     account: r.account_id && { id: r.account_id, status: r.account_status, role: r.role },
     assignment: r.permission && { validFrom: r.valid_from, validUntil: r.valid_until, permission: r.permission },
     lease: r.lease_account_id && { accountId: r.lease_account_id, deviceId: r.device_id, lastClientSeq: r.last_client_seq },
-    existing: r.existing_seq != null ? { seq: r.existing_seq, payloadHash: r.existing_hash, result: r.existing_result } : null,
+    existing: r.existing_seq != null ? { type: r.existing_type, seq: r.existing_seq, payloadHash: r.existing_hash, result: r.existing_result } : null,
     snapshot: r.snapshot,
     target: r.target_type != null ? { type: r.target_type, payload: r.target_payload, reversed: r.target_reversed } : null,
   };

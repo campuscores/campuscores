@@ -32,9 +32,7 @@ function Side({ scoring, match, index }) {
 function Points({ period, side }) {
   if (!period) return <span aria-label="Not played">—</span>;
   const points = period.points[side];
-  if (period.winner === side) return <strong>{points}</strong>;
-  if (period.tiebreak) return <>{points}<span className="sr-only">, tiebreak </span><sup className="tiebreak">{period.tiebreak[side]}</sup></>;
-  return points;
+  return <>{period.winner === side ? <strong>{points}</strong> : points}{period.tiebreak && <><span className="sr-only">, tiebreak </span><sup className="tiebreak">{period.tiebreak[side]}</sup></>}</>;
 }
 
 function ScoreTable({ sport, scoring, match }) {
@@ -122,12 +120,13 @@ export default function SportMatchDialog({ sport, scoring, match, onClose }) {
         <div className="match-details sport-dialog-details">
           {match.periods
             ? <>
-                <ScoreTable sport={sport} scoring={scoring} match={match} />
+                <div className={match.periods.length > 5 ? "sport-score-scroll" : undefined} {...(match.periods.length > 5 ? { tabIndex: 0, role: "region", "aria-label": "Score by set or period, scroll horizontally" } : {})}><ScoreTable sport={sport} scoring={scoring} match={match} /></div>
                 <Legend scoring={scoring} match={match} />
                 {match.scorers && <Scorers scoring={scoring} match={match} />}
-                {scoring.team && <div className="sport-extra"><h3>Lineups</h3><Participants match={match} /></div>}
+                {scoring.team && scoring.showLineups !== false && <div className="sport-extra"><h3>Lineups</h3><Participants match={match} /></div>}
               </>
             : <Participants match={match} />}
+          {match.events?.length > 0 && <div className="sport-extra"><h3>Match events</h3><ul className="sport-scorers">{match.events.map((e, i) => <li key={i}>{e.type === 'CARD' ? `${e.card === 'red' ? 'Red' : 'Yellow'} card · ${e.player}` : e.type === 'SUB' ? `${e.on} on for ${e.off}` : 'Foul'} · {match.sides[e.side].name}</li>)}</ul></div>}
           <dl className="sport-info">
             <div><dt>Date</dt><dd>{match.dateLabel}</dd></div>
             <div><dt>Time</dt><dd>{match.timeLabel}</dd></div>

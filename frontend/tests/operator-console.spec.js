@@ -1,3 +1,4 @@
+import { stubClerk } from './helpers.js';
 // Operator console with a mocked API and a stub Clerk session (Req 19.1–19.10).
 // Runs against the live-mode build (port 4176), which has VITE_API_BASE and a fake Clerk key. The stub Clerk object
 // exists only in this test's init script; the app code and its sign-in check are the production ones.
@@ -10,16 +11,6 @@ const live = { id: 7, tournamentId: 1, sport: 'football', kind: 'BRACKET', stage
 const scheduled = { ...live, id: 8, stage: 'SF2', status: 'SCHEDULED', seq: 0, sides: [{ name: 'Charlie' }, { name: 'Delta' }] };
 
 /** Signed-in stub for window.Clerk: @clerk/react skips the script download when window.Clerk exists. */
-function stubClerk(token) {
-  const user = { id: 'user_operator', organizationMemberships: [] };
-  const session = { id: 'sess_operator', status: 'active', user, actor: null, factorVerificationAge: null, lastActiveToken: { jwt: { claims: { sub: user.id, sid: 'sess_operator' } } }, getToken: async () => token };
-  const resources = { client: { sessions: [session], signedInSessions: [session], lastActiveSessionId: session.id }, session, user, organization: null };
-  window.Clerk = {
-    loaded: true, isSignedIn: true, user, session, client: resources.client, organization: null,
-    __internal_lastEmittedResources: resources,
-    addListener(listener, options) { if (!options?.skipInitialEmit) listener(resources); return () => {}; },
-  };
-}
 
 async function reply(route, status, body) {
   if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });

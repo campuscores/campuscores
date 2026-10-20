@@ -13,7 +13,7 @@ These decisions replace the earlier Express, Socket.IO, Redis, Supabase Postgres
 - **Database:** Neon Postgres Free. One project for staging and one for production. Autoscaling is capped at 0.5 CU (the projects are currently at 2 CU; see [tasks.md](tasks.md#follow-up-tasks)). PostgreSQL stays the score source of truth.
 - **Database connection:** Cloudflare Hyperdrive with the `pg` driver. The cached configuration serves public reads only. The uncached configuration serves sign-in, roles, assignments, leases and writes, so a revocation takes effect on the next request.
 - **Migrations:** plain SQL files in `db/migrations/`, applied with `dbmate`. Only GitHub Actions applies them: merge to `develop` deploys staging, merge to `main` deploys production. CI tests every migration on a throwaway Postgres on the runner. No team device runs Postgres or Docker.
-- **Backups:** a nightly encrypted `pg_dump` from GitHub Actions. Neon Free keeps only 6 hours of restore history.
+- **Backups:** a nightly encrypted `pg_dump` from GitHub Actions. Neon Free keeps only 6 hours of restore history. The workflow is disabled until private R2 storage exists ([Public repository and CI](#public-repository-and-ci--20-october-2026)).
 - **Sign-in:** Clerk Free. Anyone can create an account with a verified email or with Google. Clerk challenges suspicious sign-ups. Google is the only social provider. Apple is not implemented: production needs a paid Apple developer account. Facebook is deferred (see Open items).
 - **Roles:** an account without an `admin_accounts` row is a Viewer with public read access only. A signed-in Viewer gets nothing extra for now. Watching needs no account and never depends on Clerk. Staff roles come only from invitations recorded in our database. The server reads the role on every request. A Super Admin invites managers and Super Admins; managers invite Match Operators only. Clerk sends the invitation email, so no custom SMTP provider is needed.
 - **Domain:** a free GitHub Student Pack domain (Namecheap .me, .TECH or name.com) on Cloudflare DNS. Clerk production does not accept `*.workers.dev` or `*.pages.dev`. Staging uses `workers.dev` with a Clerk development instance. Clerk DNS records stay "DNS only".
@@ -39,20 +39,43 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 3. **Open — rate-limit threshold.** Question: what per-IP threshold avoids blocking many viewers behind one campus Wi-Fi address? Owner: user. Affects: the hardening task. Accept when the threshold is recorded and the rule stays off live-score sockets.
 4. **Open — privacy policy owner and contact.** Question: who owns the policy, and which contact email does it publish? Google's consent screen needs it. Owner: user/product owner. Affects: the privacy page and the Google sign-in setup. Accept when the owner and email are recorded.
 5. **Closed (19 October 2026) — load-test thresholds.** Decision (user-confirmed): the ramp, hold, room distribution, update rate, reconnect burst and pass criteria for 3,000 simulated clients are recorded, before any run, in [tasks.md](tasks.md#load-test-pass-thresholds); that list is authoritative. The run still needs a staging deploy.
-6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no result review (approve/reject), bracket advancement or standings. No admin or manager screen exists for the built invite, assignment, revoke and disable endpoints. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when the follow-up feature is scoped and claimed; see follow-ups F1 and F2 in [tasks.md](tasks.md#follow-up-tasks).
+6. **Open — management features.** The current backend plan has no endpoints to create tournaments, teams, rosters or matches. It also has no bracket advancement or standings. Manager result review was superseded by operator final confirmation on 20 October. No admin or manager screen exists for the built invite, assignment, revoke and disable endpoints. Production holds only bootstrap data until a follow-up feature adds them. Owner: user. Affects: event readiness. Accept when the follow-up feature is scoped and claimed; see follow-ups F1 and F2 in [tasks.md](tasks.md#follow-up-tasks).
 7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
 8. **Closed (18 October 2026) — package details.** The Clerk React SDK is `@clerk/react`, pinned at 6.17.8 in `frontend/package.json`; `@clerk/clerk-react` is deprecated. Sign-in against a real Clerk instance is not yet verified. Earlier part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
+
+## Public repository and CI — 20 October 2026
+
+Confirmed by Arnav, 20 October 2026:
+
+- **Public repository.** `campuscores/campuscores` became public on 20 October 2026. The commit author emails in the history are public. This is accepted; the history is not rewritten.
+- **No license.** The repository has no `LICENSE` file, so the code stays "all rights reserved". Do not add a license without a new decision.
+- **Fixture names.** The player names in the frontend display fixtures (`frontend/src/features/**/*Matches.js`, `sportFixtures.js`, `sampleMatches.js`, `operatorMatches.js`, `sampleTournaments.js`) are invented sample names. Real API data replaces them. Do not change them.
+- **Images.** The hero artwork and sport backgrounds stay as they are, by decision. They are not a blocker.
+- **CI.** GitHub Actions runs again: standard GitHub-hosted runners are free for public repositories ([GitHub billing docs](https://docs.github.com/en/actions/concepts/billing-and-usage)). Do not attach a self-hosted runner; on a public repository it can run fork pull request code on that machine. Checks that have not passed yet stay in [deferred-tests.md](deferred-tests.md) until CI clears them. CI verified `integration/matchscorer-scoring` on `9ca68b3` ([tasks.md](tasks.md#current-task-claims)).
+- **Release flow.** `develop` deploys the staging subdomain and `main` deploys production, both through `deploy.yml`. Arnav checks staging before a change goes to `main`.
+- **Backup off.** `backup.yml` is disabled in GitHub (state `disabled_manually`), and its one artifact is deleted. In a public repository any signed-in GitHub user can download artifacts. Production has no event data yet.
+- **Before launch: private R2 backups.** Right after the final feature, and before launch, store backups in a private Cloudflare R2 bucket and re-enable `backup.yml` with them. Give the backup job its own GitHub Environment (for example `production-backup`, `main` only). `backup.yml` now uses Environment `production`, which has a required reviewer, so each nightly run would wait for approval. Launch blocker: [tasks.md](tasks.md#current-blockers).
+- **GitHub security settings**, applied 20 October 2026:
+  - Secret scanning, push protection and Dependabot alerts are on.
+  - Ruleset `protect-main-develop` on `main` and `develop`: a pull request is required (0 approvals), force pushes and deletion are blocked, and no actor can bypass it. Direct pushes to these branches are rejected.
+  - Environment `production` requires reviewer `arnavbhatia2003`; self-review is allowed. Production still deploys only from `main`.
+  - Workflows from fork pull requests need approval for all external contributors.
+- **CI matrix:** option A stays. Windows runs `chromium` and `pixel`; Ubuntu and macOS run Firefox ([Documentation decisions](#documentation-decisions--9-october-2026)).
+
+Open items:
+
+1. **Open — Windows Firefox CI job (option D).** Question: add a separate parallel Windows job that runs only the `firefox` project with `--workers=1`, to restore Windows desktop Firefox coverage? Actions minutes cost is no longer a factor, because the repository is public. Owner: Arnav. Affects: `frontend.yml`, the PR #2 integration task and row 8 in [deferred-tests.md](deferred-tests.md). Accept when the Windows Firefox job is green on two consecutive runs without retries.
 
 ## Documentation decisions — 9 October 2026
 
 - Canonical docs describe final accepted behavior and contracts. [Requirements](prd.md), [architecture](architecture.md), [design](design.md) and [rules](rules.md) own their contracts. [Handoff](handoff.md) maps current integration points. [Tasks](tasks.md) holds minimal ownership, state and verification evidence.
 - Keep failed attempts, scratch HTML/Markdown, reports and machine paths out of shared docs and source. Retain detail only when it explains a current risk, compatibility constraint or security requirement. Keep durable asset sources and licenses in [asset-sources.md](asset-sources.md).
 - Final feature completion requires applicable verification and a confirmed remote commit or PR. Local unpushed work is not shared complete. Follow [AGENTS.md](../AGENTS.md) for verification policy; record actual results and limits in [tasks.md](tasks.md).
-- Required frontend CI checks run the same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects (Chromium, Firefox, WebKit, emulated Pixel, iPhone and iPad). Windows runs Chromium, Firefox and Pixel; Safari does not exist on Windows. Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. WebKit is not branded Safari, and emulation does not cover physical devices.
+- Required frontend CI checks run the same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects (Chromium, Firefox, WebKit, emulated Pixel, iPhone and iPad). Windows runs Chromium and Pixel; Safari does not exist on Windows. Windows skips Firefox (decided 20 October 2026): users are mainly on phones and tablets, Ubuntu and macOS cover Firefox, and headless Firefox on Windows runners stalls automation calls until tests time out. A separate Windows Firefox job (option D) is Open ([Public repository and CI](#public-repository-and-ci--20-october-2026)). Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. WebKit is not branded Safari, and emulation does not cover physical devices.
 
 ## Sport page decisions — 9 October 2026
 
-- Each `/sports/<sport>/` page shows Live, Upcoming and Past matches from frontend display fixtures. Fixtures are official-baseline display fixtures, not confirmed event formats. The formats in [rules.md](rules.md) stay open and no scoring engine exists.
+- With `VITE_API_BASE`, sport pages read live/final public cards; Upcoming is empty until scheduling reads exist. Without it, pages show official-baseline display fixtures. Match format controls are confirmed in [rules.md](rules.md); coaches choose event defaults.
 - Default cards show only the textured match header. Activating a card opens a native modal dialog: full viewport on phones, a centered 760px panel from 768px. Close, Escape and a desktop backdrop click close it and return focus to the card. The dialog does not change the URL.
 - Details bold each completed set, game or period's winning score, colour the current one red with a text legend and labelled column, and mark the server with a dot plus screen-reader text. Winners also get a visible Winner tag.
 - Upcoming and Past have date chips that filter in place with `aria-pressed`, like homepage sport filters. One shared event calendar supplies the chip days for every sport, so a day can show an empty message (12 Oct has no matches yet).
@@ -66,7 +89,7 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 ## Homepage decisions — 8 October 2026
 
-- The React + Vite JavaScript homepage is implemented. Backend, database, authentication and live delivery remain planned. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
+- The React + Vite JavaScript homepage and backend live platform are implemented. See [tasks.md](tasks.md) for deployed scope and the scoring integration status. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
 - Phone users are the priority; tablets, desktops and larger screens remain supported. Preserve the full-width rectangular header, heavy Helvetica/Arial wordmark, icon-only phone menu, six-athlete diagonal gallery and original blue hero dot matrix. Reuse the exact visual language in [design.md](design.md).
 - Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. Tournament detail UI remains unbuilt. Sport pages follow the sport page decisions above.
 - Keep native horizontal match and tournament rails. Partial cards become smaller and less opaque until they enter the spotlight. Do not add pause controls, View All or scrolling arrows.
@@ -75,9 +98,9 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 ## Confirmed direction
 
-The product and service decisions below are confirmed requirements. Scoring, backend, database, authentication and live delivery remain planned; they are not implemented or verified by the homepage.
+The product and service decisions below are confirmed requirements. Implementation and verification status are recorded in [tasks.md](tasks.md); a requirement alone is not proof of implementation.
 
-- Shared repository: `Kush-Saharan/t-lympics`. Each teammate may use a different local checkout path; app and test code must stay portable.
+- Shared repository: `campuscores/campuscores`. Each teammate may use a different local checkout path; app and test code must stay portable.
 - Event label: **Thaparlympics** for now. Product/site name is undecided.
 - Site type: responsive website, not a native app.
 - Primary users: public spectators (anonymous or with an optional Viewer account), Super Admins, Tournament Managers, and Match Operators. No player login/profile in initial release.
@@ -87,24 +110,24 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Tournament competition: exactly two semifinals and one final per configured tournament sport. A Tournament Manager or Super Admin assigns semifinal teams; only approved semifinal winners fill final slots. Custom matches are separate and never advance the bracket.
 - Roles (decided 6 October 2026): four user categories, stored explicitly in `admin_accounts.role` (no `is_admin` flag):
   - `SUPER_ADMIN`: core platform/event team. Full access, including account administration and audited corrections.
-  - `TOURNAMENT_MANAGER`: trusted organizer. Manages tournaments, sports configuration, teams/players, matches, operator assignments, and result review. Managers are **global** across all tournaments; there is no tournament-scoped manager table.
-  - `MATCH_OPERATOR`: verified person who can score only matches they hold an active assignment for. Cannot create or edit tournaments, matches, sport rules, teams/players, or users, and cannot approve results.
+  - `TOURNAMENT_MANAGER`: trusted organizer. Manages tournaments, sports configuration, teams/players, matches, operator assignments; finalized results cannot be edited. Managers are **global** across all tournaments; there is no tournament-scoped manager table.
+  - `MATCH_OPERATOR`: verified person who can score only matches they hold an active assignment for. Cannot create or edit tournaments, matches, teams/players or users. May choose the match format before scoring and confirm the final result.
   - Spectator: anonymous, read-only, no account.
   - Each account has exactly one role. Super Admin includes every Tournament Manager capability. There is still no sport-scoped admin role.
 - Account creation: only a Super Admin invites Super Admins and Tournament Managers. Managers (and Super Admins) invite `MATCH_OPERATOR` accounts only. Staff roles come only from invitations recorded in our database. Anyone can sign up through Clerk, but sign-up alone gives only the Viewer role (decided 11 October 2026; replaces invite-only Supabase Auth).
 - Match operator assignments: `match_operator_assignments` rows grant `SCORE` permission for one match. Status stores only `ACTIVE` or `REVOKED`; expiry is derived from `valid_from`/`valid_until`, which are both optional. With no `valid_until`, access lasts until the match is locked (submitted/approved) or the assignment is revoked. Ending a match never deletes the user account.
-- Planned scorer concurrency: at most one active assignment per match (partial unique index). The planned `scorer_leases` table identifies the one active device/session. Reassignment revokes the old row and inserts a new one in one audited transaction. Managers assign themselves before scoring. No database table or enforcement exists in the current frontend.
+- Scorer concurrency: at most one active assignment per match (partial unique index). The `scorer_leases` table identifies the one active device/session. Reassignment revokes the old row and inserts a new one in one audited transaction. Managers assign themselves before scoring. The Worker enforces these database records.
 - Authorization: every scoring HTTP command checks token → active account → active assignment → time window (server time) → `SCORE` permission → match accepting scores → scorer lease, against the database on every request. An unassigned match returns 403. UI hiding is never the control. Viewer sockets are receive-only and accept no commands.
-- Planned scoring gate: `LIVE` and `REJECTED/OPERATOR` require a valid assigned scorer. `REJECTED/MANAGER` permits only a self-assigned Tournament Manager or Super Admin. Preserve account, assignment, server-time window, `SCORE`, lease, reason and audit checks. Revoke the old assignment and create the self-assignment in one transaction. Operators remain locked out; corrected results need resubmission and review. See [architecture.md](architecture.md#scoring-authorization-chain).
-- Match finalization: the operator submits the result (`LIVE → PENDING_APPROVAL`); a Tournament Manager or Super Admin approves (`APPROVED/FINAL`) or rejects (`REJECTED/CORRECTION`). The submitter can never approve their own result, whatever their role, except through a Super Admin override that requires a reason and is audited. On rejection the reviewer chooses the correction route: `OPERATOR` reopens the assigned operator's scoring access, or `MANAGER` keeps the operator locked out while a manager corrects. Approved results are locked; post-approval corrections create a new audited result version and need another approval.
-- My Matches sections (user-confirmed 18 October 2026): the operator dashboard maps match status to its sections. Scheduled = `SCHEDULED`. Live = `LIVE` and `REJECTED/OPERATOR`; a `REJECTED/OPERATOR` card shows the action "Fix and resubmit". Completed (read-only) = `PENDING_APPROVAL`, `APPROVED` and `REJECTED/MANAGER`. `GET /api/operator/matches` returns `status` and `correctionRoute` so the frontend can apply this map. The current dashboard uses display fixtures and has no rejected case yet.
+- Scoring gate: current-day START for scheduled matches, then live scoring under the frozen format. Preserve account, assignment/window, SCORE and lease checks. Legacy rejected-state compatibility does not authorize new review/reopening endpoints. See [architecture.md](architecture.md#scoring-authorization-chain).
+- Match finalization (confirmed 20 October 2026): the assigned operator confirms the final score. It becomes final for viewers immediately and cannot be edited. This replaces manager review, rejection/reopening and the self-approval override. The stored final status remains `APPROVED`. See [rules.md](rules.md) for the current scoring scope.
+- My Matches sections (user-confirmed 18 October 2026): the operator dashboard maps match status to its sections. Scheduled = `SCHEDULED`. Live = `LIVE` and `REJECTED/OPERATOR`; a `REJECTED/OPERATOR` card shows the action "Fix and resubmit". Completed (read-only) = `PENDING_APPROVAL`, `APPROVED` and `REJECTED/MANAGER`. `GET /api/operator/matches` returns `status` and `correctionRoute` so the frontend can apply this map. The dashboard reads assigned matches from the Worker; these legacy section mappings stay compatible. New matches use SCHEDULED, LIVE and APPROVED.
 - Teams: separate team/roster per sport, identified by branch + year.
 - Team/roster fields: organizer-configurable; include name, branch, year, captain marker, optional jersey number. Tile-based manager flow to add players and move them between active and substitute states.
 - Planned roster records: `roster_players` and `match_roster`; do not create a second `players` table for the same records. See [architecture.md](architecture.md#main-data-records).
 - Player statistics: visible as contributions on match/sport views, without an individual profile or login in first release.
 - Scoring: detailed sport-specific scoring in the first release; scoring, match outcomes, and sport standings update as dependent data.
-- Live undo: while a match is `LIVE`, the assigned operator can undo/correct as many times as needed without extra permission or a reason prompt. Each undo is stored as a linked reversal action with actor and server time; spectators see no correction marker for live undos. Corrections after submission or approval require a reason and show the public correction marker; detailed history is visible to managers/Super Admins.
-- Exceptional match outcomes: a Tournament Manager or Super Admin records the decision and reason; result still follows approval before finalization.
+- Live undo: while a match is `LIVE`, the assigned operator can undo/correct as many times as needed without extra permission or a reason prompt. Each undo is stored as a linked reversal action with actor and server time; spectators see no correction marker for live undos. Operator final confirmation permanently locks further edits.
+- Exceptional whole-match outcomes beyond early set endings remain Open with Arnav/coaches. No outcome may bypass the final lock.
 - Match creation: both from a schedule and on the spot, by Tournament Managers/Super Admins only.
 - Offline behavior: an operator can keep scoring locally; actions sync in order with the same action ID on retry. The server validates each action against the operator's assignment by server receipt time (device clock untrusted). If actions arrive after `valid_until` or after revocation, sync pauses until a manager extends the window or resolves the conflict. One primary scoring device per match.
 - Sport formats: each tournament sport has its own configurable format and point/scoring values. Format defaults/limits remain to be confirmed. The bracket itself is fixed to semifinal-semifinal-final in this release.
@@ -127,7 +150,7 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 
 - TIET's official sports pages describe Thaparlympics as an inter-branch competition. Current user-selected scope is football, volleyball, basketball, table tennis, lawn tennis, and badminton.
 - BWF Laws Section 4.1 baseline is best of three to 21 with the specified deuce/cap rules; BWF alternative laws also exist.
-- FIBA Official Basketball Rules 2024 lists standard four-quarter play; Thaparlympics duration/format remains unknown.
+- FIBA Official Basketball Rules 2026, valid from 1 October 2026, is the four-quarter/team-point baseline. This product does not run a clock.
 - IFAB's latest Laws define football match duration, substitutions, and match outcomes; competition conditions and grassroots modifications must be chosen for the event.
 - FIVB Official Volleyball Rules 2025–2028; ITTF current statutes/laws and umpire documents; World Tennis/ITF Rules of Tennis (2026) are the primary references recorded in `rules.md`. Tournament-level sport formats still require confirmation.
 - CricHeroes inspiration: tournament page, live match score/detail, schedule, standings, player/leader data.
@@ -141,7 +164,7 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 
 ### Competition and rules
 
-- What dates, match schedule, timezone, venue/court labels, and tournament lifecycle apply?
+- What dates, match schedule, venue/court labels and tournament lifecycle apply? Event scoring and operator schedule display use Asia/Kolkata (confirmed 20 October 2026).
 - Should custom matches be public, count toward player statistics, count toward standings, or be manager-only?
 - Are divisions needed (for example men's/women's/mixed), or only branch-year teams?
 - What are the exact branch/team names and branch-year category values?
@@ -173,13 +196,13 @@ The product and service decisions below are confirmed requirements. Scoring, bac
 - Is an English-only first release sufficient?
 - Do spectators need search/filter by sport, branch, status, venue, or date?
 - Should live status include a displayed score freshness timestamp and correction reason?
-- **Open** — ended live match: the sport pages label it `Ended · <name> won` and `Provisional result` and keep it in Live. Decision owner: user/product owner. Affects: all six sport pages, future live feed. Accept when the final label and the moment it moves to Past are confirmed.
+- **Closed — 20 October 2026:** a computed winner stays provisional/live until the assigned operator confirms. Acceptance publishes a locked final result, moves the sport card to Past and shows it in homepage Final Results.
 - **Open** — match detail URL: the sport page detail dialog has no URL, so Back leaves the page and details cannot be shared. Decision owner: user/product owner. Affects: all six sport pages, PRD match routes. Accept when a route or dialog-only rule is confirmed. `frontend/tests/sport-edge-cases.spec.js` pins the current Back behaviour.
 
 ### Delivery and operations
 
 - Who owns the production Cloudflare, Neon and Clerk accounts and the domain?
-- Is the existing GitHub repository the intended long-term project repository; confirm the develop → staging, main → production branch workflow.
+- Is the existing GitHub repository the intended long-term project repository? The develop → staging, main → production workflow is confirmed; keep their environment values separate.
 - What expected number of matches, teams and operators should sizing target? The latest viewer estimate is approximately 1,000; confirm any change before capacity work.
 - Who owns production backups, privileged account recovery, and event-day support?
 - What are acceptable public update latency and availability targets?
@@ -203,3 +226,15 @@ Treat the open questions above as unknown. Before implementing a sport engine or
 Each open question needs a decision owner, affected tasks and acceptance criteria. Dependent work remains Blocked until the user or authorized product owner confirms the contract. Follow [AGENTS.md](../AGENTS.md) for the shared decision workflow.
 
 Current confirmed decisions take precedence over older proposals. An authorized stack, role or deployment change must update affected contracts, callers, tests and this decision record together before dependent work.
+
+## Operator scoring decisions — 20 October 2026
+
+- Arnav confirmed real scoring, not a fixture preview. Preserve the existing sign-in, assignment, device lease, persistent queue, transactional acceptance and live delivery. Develop/staging is the integration target; main/production stays untouched.
+- Operators choose an official scoring preset or a validated custom format before the first score. Freeze that format when the match starts. They can end a set early and explicitly choose its winner. Derive normal set wins and the match winner from the selected format. Live undo remains unlimited.
+- Publish set/period scores, set winners and the final winner. Goals and baskets are attributed to the side/team, not a player; doubles use team labels. Retain cards and substitutions. Do not show or run a match clock.
+- Operator final confirmation publishes and permanently locks the result, without manager approval. Keep actor/time/action records. An automatic match-winning point remains correctable until final confirmation.
+- Current-day eligibility uses Asia/Kolkata and database time, in addition to the existing assignment window. Missing dates are not eligible to start.
+- Coaches/admins still own tournament/match creation and assignment. Their management screens, rosters, standings and automatic bracket advancement are separate scope. The assignment API already exists.
+- Open: football shoot-out/draw policies and exceptional whole-match awards beyond an early set end. No tied or undecided match may be finalized by inventing a winner. Decision owner: Arnav/coaches; affects tied-match finalization only. Acceptance: a recorded event policy before enabling that result.
+
+Publication naming and authorship, confirmed by Arnav on 20 October 2026: use neutral branch/commit descriptions and the requesting contributor’s verified Git identity. Follow [AGENTS.md](../AGENTS.md#git-naming-and-authorship).

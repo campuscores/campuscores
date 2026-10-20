@@ -1,9 +1,9 @@
 name: Frontend checks
 on:
   push:
-    paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+    paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
   pull_request:
-    paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+    paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
 permissions:
   contents: read
 jobs:
@@ -12,6 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         # Windows skips WebKit: Safari does not exist there. Ubuntu and macOS cover WebKit.
+        # Windows also skips Firefox: users are mainly on phones and tablets, Ubuntu and macOS cover Firefox,
+        # and headless Firefox on Windows runners stalls automation calls until tests time out.
         include:
           - os: ubuntu-latest
             browsers: chromium firefox webkit
@@ -20,8 +22,8 @@ jobs:
             browsers: chromium firefox webkit
             projects: ''
           - os: windows-latest
-            browsers: chromium firefox
-            projects: --project=chromium --project=firefox --project=pixel
+            browsers: chromium
+            projects: --project=chromium --project=pixel
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

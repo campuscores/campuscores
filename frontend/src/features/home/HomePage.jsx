@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import useHomeCards from '../matches/useHomeCards.js';
+import HorizontalRail from '../../components/HorizontalRail.jsx';
+import LiveMatchCard from '../matches/LiveMatchCard.jsx';
+import { useState } from 'react';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import Hero from './Hero.jsx';
 import SportsFilters from './SportsFilters.jsx';
@@ -12,25 +15,12 @@ import './HomePage.css';
 
 export default function HomePage() {
   const [selectedSport, setSelectedSport] = useState('all');
-  const [liveCards, setLiveCards] = useState(null); // null until the first Home_Room message
-  const [liveStatus, setLiveStatus] = useState(null);
-  useEffect(() => {
-    if (!apiBase) return undefined; // fixture mode: the socket module is never loaded (Req 3.6)
-    let active = true;
-    let unsubscribe;
-    import('../../services/live.js')
-      .then(({ subscribe }) => {
-        if (active) unsubscribe = subscribe('home', { onData: data => setLiveCards(Array.isArray(data) ? data.map(toMatchProp) : []), onStatus: setLiveStatus });
-      })
-      .catch(() => active && setLiveStatus('unavailable'));
-    return () => {
-      active = false;
-      unsubscribe?.();
-    };
-  }, []);
+  const { cards: homeCards, status: liveStatus } = useHomeCards();
+  const liveCards = homeCards?.filter(c => c.status !== 'APPROVED').map(toMatchProp) ?? null;
+  const completed = homeCards?.filter(c => c.status === 'APPROVED').map(toMatchProp) ?? [];
   const unavailable = liveStatus === 'unavailable';
   const allMatches = !apiBase ? sampleMatches : unavailable ? [] : liveCards ?? [];
   const notice = !apiBase ? undefined : unavailable ? 'Live scores are unavailable right now.' : liveCards == null ? 'Connecting to live scores…' : undefined;
   const matches = selectedSport === 'all' ? allMatches : allMatches.filter(match => match.sport === selectedSport);
-  return <><SiteHeader /><main><Hero /><SportsFilters selectedSport={selectedSport} onSelect={setSelectedSport} /><LiveMatches matches={matches} selectedSport={selectedSport} notice={notice} /><Tournaments tournaments={sampleTournaments} /></main></>;
+  return <><SiteHeader /><main><Hero /><SportsFilters selectedSport={selectedSport} onSelect={setSelectedSport} /><LiveMatches matches={matches} selectedSport={selectedSport} notice={notice} /><Tournaments tournaments={sampleTournaments} />{completed.length > 0 && <section className="live-matches" aria-labelledby="final-results-title"><header className="live-heading"><h2 id="final-results-title">Final Results</h2></header><HorizontalRail className="match-scroll" label="Final results, scroll horizontally">{completed.map(match => <LiveMatchCard key={match.id} match={match} />)}</HorizontalRail></section>}</main></>;
 }

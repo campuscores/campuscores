@@ -206,7 +206,7 @@ Use the existing `TournamentCard` shell: venue image above white title/date deta
 
 ### Horizontal rails and spotlight
 
-Reuse `HorizontalRail` for both rows. Use native touch/trackpad/wheel/keyboard scrolling, `scroll-snap-type: x proximity`, start-aligned cards and hidden scrollbars. No carousel arrows or View All controls. The right edge has a 56px fade:
+Reuse `HorizontalRail` for both rows. Use native touch/trackpad/wheel scrolling, `scroll-snap-type: x proximity`, start-aligned cards and hidden scrollbars. When the rail itself has focus, unmodified Left/Right arrow keys scroll one visible page through the native scroll API. Keys on child controls keep their normal behavior. No carousel arrows or View All controls. The right edge has a 56px fade:
 
 ```css
 background: linear-gradient(90deg, transparent, #f6faff);

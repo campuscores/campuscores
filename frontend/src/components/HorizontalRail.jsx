@@ -14,5 +14,14 @@ export default function HorizontalRail({ children, label, className, id, resetKe
   }, [children]);
   useEffect(() => { railRef.current.scrollLeft = 0; }, [resetKey]);
 
-  return <div className="match-rail"><div ref={railRef} id={id} className={className} tabIndex={0} role="region" aria-label={label}>{children}</div></div>;
+  // Native arrow steps can snap back to the same card in WebKit; move one visible page instead.
+  function scrollWithKey(event) {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const rail = event.currentTarget;
+    rail.scrollBy({ left: (event.key === 'ArrowRight' ? 1 : -1) * rail.clientWidth });
+  }
+
+  return <div className="match-rail"><div onKeyDown={scrollWithKey} ref={railRef} id={id} className={className} tabIndex={0} role="region" aria-label={label}>{children}</div></div>;
 }

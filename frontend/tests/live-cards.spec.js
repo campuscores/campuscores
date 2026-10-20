@@ -22,3 +22,11 @@ test.describe('Home_Room card to LiveMatchCard prop', () => {
     expect(match).toMatchObject({ competition: '', score: 'VS', clock: '', sides: [{ name: 'TBD', values: ['—'] }, { name: 'TBD', values: ['—'] }] });
   });
 });
+
+test('configured cards expose set winners and final winner without a clock', () => {
+  const match = toMatchProp({ id: '9', sport: 'badminton', status: 'APPROVED', sides: [{ name: 'Alpha' }, { name: 'Bravo' }], score: [1, 0], winner: 0, format: { model: 'sets' }, periods: [{ points: [15, 9], winner: 0, current: false, manual: true }] });
+  expect(match.columns.map(c => c.label)).toEqual(['S1', 'T']);
+  expect(match.sides[0]).toMatchObject({ values: ['15', '1'], winners: [true, false] });
+  expect(match.sides[1]).toMatchObject({ values: ['9', '0'], winners: [false, false] });
+  expect(match.clock).toBe('Final · Alpha won');
+});

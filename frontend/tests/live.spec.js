@@ -37,6 +37,22 @@ test.describe('homepage live row', () => {
     sockets[0].send(snapshot(7, [card('1', 'Ana', 'Ben', [3, 0]), card('2', 'Cy', 'Dee', null)]));
     await expect(overview(page)).toHaveText(['Ana3–0Ben', 'CyVSDee']);
   });
+  test('real per-set scores become a visible locked result in Final Results', async ({ page }) => {
+    await socketCount(1);
+    const match = { ...card('7', 'Alpha', 'Bravo', [1, 0]), sport: 'badminton', format: { model: 'sets', bestOf: 3 }, periods: [{ points: [21, 19], winner: 0, current: false }, { points: [9, 8], winner: null, current: true }] };
+    sockets[0].send(snapshot(1, [match]));
+    const live = page.getByRole('region', { name: 'Live Matches', exact: true });
+    await expect(live.locator('.match-card')).toHaveCount(1);
+    await expect(live.locator('tbody tr').first().locator('td')).toHaveText(['21', '9', '1']);
+    await expect(live.locator('tbody tr').first().locator('strong')).toHaveText('21');
+    sockets[0].send(snapshot(2, [{ ...match, status: 'APPROVED', score: [2, 0], winner: 0, periods: [match.periods[0], { points: [21, 10], winner: 0, current: false }] }]));
+    await expect(live.locator('.match-card')).toHaveCount(0);
+    const finals = page.getByRole('region', { name: 'Final Results', exact: true });
+    await expect(finals.locator('.match-clock')).toHaveText('Final · Alpha won');
+    await expect(finals.locator('tbody tr').first().locator('td')).toHaveText(['21', '21', '2']);
+    await page.locator('.sports-nav [data-sport="basketball"]').click();
+    await expect(finals.locator('.match-card')).toHaveCount(1);
+  });
   test('a reconnected socket replaces state even with a lower seq', async ({ page }) => {
     await socketCount(1);
     sockets[0].send(snapshot(9, [card('1', 'Ana', 'Ben', [4, 2])]));

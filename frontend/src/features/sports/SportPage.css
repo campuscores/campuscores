@@ -174,3 +174,7 @@ html:has(.sport-dialog[open]) { overflow: hidden; }
   .sport-title h1 { margin: 36px 0 28px; font-size: 32px; }
   .sport-dialog-hero { background-image: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)), var(--match-background-phone); }
 }
+
+.sport-score-scroll { max-width: 100%; overflow-x: auto; }
+.sport-score-scroll table { table-layout: auto; }
+.sport-score-scroll th, .sport-score-scroll td { min-width: 32px; }

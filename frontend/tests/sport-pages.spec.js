@@ -223,7 +223,8 @@ for (const sport of built) {
         await expect(dialog(page)).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(page.locator('dialog[open]')).toHaveCount(0);
-        expect(await focusedMatch(page)).toBe(id);
+        await expect(dialog(page)).toBeEmpty();
+        await expect.poll(() => focusedMatch(page)).toBe(id);
       }
     });
 
@@ -320,6 +321,7 @@ for (const sport of built) {
       await expect(dialog(page).locator('.sport-info dt')).toHaveText(['Date', 'Time', 'Tournament', 'Round', 'Venue']);
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
+      await expect(dialog(page)).toBeEmpty();
 
       const scheduled = upcomingMatches[0];
       const upcoming = card(page, scheduled.id);
@@ -340,7 +342,8 @@ for (const sport of built) {
       expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThanOrEqual(2);
       await page.mouse.click(10, 10);
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(pastMatches[0].id);
+      await expect(dialog(page)).toBeEmpty();
+      await expect.poll(() => focusedMatch(page)).toBe(pastMatches[0].id);
     });
   });
 }
@@ -356,6 +359,7 @@ async function open(page, id) {
 async function close(page) {
   await page.keyboard.press('Escape');
   await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(dialog(page)).toBeEmpty();
 }
 
 test.describe('lawn tennis scoring', () => {
@@ -398,6 +402,7 @@ test.describe('lawn tennis scoring', () => {
     await expect(cell(page, 0, 0)).toHaveText('6, tiebreak 4');
     await expect(cell(page, 0, 0).locator('.tiebreak')).toHaveText('4');
     await expect(cell(page, 1, 0).locator('strong')).toHaveText('7');
+    await expect(cell(page, 1, 0).locator('.tiebreak')).toHaveText('7');
     await expect(dialog(page).locator('thead th', { hasText: /^Pts$/ })).toHaveCount(0);
     await expect(dialog(page).locator('.sport-legend')).toContainText('Small number = tiebreak points');
     await close(page);
@@ -639,6 +644,7 @@ test.describe('badminton', () => {
     for (const [id, count] of [['live', 4], ['upcoming', 5], ['past', 6]]) await expect(page.locator(`#${id} .sport-card`)).toHaveCount(count);
     await expect(page.locator('.sport-card table, .sport-card .match-details')).toHaveCount(0);
     await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await expect(dialog(page)).toBeEmpty();
     await expect(page.locator('#upcoming .date-chip')).toHaveText(['All', '10 Oct', '11 Oct', '12 Oct', '15 Oct']);
     await expect(page.locator('#past .date-chip')).toHaveText(['All', '1 Oct', '2 Oct', '3 Oct']);
     await expect(page.locator('.date-chip[aria-pressed="true"]')).toHaveText(['All', 'All']);
@@ -711,7 +717,8 @@ test.describe('badminton', () => {
     await expect(details.locator('.winner-tag')).toHaveCount(0);
     await details.getByRole('button', { name: 'Close match details' }).click();
     await expect(page.locator('dialog[open]')).toHaveCount(0);
-    expect(await focusedMatch(page)).toBe('live-ms-iyer-khan');
+    await expect(dialog(page)).toBeEmpty();
+    await expect.poll(() => focusedMatch(page)).toBe('live-ms-iyer-khan');
     expect(page.url()).toBe(url);
     expect(await page.evaluate(() => window.history.length)).toBe(history);
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe('hidden');
@@ -725,7 +732,8 @@ test.describe('badminton', () => {
       await expect(dialog(page)).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(id);
+      await expect(dialog(page)).toBeEmpty();
+      await expect.poll(() => focusedMatch(page)).toBe(id);
     }
   });
 
@@ -825,7 +833,8 @@ test.describe('badminton', () => {
     expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThanOrEqual(2);
     await page.mouse.click(10, 10);
     await expect(page.locator('dialog[open]')).toHaveCount(0);
-    expect(await focusedMatch(page)).toBe('past-ms-iyer-ghosh');
+    await expect(dialog(page)).toBeEmpty();
+    await expect.poll(() => focusedMatch(page)).toBe('past-ms-iyer-ghosh');
   });
 
   test('route entry, refresh and back work', async ({ page }) => {
