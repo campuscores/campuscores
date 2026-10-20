@@ -222,7 +222,7 @@ for (const sport of sports) {
       }
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(pastMatches[0].id);
+      await expect.poll(() => focusedMatch(page)).toBe(pastMatches[0].id);
 
       await page.locator('#past').evaluate(el => el.scrollIntoView());
       const scrollY = await page.evaluate(() => window.scrollY);
@@ -320,7 +320,7 @@ for (const sport of sports) {
       await expect(dialog(page)).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(pastMatches.at(-1).id);
+      await expect.poll(() => focusedMatch(page)).toBe(pastMatches.at(-1).id);
     });
   });
 }

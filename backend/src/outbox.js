@@ -5,8 +5,8 @@ export const SWEEP_WINDOW_MS = 15 * 60 * 1000;
 export const shouldSweep = (now, lastWriteAt) => now - lastWriteAt <= SWEEP_WINDOW_MS;
 export const room = (env, name) => env.ROOMS.get(env.ROOMS.idFromName(name));
 // One Outbox_Event to both Live_Rooms. shouldAccept in the rooms makes a resend harmless.
-export const publishEvent = (env, { matchId, seq, snapshot, card }) =>
-  Promise.all([room(env, `match:${matchId}`).publish(snapshot, seq), room(env, 'home').publishCard(matchId, card, seq)]);
+export const publishEvent = (env, { matchId, seq, snapshot, card, private: privateMatch }) =>
+  privateMatch ? Promise.resolve() : Promise.all([room(env, `match:${matchId}`).publish(snapshot, seq), room(env, 'home').publishCard(matchId, card, seq)]);
 export const markDelivered = (client, id) => client.query('UPDATE outbox_events SET delivered_at = now() WHERE id = $1', [id]);
 // Cron Outbox_Sweep (Requirements 17.1, 17.3–17.5).
 export async function sweep(env, ctx) {
@@ -20,7 +20,7 @@ export async function sweep(env, ctx) {
     for (const row of rows) {
       if (row.match_id === failedMatch) continue; // keep seq order: a later event must not pass a failed one
       try {
-        await publishEvent(env, { matchId: row.match_id, seq: row.seq, snapshot: row.room_message.data, card: row.card });
+        await publishEvent(env, { matchId: row.match_id, seq: row.seq, snapshot: row.room_message.data, card: row.card, private: row.room_message.private });
         await markDelivered(client, row.id);
       } catch (err) {
         failedMatch = row.match_id;

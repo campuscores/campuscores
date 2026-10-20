@@ -4,7 +4,7 @@
 
 The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages with display fixtures and reserved tournament destinations. The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
 
-Update, 20 October 2026: the `backend/` Worker (Hono API, `MatchRoom` live rooms, Clerk sign-in, assignments, leases, the scoring write path with the Test_Engine, outbox sweep), the `db/` migrations, the operator console and the sign-in and privacy pages are implemented and deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Not implemented: tournament, team, roster and match management; result review; bracket advancement; standings; production sport engines. Sections below that describe these parts are the target design.
+Update, 20 October 2026: the `backend/` Worker (Hono API, `MatchRoom` live rooms, Clerk sign-in, assignments, leases, the scoring write path with the Test_Engine, outbox sweep), the `db/` migrations, the operator console and the sign-in and privacy pages are implemented and deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). This integration adds real scoring with frozen presets/custom formats and operator final confirmation; see the current task in tasks.md for verification/publication. Not implemented: tournament, team, roster and match management; bracket advancement; standings. Manager result review is superseded. Sections below that describe these parts are the target design.
 
 Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` and `features/tournaments/` (sections/cards/display fixtures), `features/sports/` (shared sport page, sections, cards, dialog, calendar, fixture registry and one fixture folder per sport), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
 
@@ -50,7 +50,7 @@ frontend/
     features/
       tournaments/               # tournament list, detail, and setup UI
       teams/                     # teams and roster management UI
-      matches/                   # match list, detail, and result review UI
+      matches/                   # match list and detail UI
       access/                    # account invites, Assign Scorer, revoke/reassign
       operator/                  # My Matches and scoring entry for Match Operators
       sports/
@@ -86,7 +86,7 @@ backend/
     outbox.js                    # outbox sweep
     db.js                        # Hyperdrive pools and transactions
     routes/                      # public, me, invites, assignments, leases, actions
-    engines/                     # sport engine registry; production engines wait for rules.md
+    engines/                     # legacy Test_Engine registry; real calculations in shared/scoring.mjs
   scripts/                       # Super Admin bootstrap, smoke check
   test/
 
@@ -123,10 +123,9 @@ Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OP
 | Assign, revoke, reassign scorers | Yes | Yes | No | No |
 | View assigned match (private scoring view) | Yes, after self-assignment | Yes, after self-assignment | Assigned matches only | No |
 | Start scoring, enter live scores, undo live actions, finish match, submit result | With active assignment | With active assignment | With active assignment | No |
-| Approve/reject results | Yes, not own submission | Yes, not own submission | No | No |
-| Override the no-self-approval rule (reason required) | Yes | No | No | No |
+| Confirm final score and permanently lock it | With active assignment | With active assignment | With active assignment | No |
 | Record exceptional outcomes (tie, forfeit, abandonment) | Yes | Yes | No | No |
-| Correct an approved result (new version + new approval) | Yes | Yes | No | No |
+| Edit a finalized result | No | No | No | No |
 | View audit history | Yes | Yes | No | No |
 
 A manager or Super Admin who wants to score a match assigns themselves first; that assignment is audited like any other. Scoring always goes through the same assignment check.
@@ -166,11 +165,9 @@ const acceptsScores = match.status === 'LIVE' ||
         ['TOURNAMENT_MANAGER', 'SUPER_ADMIN'].includes(account.role))))
 ```
 
-This is a planned backend contract, not implemented frontend code. `OPERATOR` correction uses the valid current assignment. `MANAGER` correction accepts only a Tournament Manager or Super Admin who assigned themselves. Match Operators remain locked out, even if an old assignment is still active. The device lease and sport validation remain required in both routes. All other match states reject score commands with 409.
+The existing backend gate retains legacy `REJECTED` row compatibility. New scoring starts eligible `SCHEDULED` matches with `START`, requires the scheduled date to be today in Asia/Kolkata, and accepts later commands while `LIVE`. An exact accepted `FINALIZE` retry may replay a locked result after current authorization checks. New writes to final matches are refused. The new workflow never creates rejected or pending-review states and has no reopening endpoint.
 
-For a manager correction, revoke the previous assignment and create the manager's self-assignment in one audited transaction. Keep one active assignment per match. Record the correction reason and actions, then require resubmission and a new review. Do not let a manager bypass the common scoring authorization chain.
-
-Non-scoring privileged requests (tournament, team, match, assignment, review, account management) check token → active account → required role.
+Non-scoring privileged requests (tournament, team, match, assignment and account management) check token → active account → required role.
 
 ### Staff invitation
 
@@ -201,11 +198,8 @@ Public routes are read-only and need no account.
 - Each tournament sport has exactly two semifinal matches and one final. A Tournament Manager or Super Admin assigns teams to the semifinal sides.
 - A semifinal winner advances to the final only after that semifinal result is approved.
 - Custom matches are separate from the bracket and never advance bracket slots.
-- Result states: `LIVE → PENDING_APPROVAL → APPROVED/FINAL`, or `PENDING_APPROVAL → REJECTED/CORRECTION`. Live score updates can be visible before approval, but only approved results are final.
-- The assigned operator submits the result. A Tournament Manager or Super Admin reviews it. The reviewer must differ from the submitter, whatever their role. A Super Admin can override this only with a recorded reason; the override is audited.
-- On rejection, the reviewer records a reason and chooses `OPERATOR` or `MANAGER` correction. `OPERATOR` reopens the current scorer's valid assignment until resubmission. `MANAGER` keeps Match Operators locked out and requires a manager or Super Admin self-assignment. Apply the role-aware match-state rule above.
-- Approved results are locked. A correction to an approved result creates a new audited result version and requires another approval.
-- An approval records the reviewer, time, result version, and decision.
+- Current result flow: eligible `SCHEDULED → LIVE → APPROVED`. The assigned operator chooses and freezes the format at start, enters scores, corrects live mistakes, then confirms the computed final result. Confirmation immediately publishes and locks it. There is no separate review or post-final edit endpoint. See [rules.md](rules.md#6-score-corrections-and-final-results).
+- Legacy `PENDING_APPROVAL` and `REJECTED` rows remain readable. They are not targets of this new workflow.
 
 ## Main data records
 
@@ -228,8 +222,8 @@ Public routes are read-only and need no account.
   - partial unique index on `match_id` where `status = 'ACTIVE'` (one active operator per match)
   - reassignment revokes the old row and inserts a new one in one audited transaction
 - `scorer_leases`: the one active scoring device/session for a match. The assignment says **who** may score; the lease says **which device** is scoring now, preventing the same operator scoring from two tabs.
-- `match_result_reviews`: result version, `submitted_by`, `reviewed_by`, `decision`, `reason`, `correction_route` (`OPERATOR` | `MANAGER`), `self_approval_override` (boolean), `override_reason`. Check: `reviewed_by <> submitted_by` unless `self_approval_override` is true with a non-empty `override_reason`.
-- `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, assignments, revocations, reassignments, self-assignments, reviews, overrides, and corrections.
+- `match_result_reviews`: existing legacy review schema, unused by the current operator-finalization workflow. Preserve its constraints for compatibility; do not build review endpoints from this obsolete proposal.
+- `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, assignments, revocations, reassignments, self-assignments, score reversals, match start and final confirmation.
 - `outbox_events`: committed changes waiting to be broadcast.
 
 These are planned record names, not existing database tables. Use `roster_players` as the canonical player table name; do not create a second `players` table for the same records. Use database constraints for relationships and uniqueness. Save the sport configuration version with each match so later settings do not alter a live match.
@@ -334,7 +328,7 @@ These are Cloudflare and Clerk dashboard settings for the production zone. They 
 - Viewers open a receive-only WebSocket to the relevant match room or the `home` room. The room sends its stored snapshot first, then each newer snapshot. An empty `home` room sends an empty list (`seq` 0) first; an empty match room sends nothing until its first publish ([handoff.md](handoff.md#room_message)).
 - Broadcast only public fields. Account identities, assignments, audit details, and private roster data are not sent to public rooms.
 - Publish from the database outbox after transaction commit. Each snapshot carries the match sequence; a room ignores an older sequence. On reconnect, the client replaces its state with the room's first message.
-- While a match is `LIVE`, the assigned operator can undo or correct as many times as needed, with no extra permission and no reason prompt. Each undo is stored as a linked reversal action with actor and server time; accepted actions are never erased. Live undos show no public correction marker. Corrections after submission or approval require a reason and show the public correction marker.
+- While a match is `LIVE`, the assigned operator can undo or correct as many times as needed, with no extra permission and no reason prompt. Each undo is stored as a linked reversal action with actor and server time; accepted actions are never erased. Live undos show no public correction marker. After operator final confirmation, no edits or reopening are allowed.
 - The operator downloads the current match snapshot, stores actions locally when offline, sends them in order after reconnect, and retries with the same action ID to prevent duplicate scoring.
 - The server validates each synced action against the operator's assignment and the score sequence, using **server receipt time** (the device clock is untrusted). If actions arrive after `valid_until` or after the assignment was revoked, sync pauses and a manager either extends the window or resolves the conflict.
 - Mark offline actions as pending until the server confirms them. Pause sync and request manager resolution if match state or score sequence conflicts.
@@ -349,4 +343,10 @@ These are Cloudflare and Clerk dashboard settings for the production zone. They 
 - Managers can invite Match Operators only; only Super Admins create managers and Super Admins.
 - Viewer sockets are receive-only and ignore incoming messages. Scoring commands use HTTPS and run the authorization chain per command; room membership grants nothing.
 - Keep database credentials and the Clerk secret key on the Worker as secrets.
-- Validate input on the backend, use HTTPS/WSS in deployed environments, and audit account changes, assignments, revocations, reassignments, overrides, result reviews, and corrections.
+- Validate input on the backend, use HTTPS/WSS in deployed environments, and audit account changes, assignments, revocations, reassignments, score reversals, match start and final confirmation.
+
+## Operator scoring integration contract — 20 October 2026
+
+All commands keep the existing action ID, client sequence, assignment and lease contract. Start stores a validated format and source/version with the match. Scoring and manual early set endings derive a new snapshot. Final confirmation writes the final status and snapshot in the same transaction as the action, audit and outbox. Replaying a lost final response is idempotent; new writes to a final match are refused. The backend and frontend use the same pure scoring calculations, but the backend validates and decides acceptance. Pending offline projections are never presented as server-accepted results.
+
+Private scoring reads return only the assigned match and its accepted scoring actions through the uncached connection. Public snapshots/cards allow-list set/period points, winners, current state and display events; they exclude staff IDs, device IDs, tokens and raw command history. The home feed separates live matches from completed results. Public visibility still follows the published tournament/non-custom match boundary.

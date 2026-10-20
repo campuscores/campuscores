@@ -30,7 +30,7 @@ Confirmed user instructions override older plans. A proposal does not override a
 
 Mark unclear requirements **Open** in `doc/memory.md`. Record the question, decision owner, affected tasks and acceptance criteria. Mark dependent tasks **Blocked** in `doc/tasks.md`. Obtain the user or authorized product owner's decision before building that behavior. Independent work may continue. Sample scores and professional sport rules do not decide event rules.
 
-Current code is the React + Vite **JavaScript** frontend. Backend, database, authentication and live delivery are planned. Create folders only for actual implementation.
+Current code includes the React + Vite **JavaScript** frontend and Hono Worker, Neon database integration, Clerk authentication and live delivery. Check `doc/tasks.md` for implemented and published scope. Create folders only for actual implementation.
 
 ## Code technique: Ponytail
 

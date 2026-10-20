@@ -69,6 +69,8 @@ npm test
 
 Install the browsers once per machine. Re-run the browser install when a Playwright update requires it. Linux also needs system libraries: use `npx playwright install --with-deps chromium firefox webkit`, or run `sudo npx playwright install-deps webkit` when WebKit reports missing libraries. CI uses `--with-deps`.
 
+`npm run lint` also checks `shared/scoring.mjs`. Backend lint includes the shared calculations. Backend checks run the pure format suite in Node and transaction tests against CI’s temporary database. No hosted schema change is part of the scoring integration.
+
 `npm test` runs six Playwright projects:
 
 | Project | Engine and device descriptor | Specs |
@@ -174,7 +176,7 @@ They solve different problems:
 
 | Tool | Purpose | This project |
 | --- | --- | --- |
-| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium`, `firefox` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, root package files or the workflow. It does not deploy. |
+| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium`, `firefox` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, `shared/**`, root package files or the workflow. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
 An Actions job can run Docker containers. They can work together; neither replaces the other. Backend CI (`backend.yml`) and the deploy workflow run a temporary `postgres:18` service container on the runner. Team devices do not need local Postgres.

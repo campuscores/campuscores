@@ -104,8 +104,8 @@ test('sport filters change only live cards and support keyboard input', async ({
   await expect(rail.locator('.match-card')).toHaveCount(6);
 });
 
-test('cold phone loads use smaller local portraits and textures at DPR 1, 2 and 3', async ({ browser }) => {
-  for (const [width, deviceScaleFactor] of [[390, 1], [390, 2], [390, 3], [768, 1]]) {
+for (const [width, deviceScaleFactor] of [[390, 1], [390, 2], [390, 3], [768, 1]]) {
+  test(`cold phone loads use smaller local portraits and textures at ${width}px, DPR ${deviceScaleFactor}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width, height: 844 }, deviceScaleFactor });
     try {
       const page = await context.newPage();
@@ -137,8 +137,8 @@ test('cold phone loads use smaller local portraits and textures at DPR 1, 2 and 
       for (const texture of textures) expect(texture).toMatch(width < 768 ? /-background-640\.webp$/ : /-background\.webp$/);
       if (width < 768) expect(requested.filter(path => /-background\.webp$/.test(path))).toEqual([]);
     } finally { await context.close(); }
-  }
-});
+  });
+}
 
 test('both rails spotlight visible cards and scroll without arrow controls', async ({ page, browserName }) => {
   test.slow(browserName === 'webkit', 'Headless WebKit renders the 2560-3840px rails about 3× slower than Chromium');
@@ -242,7 +242,8 @@ test('repeat Home and Tournaments navigation scrolls and closes phone menus', as
     await home.click();
     await expect(page).toHaveURL(/\/$/);
     if (width < 768) await menu.locator(':scope > summary').click();
-    await home.focus();
+    await home.evaluate(el => el.focus({ preventScroll: true }));
+    await expect(home).toBeFocused();
     await page.evaluate(() => window.scrollTo(0, 200));
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
     // Keyboard activation avoids Playwright scrolling an offscreen link into view first.

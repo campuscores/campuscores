@@ -223,7 +223,7 @@ for (const sport of built) {
         await expect(dialog(page)).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(page.locator('dialog[open]')).toHaveCount(0);
-        expect(await focusedMatch(page)).toBe(id);
+        await expect.poll(() => focusedMatch(page)).toBe(id);
       }
     });
 
@@ -340,7 +340,7 @@ for (const sport of built) {
       expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThanOrEqual(2);
       await page.mouse.click(10, 10);
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(pastMatches[0].id);
+      await expect.poll(() => focusedMatch(page)).toBe(pastMatches[0].id);
     });
   });
 }
@@ -398,6 +398,7 @@ test.describe('lawn tennis scoring', () => {
     await expect(cell(page, 0, 0)).toHaveText('6, tiebreak 4');
     await expect(cell(page, 0, 0).locator('.tiebreak')).toHaveText('4');
     await expect(cell(page, 1, 0).locator('strong')).toHaveText('7');
+    await expect(cell(page, 1, 0).locator('.tiebreak')).toHaveText('7');
     await expect(dialog(page).locator('thead th', { hasText: /^Pts$/ })).toHaveCount(0);
     await expect(dialog(page).locator('.sport-legend')).toContainText('Small number = tiebreak points');
     await close(page);
@@ -711,7 +712,7 @@ test.describe('badminton', () => {
     await expect(details.locator('.winner-tag')).toHaveCount(0);
     await details.getByRole('button', { name: 'Close match details' }).click();
     await expect(page.locator('dialog[open]')).toHaveCount(0);
-    expect(await focusedMatch(page)).toBe('live-ms-iyer-khan');
+    await expect.poll(() => focusedMatch(page)).toBe('live-ms-iyer-khan');
     expect(page.url()).toBe(url);
     expect(await page.evaluate(() => window.history.length)).toBe(history);
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe('hidden');
@@ -725,7 +726,7 @@ test.describe('badminton', () => {
       await expect(dialog(page)).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
-      expect(await focusedMatch(page)).toBe(id);
+      await expect.poll(() => focusedMatch(page)).toBe(id);
     }
   });
 
@@ -825,7 +826,7 @@ test.describe('badminton', () => {
     expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThanOrEqual(2);
     await page.mouse.click(10, 10);
     await expect(page.locator('dialog[open]')).toHaveCount(0);
-    expect(await focusedMatch(page)).toBe('past-ms-iyer-ghosh');
+    await expect.poll(() => focusedMatch(page)).toBe('past-ms-iyer-ghosh');
   });
 
   test('route entry, refresh and back work', async ({ page }) => {

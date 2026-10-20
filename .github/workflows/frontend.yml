@@ -1,9 +1,9 @@
 name: Frontend checks
 on:
   push:
-    paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+    paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
   pull_request:
-    paths: ['frontend/**', 'package*.json', '.github/workflows/frontend.yml']
+    paths: ['shared/**', 'frontend/**', 'package*.json', '.github/workflows/frontend.yml']
 permissions:
   contents: read
 jobs:

@@ -65,3 +65,10 @@
   .match-overview { font-size: clamp(12px, 3.4vw, 14px); }
   .match-overview strong { font-size: clamp(28px, 8vw, 32px); }
 }
+
+/* Custom formats can have many sets; keep their score table inside the approved card shell. */
+.match-details[role="region"] { overflow-x: auto; scrollbar-color: #50688c #eaf2ff; }
+.match-details[role="region"] table { min-width: 100%; table-layout: auto; }
+.match-details[role="region"] td { min-width: 28px; }
+.match-details td strong { font-weight: 800; }
+.match-details .is-current { color: #d5203e; }
