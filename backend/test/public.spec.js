@@ -90,9 +90,18 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
       const signed = await worker(path, { Authorization: 'Bearer test_not_a_real_token' });
       expect(signed.status, path).toBe(anon.status);
       const body = await anon.json();
-      expect(await signed.json(), path).toEqual(body);
-      expect(allKeys(body).filter((k) => !PUBLIC_KEYS.has(k)), path).toEqual([]);
-      expect(JSON.stringify(body), path).not.toMatch(/test_(super_admin|tournament_manager|match_operator)/);
+      const signedBody = await signed.json();
+      if (body.tournaments) {
+        // Other spec files insert and delete PUBLISHED tournaments in the shared DB between the two calls,
+        // so compare only the rows both lists contain.
+        const shared = (a, b) => a.filter((t) => b.some((u) => u.id === t.id));
+        expect(shared(body.tournaments, signedBody.tournaments).map((t) => t.id), path).toContain('1');
+        expect(shared(signedBody.tournaments, body.tournaments), path).toEqual(shared(body.tournaments, signedBody.tournaments));
+      } else {
+        expect(signedBody, path).toEqual(body);
+      }
+      expect(allKeys([body, signedBody]).filter((k) => !PUBLIC_KEYS.has(k)), path).toEqual([]);
+      expect(JSON.stringify([body, signedBody]), path).not.toMatch(/test_(super_admin|tournament_manager|match_operator)/);
     }
   });
 });
