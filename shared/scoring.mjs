@@ -67,7 +67,8 @@ export function validateSportAction(sport, format, action) {
       keys(['side', 'value']); requireValue(side(p.side), 'Choose a scoring side.');
       requireValue(format.model === 'periods' ? format.scoreValues.includes(p.value ?? 1) : (p.value == null || p.value === 1), 'This scoring value is not in the match format.'); break;
     case 'END_SET': keys(['winner']); requireValue(format.model !== 'periods' && side(p.winner), 'Choose the early set winner.'); break;
-    case 'END_PERIOD': case 'EXTRA_PERIOD': keys([]); requireValue(format.model === 'periods', 'Only period sports use this command.'); break;
+    case 'END_PERIOD': keys([]); requireValue(format.model === 'periods', 'Only period sports use this command.'); break;
+    case 'EXTRA_PERIOD': keys([]); requireValue(sport === 'basketball', 'The football tie policy must be agreed before a deciding period.'); break;
     case 'CARD':
       keys(['side', 'player', 'card']); requireValue(sport === 'football' && side(p.side) && ['yellow', 'red'].includes(p.card), 'Choose a football side and card.');
       requireValue(typeof p.player === 'string' && p.player.trim().length > 0 && p.player.length <= 80, 'Enter the player name (up to 80 characters).'); break;

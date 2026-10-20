@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useLayoutEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import HomePage from '../features/home/HomePage.jsx';
 import SportPage from '../features/sports/SportPage.jsx';
@@ -17,7 +17,7 @@ const authPage = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 export default function App() {
   const { pathname, hash, search, key } = useLocation();
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
       : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
       : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics'

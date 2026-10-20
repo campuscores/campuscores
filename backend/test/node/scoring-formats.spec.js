@@ -91,3 +91,9 @@ it('final confirmation locks all further scoring and preserves winner 0', () => 
   expect(state.status).toBe('APPROVED'); expect(state.winner).toBe(0); expect(state.finalized).toBe(true);
   expect(() => score('badminton', [...actions, point(1)], { bestOf: 1, target: 1, decidingTarget: 1, winBy: 1 })).toThrow(/locked/);
 });
+it('football ties wait for the event policy and cannot be finalized or resolved with an unapproved period', () => {
+  const actions = [action('END_PERIOD'), action('END_PERIOD')];
+  expect(score('football', actions).winner).toBeNull();
+  expect(() => score('football', [...actions, action('EXTRA_PERIOD')])).toThrow(/football tie policy/);
+  expect(() => score('football', [...actions, action('FINALIZE')])).toThrow(/tied/);
+});

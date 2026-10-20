@@ -1,5 +1,6 @@
 import { test, expect, devices } from '@playwright/test';
 import { sports } from '../src/data/sports.js';
+import { sampleTournaments } from '../src/features/tournaments/sampleTournaments.js';
 import { swipe } from './helpers.js';
 
 async function settleScroll(rail) {
@@ -172,7 +173,7 @@ test('both rails spotlight visible cards and scroll without arrow controls', asy
   await expect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
 });
 
-test('menu, reserved routes, refresh, back navigation and old links work', async ({ page }) => {
+test('menus and legacy links navigate and close correctly', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -180,22 +181,6 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
   await expect(page.locator('.desktop-nav .sports-options a')).toHaveCount(6);
   await page.keyboard.press('Escape');
   await expect(page.locator('.desktop-nav .sports-dropdown')).not.toHaveAttribute('open');
-  const links = await page.locator('.desktop-nav .sports-options a, .tournament-card').evaluateAll(anchors => anchors.map(a => a.getAttribute('href')));
-  for (const destination of links) {
-    if (destination.startsWith('/sports/')) await page.locator('.desktop-nav .sports-dropdown summary').click();
-    await page.locator(`a[href="${destination}"]`).first().click();
-    await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    // Every sport destination has its page; tournament destinations stay reserved and blank.
-    const sport = sports.find(item => destination === `/sports/${item.id}/`);
-    const built = Boolean(sport);
-    if (destination.startsWith('/sports/')) expect(sport, destination).toBeTruthy();
-    const ready = () => built ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
-    await ready();
-    expect((await page.reload()).status()).toBe(200);
-    await ready();
-    await page.goBack();
-    await expect(page.locator('.hero')).toBeVisible();
-  }
   await page.goto('/tournament.html?event=racquet-open');
   await expect(page).toHaveURL(/\/tournaments\/racquet-open$/);
   await page.goto('/index.html?preview=rectangular');
@@ -219,6 +204,21 @@ test('menu, reserved routes, refresh, back navigation and old links work', async
   await expect(page.locator('#tournaments')).toBeInViewport();
   expect(errors).toEqual([]);
 });
+
+// Keep each click/refresh/back journey inside its own timeout budget on slower runners.
+const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id }))];
+for (const { destination, sport } of destinations) {
+  test('homepage destination ' + destination + ' opens, refreshes and returns with Back', async ({ page }) => {
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto('/');
+    if (sport) await page.locator('.desktop-nav .sports-dropdown summary').click();
+    await page.locator('a[href="' + destination + '"]').first().click();
+    await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
+    const ready = () => sport ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    await ready(); expect((await page.reload()).status()).toBe(200); await ready();
+    await page.goBack(); await expect(page.locator('.hero')).toBeVisible(); expect(errors).toEqual([]);
+  });
+}
 
 test('repeat Home and Tournaments navigation scrolls and closes phone menus', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

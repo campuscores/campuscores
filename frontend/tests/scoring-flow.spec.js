@@ -138,3 +138,12 @@ test.describe('India match dates', () => {
     await expect(page.locator('#op-scheduled .match-clock')).toHaveText('21 Oct · 00:05');
   });
 });
+
+test('a tied football match keeps undo but offers no unapproved deciding period or final winner', async ({ page }) => {
+  await mockScoring(page, 'football', { custom: { periodCount: 1 } }); await open(page);
+  await page.getByRole('button', { name: 'End period', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 1);
+  await expect(page.getByText('Scores are tied. The organizer must agree the football tie policy before this result can be finalized.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start extra period', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Confirm final result', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); await expect(point(page)).toBeEnabled();
+});
