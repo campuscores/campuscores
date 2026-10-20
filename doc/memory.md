@@ -213,3 +213,5 @@ Current confirmed decisions take precedence over older proposals. An authorized 
 - Current-day eligibility uses Asia/Kolkata and database time, in addition to the existing assignment window. Missing dates are not eligible to start.
 - Coaches/admins still own tournament/match creation and assignment. Their management screens, rosters, standings and automatic bracket advancement are separate scope. The assignment API already exists.
 - Open: football shoot-out/draw policies and exceptional whole-match awards beyond an early set end. No tied or undecided match may be finalized by inventing a winner. Decision owner: Arnav/coaches; affects tied-match finalization only. Acceptance: a recorded event policy before enabling that result.
+
+Publication naming and authorship, confirmed by Arnav on 20 October 2026: use neutral branch/commit descriptions and the requesting contributor’s verified Git identity. Follow [AGENTS.md](../AGENTS.md#git-naming-and-authorship).

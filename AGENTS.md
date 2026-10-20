@@ -12,6 +12,10 @@ Keep one current entry per task in `doc/tasks.md`: owner, scope/files, dependenc
 
 Git shares these records across machines. Other teams see an edit only after its branch is pushed and pulled. Check the remote register and coordinate claims with the team. Markdown is not an automatic distributed lock.
 
+## Git naming and authorship
+
+Use descriptive branch names, such as `integration/matchscorer-scoring`, without tool or agent prefixes. Keep commit subjects and bodies focused on the change and its checks, without tool or agent attribution. Use the requesting contributor's verified Git author and committer identity. Do not add extra author or co-author trailers. Preserve each teammate's existing authorship.
+
 ## Keep local output out of GitHub
 
 **Local logs, generated output and agent scratch work must never enter a commit or push.** Keep them outside the checkout. If a tool needs a local output folder, use the ignored root `output/` folder or its ignored tool folder.
