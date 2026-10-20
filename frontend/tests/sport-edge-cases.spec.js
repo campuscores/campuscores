@@ -68,6 +68,7 @@ test('Back with the dialog open leaves the sport page', async ({ page }) => {
   await page.goForward();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Badminton');
   await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(dialog(page)).toBeEmpty();
   await expect(page.locator('.date-chip[aria-pressed="true"]')).toHaveText(['All', 'All']);
 });
 
@@ -163,6 +164,7 @@ for (const sport of sports) {
         await expect(dialog(page)).toBeVisible();
         await closeDialog();
         await expect(page.locator('dialog[open]')).toHaveCount(0);
+        await expect(dialog(page)).toBeEmpty();
         await expect(past.locator('.date-chip[aria-pressed="true"]')).toHaveText([day.label]);
         await expect(past.locator('.sport-card')).toHaveCount(expected.length);
       }
@@ -222,6 +224,7 @@ for (const sport of sports) {
       }
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
+      await expect(dialog(page)).toBeEmpty();
       await expect.poll(() => focusedMatch(page)).toBe(pastMatches[0].id);
 
       await page.locator('#past').evaluate(el => el.scrollIntoView());
@@ -236,6 +239,7 @@ for (const sport of sports) {
       expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
+      await expect(dialog(page)).toBeEmpty();
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe('hidden');
       expect(Math.abs(await page.evaluate(() => window.scrollY) - scrollY)).toBeLessThanOrEqual(1);
       // Wheel up: the page may already be at its bottom.
@@ -261,6 +265,7 @@ for (const sport of sports) {
         await expect(dialog(page)).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(page.locator('dialog[open]')).toHaveCount(0);
+        await expect(dialog(page)).toBeEmpty();
       }
       await expect(page.locator('.sport-card .match-surface').last()).toHaveCSS('transform', 'none');
       expect(problems).toEqual([]);
@@ -287,6 +292,7 @@ for (const sport of sports) {
         expect(await bodyOverflows(page)).toBe(false);
         await page.keyboard.press('Escape');
         await expect(page.locator('dialog[open]')).toHaveCount(0);
+        await expect(dialog(page)).toBeEmpty();
       }
     });
 
@@ -320,6 +326,7 @@ for (const sport of sports) {
       await expect(dialog(page)).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
+      await expect(dialog(page)).toBeEmpty();
       await expect.poll(() => focusedMatch(page)).toBe(pastMatches.at(-1).id);
     });
   });

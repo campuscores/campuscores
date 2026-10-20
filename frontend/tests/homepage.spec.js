@@ -236,21 +236,24 @@ test('repeat Home and Tournaments navigation scrolls and closes phone menus', as
       await expect(page.locator('#tournaments')).toBeInViewport();
       if (width < 768) await expect(menu).not.toHaveAttribute('open');
     }
-    await page.evaluate(() => window.scrollTo(0, 0));
-    if (width < 768) await menu.locator(':scope > summary').click();
     const home = navigation.getByRole('link', { name: 'Home', exact: true });
-    await home.click();
-    await expect(page).toHaveURL(/\/$/);
-    if (width < 768) await menu.locator(':scope > summary').click();
-    await home.evaluate(el => el.focus({ preventScroll: true }));
-    await expect(home).toBeFocused();
-    await page.evaluate(() => window.scrollTo(0, 200));
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
-    // Keyboard activation avoids Playwright scrolling an offscreen link into view first.
-    await page.keyboard.press('Enter');
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page).toHaveURL(/\/$/);
-    if (width < 768) await expect(menu).not.toHaveAttribute('open');
+    for (let repeat = 0; repeat < 2; repeat++) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      if (width < 768) {
+        await expect(menu).not.toHaveAttribute('open');
+        await menu.locator(':scope > summary').click();
+        await expect(menu).toHaveAttribute('open');
+      }
+      await home.evaluate(el => el.focus({ preventScroll: true }));
+      await expect(home).toBeFocused();
+      await page.evaluate(() => window.scrollTo(0, 200));
+      await expect.poll(() => page.evaluate(() => window.scrollY), { message: 'Home starts scrolled at ' + width + 'px' }).toBe(200);
+      // A keyboard activation leaves the setup scroll in place until the route effect resets it.
+      await page.keyboard.press('Enter');
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await expect(page).toHaveURL(/\/$/);
+      if (width < 768) await expect(menu).not.toHaveAttribute('open');
+    }
   }
 });
 
