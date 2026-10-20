@@ -43,12 +43,27 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 7. **Open — static pages at the daily cap.** Cloudflare documents that static assets keep loading after the Worker reaches its daily request cap. This is untested; staging cannot reach the cap safely. Owner: implementing team. Affects: event-day risk. Accept when it is tested or accepted as a documented risk.
 8. **Closed (18 October 2026) — package details.** The Clerk React SDK is `@clerk/react`, pinned at 6.17.8 in `frontend/package.json`; `@clerk/clerk-react` is deprecated. Sign-in against a real Clerk instance is not yet verified. Earlier part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
 
+## CI while GitHub Actions is unavailable — 20 October 2026
+
+Confirmed by Arnav, 20 October 2026:
+
+- GitHub Actions minutes are exhausted. The workflow files stay unchanged. Each pushed commit has `[skip ci]` in its subject, except a commit that must deploy: `[skip ci]` also skips `deploy.yml`.
+- Checks that cannot run are deferred, not skipped. [deferred-tests.md](deferred-tests.md) is their register. They run later in GitHub Actions when minutes return, or in a full local end-to-end run after the product is built. CI verified `integration/matchscorer-scoring` through `6f19182`.
+- The CI matrix stays at option A: Windows runs `chromium` and `pixel`; Ubuntu and macOS run Firefox ([Documentation decisions](#documentation-decisions--9-october-2026)).
+
+Rationale: staging and production deploy only through `deploy.yml`, CI applies the hosted migrations, and the backup runs only through `backup.yml`. All three run on GitHub-hosted runners, so they also stop without minutes.
+
+Open items:
+
+1. **Open — deploy path while Actions is unavailable.** Question: wait for the monthly minute reset or set a spending limit, add a self-hosted runner, or deploy manually with Wrangler? Owner: Arnav. Affects: the staging deploy from `develop` (needed to check changes on the staging subdomain before `main`), the production deploy from `main`, CI-only database migrations, the nightly backup (`backup.yml`, 21:30 UTC), publication of PR #2 and rows 5–7 in [deferred-tests.md](deferred-tests.md). A manual Wrangler deploy or a laptop migration changes the confirmed rule that only GitHub Actions deploys and migrates; record that change here if it is chosen. Accept when the path is recorded here and a staging deploy passes its smoke check.
+2. **Open — Windows Firefox CI job (option D).** Question: when minutes return, add a separate parallel Windows job that runs only the `firefox` project with `--workers=1`, to restore Windows desktop Firefox coverage? Owner: Arnav. Affects: `frontend.yml`, the PR #2 integration task and row 8 in [deferred-tests.md](deferred-tests.md). Accept when the Windows Firefox job is green on two consecutive runs without retries.
+
 ## Documentation decisions — 9 October 2026
 
 - Canonical docs describe final accepted behavior and contracts. [Requirements](prd.md), [architecture](architecture.md), [design](design.md) and [rules](rules.md) own their contracts. [Handoff](handoff.md) maps current integration points. [Tasks](tasks.md) holds minimal ownership, state and verification evidence.
 - Keep failed attempts, scratch HTML/Markdown, reports and machine paths out of shared docs and source. Retain detail only when it explains a current risk, compatibility constraint or security requirement. Keep durable asset sources and licenses in [asset-sources.md](asset-sources.md).
 - Final feature completion requires applicable verification and a confirmed remote commit or PR. Local unpushed work is not shared complete. Follow [AGENTS.md](../AGENTS.md) for verification policy; record actual results and limits in [tasks.md](tasks.md).
-- Required frontend CI checks run the same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects (Chromium, Firefox, WebKit, emulated Pixel, iPhone and iPad). Windows runs Chromium and Pixel; Safari does not exist on Windows. Windows skips Firefox (decided 20 October 2026): users are mainly on phones and tablets, Ubuntu and macOS cover Firefox, and headless Firefox on Windows runners stalls automation calls until tests time out. Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. WebKit is not branded Safari, and emulation does not cover physical devices.
+- Required frontend CI checks run the same install, lint and build on Ubuntu, Windows and macOS. Ubuntu and macOS run all six Playwright projects (Chromium, Firefox, WebKit, emulated Pixel, iPhone and iPad). Windows runs Chromium and Pixel; Safari does not exist on Windows. Windows skips Firefox (decided 20 October 2026): users are mainly on phones and tablets, Ubuntu and macOS cover Firefox, and headless Firefox on Windows runners stalls automation calls until tests time out. A separate Windows Firefox job (option D) is Open ([CI while GitHub Actions is unavailable](#ci-while-github-actions-is-unavailable--20-october-2026)). Each OS reports separately; one failure must not cancel the others. A three-OS pass requires remote job results. WebKit is not branded Safari, and emulation does not cover physical devices.
 
 ## Sport page decisions — 9 October 2026
 

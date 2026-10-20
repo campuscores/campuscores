@@ -121,6 +121,8 @@ Review phone and desktop rendering after UI/asset changes. Record tested cases, 
 
 Add feature and regression specs to `frontend/tests/` in the same change as the implementation. `npm test` discovers matching test files in that folder. Add applicable edge, failure and integration cases; preserve existing coverage. When other application layers are built, extend their commands and CI jobs/path triggers. Follow the shared verification policy in [AGENTS.md](../AGENTS.md).
 
+GitHub Actions minutes are exhausted, so CI does not run. [deferred-tests.md](deferred-tests.md) lists the deferred checks, their exact commands and which ones a Windows machine can run.
+
 ## Backend (planned)
 
 The backend is planned and not implemented. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).

@@ -82,6 +82,8 @@ For frontend changes, run `npm run lint`, `npm run build` and `npm test`. Use fo
 
 Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs Chromium and an emulated Pixel on Ubuntu, Windows and macOS, plus Firefox, WebKit and emulated iPhone and iPad on Ubuntu and macOS. WebKit is the engine behind Safari, not branded Safari, and emulation does not replace physical-device checks.
 
+While GitHub Actions is unavailable, run the required local checks: `npm run lint`, `npm run build`, `npm test`, `npm run lint:backend` and `npm run test:backend`. Add every required check that could not run to [doc/deferred-tests.md](doc/deferred-tests.md). Put `[skip ci]` in the subject of each pushed commit, except a commit meant to deploy. Do not mark a feature Verified while a row there covers it.
+
 When a new application layer needs other checks, add its test commands, dependencies, CI jobs and path triggers in the same change. Cover implemented behavior; do not add empty jobs for planned services. Record new coverage and remaining gaps in `doc/tasks.md` before marking the feature Verified.
 
 Use **Implemented, not verified** while checks are incomplete and **Locally verified, unpublished** after local checks pass. A shared completed-feature record needs applicable checks and a confirmed pushed commit or PR reference. A pushed branch is not a merged release; state which branch contains it. Never infer publication from a local commit or planned push. Keep any current failed or unavailable required check as a brief blocker, not a history of failed runs.
@@ -107,6 +109,7 @@ During work, keep only the ownership/dependency/status entry and decisions that 
 | [doc/memory.md](doc/memory.md) | Current durable decisions, necessary rationale and open questions. |
 | [doc/tasks.md](doc/tasks.md) | Current task ownership/state and concise final verification/publication evidence. |
 | [doc/handoff.md](doc/handoff.md) | Current integration points and boundaries for the next team. |
+| [doc/deferred-tests.md](doc/deferred-tests.md) | Checks that have not run while GitHub Actions is unavailable. Remove a row when its check passes. |
 | [doc/asset-sources.md](doc/asset-sources.md) | Asset mapping, derived variants, sources and licenses. |
 | `AGENTS.md` | Shared agent workflow and tool policy. |
 
