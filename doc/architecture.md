@@ -299,7 +299,7 @@ Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No au
   - Google sign-in: create our own OAuth client in Google Cloud and enter its client ID and secret in the Clerk production instance. Clerk does not supply shared Google credentials for a production instance. Use the redirect URI that Clerk shows.
   - Google consent screen: set the privacy policy URL to `https://campuscores.live/privacy` (the [`PrivacyPage`](../frontend/src/features/legal/PrivacyPage.jsx) route) and the home page to `https://campuscores.live`. Add `campuscores.live` as an authorized domain.
   - DNS: add the CNAME records that the Clerk production instance lists to the `campuscores.live` zone in Cloudflare. Set each one to **DNS only** (grey cloud), not proxied. A proxied Clerk record breaks Clerk's domain and certificate checks.
-  - Known limit: the Worker secrets, the Google OAuth client, the consent screen and the DNS records are not confirmed as set. The privacy policy text still needs its owner's approval ([memory.md](memory.md)).
+  - Current state (21 October 2026): the 5 Clerk CNAME records are verified as DNS only. The consent screen branding is set: home page, privacy URL, authorized domain and support email `bhatiaarnav05@gmail.com`. Not confirmed: the Worker secrets, the published Google app, and the OAuth client redirect URI and Clerk custom credentials ([tasks.md](tasks.md#follow-up-tasks) F7, F8). The privacy owner and contact are recorded ([memory.md](memory.md#backend-open-items) item 4).
 
 ### Plan and limits
 
@@ -317,11 +317,16 @@ These are Cloudflare and Clerk dashboard settings for the production zone. They 
   - Expression: `starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/sign-up")`.
   - Counting characteristic: IP address.
   - Period: 10 seconds. Block (mitigation timeout): 10 seconds.
-  - Threshold (requests per period): not decided. It is [memory.md](memory.md#backend-open-items) item 3 (Open). Do not create the rule with a guessed number.
+  - Name: `api-flood-guard`. Threshold: 300 requests per 10 seconds. Action: Block. Decided 21 October 2026 ([memory.md](memory.md#backend-open-items) item 3).
+  - Free plan limits: one rule, IP-only counting, the URI Path field only, 10-second period and mitigation timeout, no Log action.
+  - Rationale: campus Wi-Fi and Indian mobile carrier-grade NAT (CGNAT) put many viewers and operators behind one IP address. A low threshold would block legitimate users and operators during a match. With IP-only counting, no single threshold can protect the 100,000/day Worker quota. Quota protection relies on the fail-closed route, Workers usage notifications and cached public reads. This rule is a flood guard only.
+  - Review Security analytics after the first event day. Lower the threshold if abuse appears.
+  - The user applies the rule in the Cloudflare dashboard. It is not yet confirmed as applied.
+  - The score console retries an HTTP 429 with backoff, like a 5xx, so a blocked operator does not need to resume sync by hand.
 - **Not on `/live/`.** Campus Wi-Fi puts many viewers behind one IP address. A per-IP limit on live sockets would block them together. The expression above does not match `/live/`. Keep it that way.
-- **Clerk Frontend API.** Clerk serves it on its own DNS-only subdomain, so our zone rule cannot reach it. Clerk Bot protection (the suspicious-sign-up challenge, [Sign-in setup](#sign-in-setup)) covers it.
-- **Fail-closed route mode.** The production Worker route on the custom domain uses the request-limit failure mode **fail closed**. At the daily Worker request cap, requests get error 1027. They never bypass the Worker. API and live calls then fail, and the frontend shows that live scores are unavailable. Cloudflare documents that static assets keep loading at the cap; this is untested ([memory.md](memory.md#backend-open-items) item 7).
-- **Usage notifications.** Turn on Cloudflare usage notifications for Workers and Durable Objects. They warn the operations owner before the daily caps in [memory.md](memory.md#research-notes) are reached.
+- **Clerk Frontend API.** Clerk serves it on its own DNS-only subdomain `clerk.campuscores.live`, so our zone rule cannot reach it. Clerk Bot protection (the suspicious-sign-up challenge, [Sign-in setup](#sign-in-setup)) covers it.
+- **Fail-closed route mode.** Only the production Worker route `campuscores.live/*` has this mode; staging uses `workers.dev` and has no route. The production route uses the request-limit failure mode **fail closed**. At the daily Worker request cap, requests get error 1027. They never bypass the Worker. API and live calls then fail, and the frontend shows that live scores are unavailable. Cloudflare documents that static assets keep loading at the cap; this is untested ([memory.md](memory.md#backend-open-items) item 7).
+- **Usage notifications.** Turn on the Workers notifications "Weekly Summary" and "Usage Report". No dedicated Durable Objects notification type is confirmed. They warn the operations owner before the daily caps in [memory.md](memory.md#research-notes) are reached.
 
 ## Live updates and offline scoring
 
