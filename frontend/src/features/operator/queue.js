@@ -1,7 +1,7 @@
 import { backoffDelay } from '../../services/live.js';
 
 // Pure Offline_Queue reducer (Req 19.3, 19.5, 19.6, 19.7). Item status: 'queued' | 'syncing' | 'synced' (with `seq`).
-// `attempt` counts consecutive network/5xx failures for the retry backoff.
+// `attempt` counts consecutive network/5xx/429 failures for the retry backoff.
 export const emptyQueue = { items: [], paused: null, inFlight: null, attempt: 0 };
 
 /** State rebuilt from stored records after a reload; an unanswered send goes back to queued (Req 19.8). */
@@ -54,7 +54,7 @@ export function queueReducer(state, event) {
       if (!state.inFlight) return state;
       return { ...setInFlight(state, { status: 'queued' }), attempt: state.attempt + 1 };
     case 'SEND_REJECTED':
-      // 401/403/409 (and any other 4xx) need a person: keep every item and stop until RESUME (Req 19.5).
+      // 401/403/409 (and any other 4xx except 429) need a person: keep every item and stop until RESUME (Req 19.5).
       if (!state.inFlight) return state;
       return { ...setInFlight(state, { status: 'queued' }), paused: event.code ?? String(event.status), attempt: 0 };
     case 'RESUME':

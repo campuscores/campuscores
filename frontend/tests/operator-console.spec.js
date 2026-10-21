@@ -155,6 +155,21 @@ test('5xx retries the same action; 403 and 409 pause with the code and keep late
   await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4', '#2 Point to Bravo · synced, seq 5', '#3 Point to Alpha · synced, seq 6']);
 });
 
+test('429 (rate limit) retries the same action with backoff and does not pause', async ({ page }) => {
+  const script = [429, 'ok'];
+  const server = await mockApi(page, (route, body) => {
+    const next = script[server.actions.length - 1];
+    return next === 'ok' ? server.accept(route, body) : reply(route, next, error('RATE_LIMITED'));
+  });
+  await openConsole(page, server);
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Synced up to seq 4');
+  expect(server.actions).toHaveLength(2);
+  expect(server.actions[1].actionId).toBe(server.actions[0].actionId);
+  await expect(page.locator('.console-notice')).toHaveCount(0);
+  await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4']);
+});
+
 test('keyboard-only flow from My Matches to scoring, with 44px targets on phone and desktop', async ({ page, browserName }) => {
   // macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
   const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';

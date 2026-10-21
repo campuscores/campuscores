@@ -35,7 +35,7 @@ export default function PrivacyPage() {
         <p>You can delete your account at any time on the <Link to="/account/delete">account deletion page</Link>.</p>
 
         <h2>Contact</h2>
-        <p>The contact for privacy questions is to be confirmed.</p>
+        <p>For privacy questions, email <a href="mailto:bhatiaarnav05@gmail.com">bhatiaarnav05@gmail.com</a>.</p>
       </main>
     </>
   );

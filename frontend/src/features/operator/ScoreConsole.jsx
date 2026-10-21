@@ -122,7 +122,7 @@ export default function ScoreConsole({ matchId, getToken }) {
         });
       } catch (err) {
         if (!err.status) dispatch({ type: 'SEND_NETWORK_ERROR' });
-        else if (err.status >= 500) dispatch({ type: 'SEND_5XX' });
+        else if (err.status >= 500 || err.status === 429) dispatch({ type: 'SEND_5XX' }); // 429: rate limit, retry with backoff
         else dispatch({ type: 'SEND_REJECTED', status: err.status, code: err.code });
         return;
       }
