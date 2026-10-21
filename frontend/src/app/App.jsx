@@ -15,10 +15,16 @@ const authPage = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
   ? <Suspense fallback={<p className="sr-only" role="status">Loading sign-in…</p>}><AuthArea /></Suspense>
   : <SignInUnavailable />;
 
+// Stage 1 layout preview: local and staging builds only. Production builds drop the chunk (Req 1.11).
+const preview = import.meta.env.DEV || import.meta.env.VITE_LAYOUT_PREVIEW === '1';
+const PreviewIndex = preview ? lazy(() => import('../features/preview/PreviewIndex.jsx')) : null;
+const previewPage = preview && <Suspense fallback={<p className="sr-only" role="status">Loading preview…</p>}><PreviewIndex /></Suspense>;
+
 export default function App() {
   const { pathname, hash, search, key } = useLocation();
   useEffect(() => {
-    document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
+    // StaffShell sets the title of staff screens; this effect runs after it and must not overwrite it.
+    if (!/^\/(manage|admin|preview)(\/|$)/.test(pathname)) document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
       : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
       : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics'
       : pathname === '/privacy' ? 'Privacy | Thaparlympics'
@@ -47,6 +53,8 @@ export default function App() {
       <Route path="/account" element={authPage} />
       <Route path="/account/delete" element={authPage} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      {preview && <Route path="/preview" element={previewPage} />}
+      {preview && <Route path="/preview/:screen" element={previewPage} />}
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>
   );

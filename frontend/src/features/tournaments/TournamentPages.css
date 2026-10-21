@@ -1,0 +1,15 @@
+/* Public tournament pages: reuse the sport page title, section container and sport-filter tile shape. */
+.sport-title .tournament-trophy { color: #dd7f00; }
+.sport-title h1 > span { overflow-wrap: anywhere; }
+.tournament-facts { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: -16px 0 24px; }
+.tournament-facts dt { color: #50688c; font-size: 14px; font-weight: 600; }
+.tournament-facts dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.tournament-description { max-width: 70ch; margin: 0 0 32px; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.tournament-sports { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.tournament-sports .sport-link { width: 100%; }
+.public-retry { margin-bottom: 18px; }
+
+@media (max-width: 767px) {
+  .tournament-sports { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tournament-sports .sport-link { white-space: normal; }
+}

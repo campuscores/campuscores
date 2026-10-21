@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import SportIcon from '../../../components/SportIcon.jsx';
 import { sportLabel, sideName } from '../operatorMatches.js';
 import { DEFAULT_FORMATS, RULE_SOURCES, periodLabel, validateFormat } from '../../../../../shared/scoring.mjs';
+import FormatSettings from './FormatSettings.jsx';
 import './ScoringPage.css';
 
 function Dialog({ label, onClose, onReturnFocus, children }) {
@@ -17,7 +18,6 @@ function FormatForm({ match, disabled, onAction }) {
   const [scoreText, setScoreText] = useState(() => defaults.scoreValues?.join(', ') ?? '');
   const [error, setError] = useState('');
   const change = (key, value) => { setCustom(true); setFormat(f => ({ ...f, [key]: value })); setError(''); };
-  const number = (key, label, min, max, extra = {}) => <label className="format-field">{label}<input type="number" min={min} max={max} step="1" required value={Number.isNaN(format[key]) ? '' : format[key] ?? ''} onChange={e => change(key, e.target.value === '' ? NaN : Number(e.target.value))} {...extra} /></label>;
   async function start(e) {
     e.preventDefault();
     try { await onAction('START', { format: validateFormat(match.sport, match.sport === 'basketball' ? { ...format, scoreValues: scoreText.split(',').map(v => Number(v.trim())) } : format) }); }
@@ -28,28 +28,10 @@ function FormatForm({ match, disabled, onAction }) {
     <p>Check the format with the coach before starting. It stays fixed once scoring begins.</p>
     <label className="format-field">Scoring format<select value={custom ? 'custom' : 'preset'} onChange={e => { const changed = e.target.value === 'custom'; setCustom(changed); if (!changed) { setFormat({ ...defaults }); setScoreText(defaults.scoreValues?.join(', ') ?? ''); } }}><option value="preset">Official scoring preset</option><option value="custom">Custom match format</option></select></label>
     <p className="format-source"><a href={RULE_SOURCES[match.sport][1]} target="_blank" rel="noreferrer">{RULE_SOURCES[match.sport][0]}</a>.{match.sport === 'table-tennis' && ' The preset uses best of 5; choose another odd number below.'}</p>
-    <fieldset disabled={disabled}><legend>Match settings</legend><div className="format-grid">
-      {format.model === 'periods' ? <>
-        {number('periodCount', 'Number of periods', 1, 12)}
-        {match.sport === 'basketball' && <label className="format-field">Scoring values (separate with commas)<input value={scoreText} onChange={e => { setScoreText(e.target.value); setCustom(true); }} /></label>}
-      </> : <>
-        {number('bestOf', 'Best of (odd number of sets)', 1, 15)}
-        <label className="format-field">First serving side<select value={format.firstServe} onChange={e => change('firstServe', Number(e.target.value))}>{[0, 1].map(i => <option key={i} value={i}>{sideName(match, i)}</option>)}</select></label>
-        {format.model === 'sets' ? <>
-          {number('target', 'Points to win a set', 1, 999)}
-          {number('winBy', 'Winning margin', 1, 10)}
-          {number('decidingTarget', 'Points in the deciding set', 1, 999)}
-          <label className="format-field">Golden point at a tied score (optional)<input aria-label="Golden point at a tied score (optional)" aria-describedby="golden-point-hint" type="number" min="0" max="9998" value={format.cap == null ? '' : format.cap - 1} placeholder="No golden point" onChange={e => change('cap', e.target.value === '' ? null : Number(e.target.value) + 1)} /><span id="golden-point-hint" className="format-hint">{format.cap == null ? 'Play until the winning margin is reached.' : `At ${format.cap - 1}–${format.cap - 1}, the next point wins.`}</span></label>
-        </> : <>
-          {number('gamesPerSet', 'Games to win a set', 1, 20)}
-          {number('gameWinBy', 'Winning margin in games', 1, 2)}
-          <label className="format-field">Game scoring<select value={String(format.advantage)} onChange={e => change('advantage', e.target.value === 'true')}><option value="true">Advantage</option><option value="false">No-ad (deciding point at deuce)</option></select></label>
-          <label className="format-field">Tie-break at games all (optional)<input type="number" min="1" max="30" value={format.tiebreakAt ?? ''} placeholder="No tie-break" onChange={e => change('tiebreakAt', e.target.value === '' ? null : Number(e.target.value))} /></label>
-          {number('tiebreakTo', 'Tie-break point target', 1, 99)}
-          {number('tiebreakWinBy', 'Tie-break winning margin', 1, 10)}
-        </>}
-      </>}
-    </div></fieldset>
+    <fieldset disabled={disabled}><legend>Match settings</legend>
+      <FormatSettings sport={match.sport} format={format} scoreText={scoreText} onChange={change}
+        onScoreText={text => { setScoreText(text); setCustom(true); }} sideName={i => sideName(match, i)} />
+    </fieldset>
     {error && <p className="text-error" role="alert">{error}</p>}
     {!match.isToday && <p>This match can be started on its scheduled date in India time.</p>}
     {match.validNow === false && <p>The scoring assignment is not valid yet or has expired.</p>}

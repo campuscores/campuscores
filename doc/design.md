@@ -117,7 +117,7 @@ background:
 
 ### Tournament photography
 
-Tournament cards use local, high-quality Unsplash photos of sports venues, with no athletes: `tournament-field.webp`, `tournament-stadium.webp`, `tournament-court.webp`, `tournament-tennis.webp`, and `tournament-track.webp`. These are photos, not sport gradient backgrounds. Show a `2 / 1` image above white details using `width: 100%`, `height: auto`, `object-fit: cover`; preserve each image's crop from `sampleTournaments.js` (`event.position`). No image overlay is applied. Keep source/license records when adding or replacing photography.
+Tournament cards use local, high-quality Unsplash photos of sports venues, with no athletes: `tournament-field.webp`, `tournament-stadium.webp`, `tournament-court.webp`, `tournament-tennis.webp`, and `tournament-track.webp`. These are photos, not sport gradient backgrounds. Show a `2 / 1` image above white details using `width: 100%`, `height: auto`, `object-fit: cover`; preserve each image's crop from the Venue_Library in `venues.js` (`position`). No image overlay is applied. Keep source/license records when adding or replacing photography.
 
 ## 5. Shapes, borders and elevation
 
@@ -260,3 +260,35 @@ The field is decorative, not a repeated background for every section. Reduced mo
 | Venue crop, title/date layout and tournament interactions | [TournamentCard.css](../frontend/src/features/tournaments/TournamentCard.css), [TournamentCard.jsx](../frontend/src/features/tournaments/TournamentCard.jsx) |
 | Sport keys/colors and outline icons | [sports.js](../frontend/src/data/sports.js), [SportIcon.jsx](../frontend/src/components/SportIcon.jsx) |
 | Artwork and license records | `frontend/public/assets/`, [asset-sources.md](asset-sources.md) |
+| Staff_Style and shared staff components (proposed) | [staff.css](../frontend/src/features/staff/staff.css), `frontend/src/features/staff/` |
+
+## 12. Staff_Style (proposed)
+
+Status: **proposed**. It becomes approved with the Stage 1 Layout_Approval in [memory.md](memory.md). Until then, change these values only with the layout review.
+
+Staff screens (Manager console, Admin console and Match Scorer pages) are work screens for coaches, often on a phone. They keep `SiteHeader`, the colors of section 2 and the section container of section 6. They use quiet white panels on the page tint, ink text, one blue Primary_Action and color only for status and live data. These values apply only inside `.staff`; the public pages keep sections 1 to 11.
+
+| Token | Value |
+| --- | --- |
+| Font | `Helvetica, Arial, sans-serif`; tabular numerals for times and scores |
+| Body, field values, labels, button labels | 17px, line height 1.5; labels weight 700 |
+| Minimum visible text | 14px (help text, table metadata), `#50688c` |
+| `h1` | 32px / 800 (28px at <=767px), letter spacing -.03em |
+| `h2` | 24px / 800 |
+| Form control | White, 1px `#50688c` border, 14px radius, minimum height 52px, 12px x 16px padding |
+| Primary_Action | Filled `#0755ff`, white 17px bold label, 14px radius, minimum height 52px, 24px side padding; full content width at <=767px |
+| Secondary button | White, 2px `#0755ff` border, `#0755ff` label, same size |
+| Text button and inline link | `#0755ff`, underlined, target at least 44x44px |
+| Destructive button | Filled `#d5203e`, white label; only the confirm button of the confirmation dialog |
+| Error text | `#d5203e`, 17px bold, prefixed "Error:" for screen readers; invalid field border 2px `#d5203e` |
+| Panel | White, 16px radius, 1px `#e7edf7` border, no shadow, 24px padding (16px at <=767px) |
+| Spacing | 8 / 16 / 24 / 32 / 48px; 16px between fields, 24px before the Primary_Action, 48px between sections |
+| Form column | Maximum width 640px |
+| Reading width | Paragraph and help text maximum `80ch` at >=1024px |
+| Status | Text label always; Live adds an 11px `#ff334b` dot beside the text; Not scored text `#50688c`; Final ink bold |
+| Focus | Section 10 style: 3px `#0755ff` outline, 5px offset (2px inside table cells), never clipped |
+| Motion | None; reduced motion keeps none |
+
+Rules: exactly one Primary_Action per screen and per open dialog. `#607697` is not used for text on the tint, because it measures 4.4:1 on `#f6faff`. Measured contrast: `#50688c` on white 5.7:1 and on `#f6faff` 5.4:1; `#0755ff` on white and white on `#0755ff` 5.6:1; white on `#d5203e` and `#d5203e` on white 5.1:1. Re-measure on the real surfaces during the layout review.
+
+Shared components in `frontend/src/features/staff/`: `StaffShell` (header, staff navigation, Back link, `h1`, live regions), `ScreenState` (loading, error with "Try again", empty) and `NoAccess`, `Field`, `ErrorSummary`, `ConfirmDialog` (native modal), `labels.js` (display names and error sentences) and `formatSummary.js` (Default_Format summary).

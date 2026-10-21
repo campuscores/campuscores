@@ -6,6 +6,7 @@ function statusText(match) {
   if (match.status === 'live') return `Live · ${match.clock}`;
   if (match.status === 'ended') return `Match ended · ${winner} · Provisional result`;
   if (match.status === 'completed') return `Final · ${winner}`;
+  if (match.status === 'not-scored') return `Not scored · ${match.dateLabel} · ${match.timeLabel}`;
   return `Scheduled · ${match.dateLabel} · ${match.timeLabel}`;
 }
 
@@ -17,7 +18,7 @@ function Players({ side }) {
 
 /** Team label and players per side, without scores. */
 function Participants({ match }) {
-  return <div className="sport-participants">{match.sides.map(side => <p key={side.name}><span className="sport-team">{side.team}</span><Players side={side} /></p>)}</div>;
+  return <div className="sport-participants">{match.sides.map((side, index) => <p key={index}><span className="sport-team">{side.team}</span><Players side={side} /></p>)}</div>;
 }
 
 function Side({ scoring, match, index }) {
@@ -49,7 +50,7 @@ function ScoreTable({ sport, scoring, match }) {
         <th scope="col" className="match-total" aria-label={scoring.totalName}>{scoring.total}</th>
       </tr></thead>
       <tbody>{match.sides.map((side, sideIndex) => (
-        <tr key={side.name} data-side={sideIndex}>
+        <tr key={sideIndex} data-side={sideIndex}>
           <th scope="row"><Side scoring={scoring} match={match} index={sideIndex} /></th>
           {match.periods.map((period, index) => <td key={index} className={period?.current ? 'is-current' : undefined}><Points period={period} side={sideIndex} /></td>)}
           {match.gamePoints && <td className="is-current">{match.gamePoints[sideIndex]}</td>}
@@ -83,7 +84,7 @@ function Scorers({ scoring, match }) {
       <div className="sport-participants">{match.sides.map((side, index) => {
         const scorers = match.scorers.filter(scorer => scorer.side === index);
         return (
-          <div key={side.name}>
+          <div key={index}>
             <span className="sport-team">{side.team}</span>
             <ul className="sport-scorers">
               {scorers.length

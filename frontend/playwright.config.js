@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 // Installed Chrome is a Chromium build; Firefox and WebKit always use Playwright's own builds.
 const channel = process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {};
 const desktop = { testIgnore: /mobile\.spec\.js/ };
-const phone = { testMatch: /mobile\.spec\.js/ };
+// layout-preview.spec.js also runs on phones: its 390px checks then use touch and mobile viewport emulation.
+const phone = { testMatch: /(mobile|layout-preview)\.spec\.js/ };
 
 export default defineConfig({
   testDir: './tests',
@@ -36,9 +37,10 @@ export default defineConfig({
     {
       // Live-mode build for live.spec.js and operator-console.spec.js. Tests mock every socket and API call, so the API host
       // never resolves. The fake Clerk key points at an unresolvable host; operator-console.spec.js injects a stub Clerk.
+      // VITE_LAYOUT_PREVIEW adds /preview as on staging for layout-preview.spec.js; 4175 stays the production build without it.
       command: 'npx vite build --outDir ../output/live-dist --emptyOutDir && npx vite preview --outDir ../output/live-dist --host 127.0.0.1 --port 4176 --strictPort',
       url: 'http://127.0.0.1:4176',
-      env: { VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
+      env: { VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=', VITE_LAYOUT_PREVIEW: '1' }, // clerk.operator.test
       reuseExistingServer: false,
       timeout: 120000,
     },

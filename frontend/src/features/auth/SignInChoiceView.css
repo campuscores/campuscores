@@ -1,0 +1,11 @@
+/* 400px column on desktop, full content width on phones; the links use the Staff_Style secondary button. */
+.sign-in-choice { width: min(400px, calc(100% - 32px)); margin: 40px auto 72px; }
+.sign-in-choice h1 { margin: 0 0 24px; font-size: 40px; font-weight: 800; line-height: 1.06; letter-spacing: -.04em; }
+.sign-in-choice ul { display: grid; gap: 16px; margin: 0 0 24px; padding: 0; list-style: none; }
+.sign-in-choice .button-secondary { width: 100%; }
+.sign-in-choice p { margin: 0; }
+
+@media (max-width: 767px) {
+  .sign-in-choice { margin-top: 36px; }
+  .sign-in-choice h1 { font-size: 32px; }
+}

@@ -2,7 +2,7 @@
 
 Retrieved and inspected on 8 October 2026. These photographs illustrate the demonstration tournament cards; they do not identify the campus or event venues. Event names and dates are display content for the current frontend.
 
-All five selected photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`.
+All five selected photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`. These five photos are the Venue_Library: [venues.js](../frontend/src/features/tournaments/venues.js) maps the keys `field`, `stadium`, `court`, `tennis` and `track` to the files below, with alt text and crop.
 
 | Local asset | Original photo and creator | Delivery URL |
 |---|---|---|
