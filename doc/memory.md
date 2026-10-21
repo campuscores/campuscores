@@ -241,3 +241,7 @@ Current confirmed decisions take precedence over older proposals. An authorized 
 - Open: football shoot-out/draw policies and exceptional whole-match awards beyond an early set end. No tied or undecided match may be finalized by inventing a winner. Decision owner: Arnav/coaches; affects tied-match finalization only. Acceptance: a recorded event policy before enabling that result.
 
 Publication naming and authorship, confirmed by Arnav on 20 October 2026: use neutral branch/commit descriptions and the requesting contributor’s verified Git identity. Follow [AGENTS.md](../AGENTS.md#git-naming-and-authorship).
+
+## Stage 1 layout approval — 21 October 2026
+
+Arnav approved the Stage 1 staff layout preview on 21 October 2026. Approved commit `27db57d` on `develop`, the Slice 0 staging tip, served at `https://thaparlympics-staging.bhatiaarnav05.workers.dev/preview`. The approval covers the Staff_Style and the Manager, Super Admin, public and sign-in Views as the approved layout direction. This records Layout_Approval and unblocks Slice 1 to Slice 6 of the staff-roles-manager-console feature (Requirement 1.8).
