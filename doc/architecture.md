@@ -369,7 +369,8 @@ Staff entry (change 5). Every account page and staff route renders `AuthArea` wi
 | `/operator/matches`, `/operator/matches/:matchId/score` | My Matches and Score console, now inside `StaffShell` |
 | `/manage`, `/manage/tournaments/new`, `/manage/tournaments/:slug`, `.../setup`, `.../setup/:step`, `.../details`, `.../sports/:sport`, `.../sports/:sport/teams` | Manager home, Guided_Setup, Tournament overview, details, Sport setup, Teams |
 | `/manage/matches`, `/manage/matches/new`, `/manage/matches/:matchId` | Matches and Match editor |
-| `/manage/matches/:matchId/scorer`, `/manage/invite`, `/admin/...` | Registered; the page shows "This page is not ready yet" until spec Slices 3 and 5 build it |
+| `/manage/matches/:matchId/scorer`, `/manage/invite` | Assign scorer and Invite scorer (Slice 3, [below](#staff-roles-and-manager-console--slice-3-22-october-2026)) |
+| `/admin/...` | Registered; the page shows "This page is not ready yet" until spec Slice 5 builds it |
 
 Role gate. `AuthArea` `SCREENS` lists each screen's title, allowed roles, current navigation item and page. `useMe` reads `GET /api/me` once per Staff_Area mount. While it loads, the screen shows a text status; a network error or 5xx shows "Try again"; a 401 shows the sign-in prompt; a role that the screen does not allow shows "You do not have access to this page". The role comes only from `/api/me`. Start screens: Match Scorer `/operator/matches`, Tournament Manager `/manage`, Super Admin `/admin` (`STAFF_NAV` and `startScreen` in [`labels.js`](../frontend/src/features/staff/labels.js)).
 
@@ -383,6 +384,42 @@ Current limits (contract mappings in the containers):
 - Teams: the API Player_Entry jersey field is `jersey`; `TeamForm` keeps it as `number`. `TeamsPage.jsx` and `setup.js` map it on read and write.
 - Matches phase filter: the page values are the staff phases `live`, `scheduled`, `final` and `not-scored`. The API filter accepts only `live`, `upcoming` and `past`, so Final and Not scored both read `past` and the page keeps only the rows of the chosen phase ([`MatchesPage.jsx`](../frontend/src/features/manage/MatchesPage.jsx)). The API returns at most 500 rows, so these two filters can show fewer rows than exist when more than 500 past matches match the other filters.
 - The Match editor of a Live, Final or Not scored match shows a read-only summary with no form and no Primary_Action ([memory.md](memory.md#staff-roles-and-manager-console--slice-2-22-october-2026)).
+
+## Staff roles and manager console — Slice 3, 22 October 2026
+
+Slice 3 adds scorer assignment by email, the Assign scorer and Invite scorer screens, and the Score_Console side of the START rule (change 6). No schema change. Decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-3-22-october-2026). Source: [`routes/assignments.js`](../backend/src/routes/assignments.js), `frontend/src/features/manage/{AssignScorerPage,InviteScorerPage}.jsx`, `frontend/src/features/operator/`.
+
+Email and self assign. `POST /api/matches/:id/assignments` accepts one target, checked in this order:
+
+| Body | Result |
+| --- | --- |
+| `{ self: true, reason? }` | Assigns the caller; audit action `SELF_ASSIGNED` |
+| `{ email, reason? }` | The email is trimmed and lower-cased like invitations. The caller's own ACTIVE email is a self assign. An ACTIVE `MATCH_OPERATOR` is assigned. Otherwise 400: `INVITE_PENDING` (a pending, unexpired invitation), `NOT_A_SCORER` (any other account, also DISABLED) or `SCORER_NOT_FOUND` (no account). Each message starts with `email:` |
+| `{ accountId, validFrom?, validUntil?, reason? }` | Legacy body, unchanged |
+
+The email resolves after the match lock and `requireScope`, so an out-of-scope caller learns nothing about accounts. Every refusal writes nothing. A Final or Not_Scored match returns 409 `MATCH_CLOSED`; a match that has a scorer needs `reason` (409 `REASON_REQUIRED`), then the existing reassign contract applies. The new assignment has no window and removes the match's lease.
+
+Assignment windows in the UI (change 7). Managers do not set windows. The Frontend never sends `validFrom` or `validUntil`; the API still accepts them for compatibility.
+
+Operator list. `GET /api/operator/matches` rows keep `format`, `isToday` and `validNow` and add:
+
+- `canStart`: `true` only for a `SCHEDULED` match that passes `startDecision` with database `now()`, the same rule as START in `POST /api/matches/:id/actions`.
+- `startReason`: the `startDecision` code (`TOURNAMENT_NOT_ONGOING`, `START_TOO_EARLY`, `MATCH_DAY_OVER`) for a `SCHEDULED` match that cannot start, else `null`. A match with no `scheduledAt` gives `START_TOO_EARLY`.
+- `notScored`: `true` for a `SCHEDULED` match whose Match_Phase is past (Not_Scored).
+- `defaultFormat`: the Tournament_Sport Default_Format (`tournament_sports.config.format`), else the Official_Preset of the sport.
+
+The Score_Console reads `canStart` once, when the page loads; it does not refresh it on a timer. "Start match" stays off until a reload after the start time. The server still decides every START; a refusal pauses the queue and shows the reason as text.
+
+Screens:
+
+- Assign scorer (`/manage/matches/:matchId/scorer`) reads `GET /api/manage/matches/:id` and sends the bodies above, or `POST /api/assignments/:id/revoke { reason }` through `ConfirmDialog` for "Remove scorer". `SCORER_NOT_FOUND` offers "Invite as Match Scorer", which opens `/manage/invite?email=<email>`. Matches shows a "Score" button when the caller holds the match's ACTIVE Assignment.
+- Invite scorer (`/manage/invite`) sends the existing `POST /api/invites { email, role: 'MATCH_OPERATOR' }` and shows `expiresAt` in India_Time.
+- Both forms offer "Try again" after a 500, 502 or no response and resend the same values; a 401, also inside the Remove scorer dialog, offers "Sign in again" and keeps the values (Requirements 20.3, 20.8).
+- The Score_Console frame follows the role from `GET /api/me`: a Match_Scorer gets My Matches and "Back to My Matches"; a Tournament_Manager or Super_Admin gets Matches and "Back to Matches".
+- `FormatForm` offers the Tournament default format first, then the Official_Preset, then "Changed for this match". A Regular_Match shows the stage "Match".
+- My Matches puts a Not_Scored match in Completed with the state "Not scored" and no scoring link.
+
+Shared staff components. `ConfirmDialog` cancels on a `close` event only when the dialog is closed at that moment: a queued `close` from an earlier opening could arrive after a reopen and close the new dialog. `StaffShell` moves focus to the `h1` when a status or alert appears and focus has fallen to the page body, for example after a save reloads the form.
 
 ## Live updates and offline scoring
 
