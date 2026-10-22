@@ -25,7 +25,7 @@ Preserve the approved card colors, rounded shape, white details and native horiz
 - Let managers create teams identified by branch and year, add players, and assign players between active and substitute roster states. Management access is not restricted by sport.
 - Let a manager configure the sports and sport-specific rules/settings when creating a tournament.
 - Support exactly two semifinals and one final per tournament sport. Managers assign semifinal teams. Only approved semifinal winners advance. The final determines the champion.
-- Allow managers to create custom matches outside the bracket; their effect on standings/statistics is configurable and still to be decided.
+- Allow managers to create Regular_Matches (display name "Match") outside the bracket. They are public with their tournament and never advance the bracket. Their effect on standings/statistics is still to be decided (change 4, 22 October 2026).
 - An assigned operator confirms the final score. It becomes final for viewers immediately and locks editing, with an audited confirmation. No manager review is required (confirmed 20 October 2026).
 - Record detailed sport-specific scoring and recalculate match results and sport standings from scoring data.
 - Keep the scoring workflow usable on a laptop, with a responsive mobile interface as a fallback.
@@ -40,7 +40,7 @@ Preserve the approved card colors, rounded shape, white details and native horiz
 - The combined overall branch championship table; sport-level standings are the initial standings scope.
 - A public archive or editing of past editions.
 - Registration, payments, ticketing, livestreaming, chat, or social feeds.
-- League/group stages or extra bracket rounds. The initial bracket is fixed to two semifinals and one final.
+- League/group stages with their own standings, or extra bracket rounds. The initial bracket is fixed to two semifinals and one final. Managers can add Regular_Matches outside the bracket (change 4); they form no stage.
 - Unconfirmed match formats, durations, tie-break procedures or overall event points. Organizers must decide these before implementation.
 - Sports beyond the six initial choices, though the data model should allow later additions.
 - Tournament-scoped managers or sport-scoped admin roles; operator permissions beyond `SCORE`.
@@ -115,6 +115,15 @@ Operating rule: one active assignment per match and one primary scoring device p
 
 The homepage, global sport pages and reserved tournament routes are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
 
+### Sign-in and staff entry (change 5, implemented 22 October 2026)
+
+- The public header shows no "My Matches" link and no staff navigation. Public pages load no Clerk code.
+- `/sign-in` is a choice page with three options: "Continue as guest" (opens Home with no account), "Sign in as Match Scorer" (`/sign-in/scorer`) and "Sign in as Tournament Manager" (`/sign-in/manager`). There is no separate Super Admin entry. A signed-in user who opens `/sign-in` goes to the start screen of their role.
+- After sign-in through either staff choice, `/start` accepts a pending invitation once, reads the role from `GET /api/me` and opens the start screen of that role, independent of the choice used: Match Scorer → My Matches (`/operator/matches`), Tournament Manager → Manager home (`/manage`), Super Admin → Admin home (`/admin`). An account with no staff role sees "This account has no staff access" and a Home link.
+- Staff screens show the role's navigation (1 to 5 items, one marked current) and a "Back" link except on the start screen. A screen of another role shows "You do not have access to this page".
+- The implemented Tournament Manager routes are `/manage`, `/manage/tournaments/new`, `/manage/tournaments/{slug}` (with `/setup/{step}`, `/details`, `/sports/{sport}` and `/sports/{sport}/teams`), `/manage/matches`, `/manage/matches/new` and `/manage/matches/{match}`. They replace the proposed `/admin/...` manager routes above. The route list is in [architecture.md](architecture.md#staff-roles-and-manager-console--slice-2-22-october-2026).
+- Current limit: the header "Tournaments" link still opens `/#tournaments`. It opens the Tournaments page when the public tournament pages are built (spec Slice 4).
+
 ### Main journeys
 
 1. Spectator opens the tournament index, chooses a tournament, chooses one of its configured sports, opens a live match, and follows the changing score and player contributions.
@@ -137,7 +146,7 @@ The homepage, global sport pages and reserved tournament routes are registered i
 - Each enabled sport has independent settings, ruleset/version, team roster, bracket/matches, scoring model, and standings configuration.
 - Use a shared tournament/bracket framework with sport-specific match and scoring engines; sport settings must not be flattened into generic score fields. Managers can configure the sport-specific format and scoring values for each tournament.
 - The bracket is exactly two semifinal matches feeding one final for each configured tournament sport. A manager assigns teams to semifinal sides; approved semifinal winners advance to the final slots. No configurable additional bracket rounds in the initial release.
-- Permit custom matches outside the bracket. Mark their origin/type clearly and do not include them in bracket progression; whether they affect standings/player statistics remains configurable/open.
+- Permit Regular_Matches outside the bracket (stored kind `CUSTOM`). The UI calls each one "Match" and never "custom". A Regular_Match is public with its tournament and is never part of bracket progression. Whether it affects standings/player statistics remains open.
 - Support future tournament seasons/archives as separate tournament records; historical archive UX is not required for the first release.
 
 ### Teams and players
@@ -152,7 +161,7 @@ The homepage, global sport pages and reserved tournament routes are registered i
 ### Matches and schedules
 
 - Support both scheduled matches and creating a match on the spot. Only managers and Super Admins create matches.
-- Distinguish bracket matches from custom matches. Bracket matches have stage/slot and progression links; custom matches have no bracket slot.
+- Managers create only two kinds of match: a Bracket_Match (stage SF1, SF2 or FINAL, with progression links) and a Regular_Match (no stage, no bracket slot, shown as "Match"). There is no separate custom match in the UI (change 4).
 - Allow a manager to build/edit the fixed bracket before affected matches start, assign eligible teams, and preview progression. Once scoring begins, team/format changes stay locked; exceptional bracket conflicts need a separate agreed policy.
 - Permit overlapping matches across sports.
 - Allow managers to configure date/time, venue/court/ground, participants, format, and status.

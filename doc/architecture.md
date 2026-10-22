@@ -197,7 +197,7 @@ Public routes are read-only and need no account.
 - A tournament stores its enabled sports and each sport's validated format/scoring configuration.
 - Each tournament sport has exactly two semifinal matches and one final. A Tournament Manager or Super Admin assigns teams to the semifinal sides.
 - A semifinal winner advances to the final only after that semifinal result is approved.
-- Custom matches are separate from the bracket and never advance bracket slots.
+- Regular_Matches (stored kind `CUSTOM`, shown as "Match") are separate from the bracket, public with their tournament, and never advance bracket slots (change 4).
 - Current result flow: eligible `SCHEDULED → LIVE → APPROVED`. The assigned operator chooses and freezes the format at start, enters scores, corrects live mistakes, then confirms the computed final result. Confirmation immediately publishes and locks it. There is no separate review or post-final edit endpoint. See [rules.md](rules.md#6-score-corrections-and-final-results).
 - Legacy `PENDING_APPROVAL` and `REJECTED` rows remain readable. They are not targets of this new workflow.
 
@@ -208,7 +208,7 @@ Public routes are read-only and need no account.
 - `teams`: teams scoped to a tournament sport.
 - `roster_players`: player entries scoped to a sport team; display name, branch/year, captain marker, optional jersey number and active state.
 - `match_roster`: selected `roster_players` for a match, with active/substitute state.
-- `matches`: participants, schedule, sport configuration snapshot, status, result, and bracket/custom type.
+- `matches`: participants, schedule, sport configuration snapshot, status, result, and kind (`BRACKET` or `CUSTOM` for a Regular_Match).
 - `bracket_slots`: the two semifinal assignments and final slots linked to approved semifinal winners.
 - `score_actions`: ordered, auditable sport-specific scoring events, including linked reversal actions for undo/correction.
 - `match_snapshots` and `sport_standings`: derived current match and standings views.
@@ -297,7 +297,7 @@ Manager API and changed endpoints (change 2). New router `backend/src/routes/man
 
 Public reads (change 2). Public tournaments are `status IN ('ONGOING','COMPLETED')`; `DRAFT` and `ARCHIVED` return 404. `GET /api/tournaments/:key` accepts an ID or a slug (slugs always contain a letter, so they never collide with IDs); the `CUSTOM` filter is removed, so Regular_Matches are public. New `GET /api/sports/:sport/matches` returns matches across public tournaments. Each tournament and match carries a derived `phase`; `tournament` adds `imageKey` (the stored key, else `VENUE_KEYS[(id − 1) mod 5]`); `match` adds `tournamentName` and `tournamentSlug`. The Public_DTO allow-lists in `http.js` gain only `phase`, `imageKey`, `tournamentName` and `tournamentSlug`; no staff, owner, scope, assignment, branch, year or player field is exposed.
 
-START rule (change 10). `startDecision({ now, scheduledAt, tournamentStatus })` in `scoring.js` accepts START only when the tournament is Ongoing and database time is at or after the scheduled time and before Match_Day_End (the next Event_Time_Zone midnight); otherwise it returns `TOURNAMENT_NOT_ONGOING`, `START_TOO_EARLY` or `MATCH_DAY_OVER`. It runs only for START, after the existing account, assignment, window, permission and match-state checks, and before the lease check. The retired `requireToday`/`is_today` and `NOT_TODAY` are gone; later commands of a Live match have no date check. At START, `matches.config_version` takes `tournament_sports.config_version` and `privateMatch` is `!['ONGOING','COMPLETED'].includes(tournamentStatus)`. This refines the scoring gate described in [Scoring authorization chain](#scoring-authorization-chain).
+START rule (change 6). `startDecision({ now, scheduledAt, tournamentStatus })` in `scoring.js` accepts START only when the tournament is Ongoing and database time is at or after the scheduled time and before Match_Day_End (the next Event_Time_Zone midnight); otherwise it returns `TOURNAMENT_NOT_ONGOING`, `START_TOO_EARLY` or `MATCH_DAY_OVER`. It runs only for START, after the existing account, assignment, window, permission and match-state checks, and before the lease check. The retired `requireToday`/`is_today` and `NOT_TODAY` are gone; later commands of a Live match have no date check. At START, `matches.config_version` takes `tournament_sports.config_version` and `privateMatch` is `!['ONGOING','COMPLETED'].includes(tournamentStatus)`. This refines the scoring gate described in [Scoring authorization chain](#scoring-authorization-chain).
 
 Event_Time_Zone. `shared/time.mjs` is the one definition of the event zone (`{ name: 'Asia/Kolkata', label: 'IST', offsetMinutes: 330 }`) and holds `istDate`, `matchDayEnd`, `utcToIst`, `istToUtc`, `timeText`, `matchPhase`, `tournamentPhase` and `needsScorer`. Every zone literal and visible "IST" in the backend, frontend and shared code comes from it; `backend/test/node/event-time-zone.spec.js` fails the build on any stray zone literal and on a time function in the public SQL.
 
@@ -352,6 +352,37 @@ These are Cloudflare and Clerk dashboard settings for the production zone. They 
   - The account has "HTTP DDoS Attack Alert" (all plans) and "Incident alert" (Cloudflare Status).
   - On event days, check the Workers & Pages usage metrics by hand against the daily caps in [memory.md](memory.md#research-notes).
   - Workers Paid (the paid gate) adds usage-based alerts, if it is adopted.
+
+## Staff roles and manager console — Slice 2, 22 October 2026
+
+Slice 2 adds the frontend of the staff entry and the Tournament_Manager screens. It changes no API endpoint, schema or backend code; the screens use the Slice 1 manager API. Decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-2-22-october-2026).
+
+Router. `frontend/src/main.jsx` uses `createBrowserRouter([{ path: '*', element: <App /> }])` with `RouterProvider`, so `useBlocker` works for the unsaved-changes guard. `App.jsx` keeps its `<Routes>` and its scroll effect; no public route moved.
+
+Staff entry (change 5). Every account page and staff route renders `AuthArea` with a `screen` key, through `staff('<screen>')` in [`App.jsx`](../frontend/src/app/App.jsx). `AuthArea` stays a lazy chunk, so public pages load no Clerk code. `SiteHeader` has no "My Matches" link.
+
+| Path | Screen |
+| --- | --- |
+| `/sign-in` | Sign-in choice: "Continue as guest", "Sign in as Match Scorer", "Sign in as Tournament Manager". A signed-in user goes to the start screen |
+| `/sign-in/scorer/*`, `/sign-in/manager/*` | Clerk `SignIn` (`routing="path"`), then `/start` |
+| `/start` | `POST /api/invites/accept` once per session, then `GET /api/me`, then replace with the start screen of the role |
+| `/operator/matches`, `/operator/matches/:matchId/score` | My Matches and Score console, now inside `StaffShell` |
+| `/manage`, `/manage/tournaments/new`, `/manage/tournaments/:slug`, `.../setup`, `.../setup/:step`, `.../details`, `.../sports/:sport`, `.../sports/:sport/teams` | Manager home, Guided_Setup, Tournament overview, details, Sport setup, Teams |
+| `/manage/matches`, `/manage/matches/new`, `/manage/matches/:matchId` | Matches and Match editor |
+| `/manage/matches/:matchId/scorer`, `/manage/invite`, `/admin/...` | Registered; the page shows "This page is not ready yet" until spec Slices 3 and 5 build it |
+
+Role gate. `AuthArea` `SCREENS` lists each screen's title, allowed roles, current navigation item and page. `useMe` reads `GET /api/me` once per Staff_Area mount. While it loads, the screen shows a text status; a network error or 5xx shows "Try again"; a 401 shows the sign-in prompt; a role that the screen does not allow shows "You do not have access to this page". The role comes only from `/api/me`. Start screens: Match Scorer `/operator/matches`, Tournament Manager `/manage`, Super Admin `/admin` (`STAFF_NAV` and `startScreen` in [`labels.js`](../frontend/src/features/staff/labels.js)).
+
+Manager screens (change 4). Each screen is a presentational View (approved in Slice 0) plus a thin container in `frontend/src/features/manage/*Page.jsx`. The containers use `useStaffData` (read on entry and "Try again" only), `useMutation` (one request per press) and `useUnsavedGuard` (`useBlocker` plus `beforeunload`, with `ConfirmDialog`), all in `frontend/src/features/staff/`. A 401 offers "Sign in again" through Clerk `openSignIn()` and keeps the values. The Match editor offers stage SF1, SF2, FINAL or none; a match with no stage is a Regular_Match, and every screen shows it as "Match" (`stageLabel` in `labels.js`). There is no custom match control.
+
+Errors. `messageFor` in `labels.js` maps each Error_Body code to one plain sentence and, for some codes, to a form field; no code or request ID is shown. A `BAD_REQUEST` message "<field>: <fix>" goes below that field.
+
+Current limits (contract mappings in the containers):
+
+- Tournament create and edit: the API names the date fields `startDate` and `endDate` in 400 messages, and the form names them `startsOn` and `endsOn`. `renameFields` with `TOURNAMENT_TOKENS` in [`setup.js`](../frontend/src/features/manage/setup.js) maps them.
+- Teams: the API Player_Entry jersey field is `jersey`; `TeamForm` keeps it as `number`. `TeamsPage.jsx` and `setup.js` map it on read and write.
+- Matches phase filter: the page values are the staff phases `live`, `scheduled`, `final` and `not-scored`. The API filter accepts only `live`, `upcoming` and `past`, so Final and Not scored both read `past` and the page keeps only the rows of the chosen phase ([`MatchesPage.jsx`](../frontend/src/features/manage/MatchesPage.jsx)). The API returns at most 500 rows, so these two filters can show fewer rows than exist when more than 500 past matches match the other filters.
+- The Match editor of a Live, Final or Not scored match shows a read-only summary with no form and no Primary_Action ([memory.md](memory.md#staff-roles-and-manager-console--slice-2-22-october-2026)).
 
 ## Live updates and offline scoring
 
