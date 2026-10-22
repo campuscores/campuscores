@@ -3,8 +3,11 @@ import { defineConfig, devices } from '@playwright/test';
 // Installed Chrome is a Chromium build; Firefox and WebKit always use Playwright's own builds.
 const channel = process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {};
 const desktop = { testIgnore: /mobile\.spec\.js/ };
+// staff-layout.spec.js measures CSS layout through 11 widths per screen with setViewportSize: Chromium only, for run time.
+const otherDesktop = { testIgnore: /(mobile|staff-layout)\.spec\.js/ };
 // layout-preview.spec.js also runs on phones: its 390px checks then use touch and mobile viewport emulation.
-const phone = { testMatch: /(mobile|layout-preview)\.spec\.js/ };
+// sign-in-choice, staff-shell and the manager screen specs also run on phones, the main staff device.
+const phone = { testMatch: /(mobile|layout-preview|sign-in-choice|staff-shell|manage-setup|manage-matches)\.spec\.js/ };
 
 export default defineConfig({
   testDir: './tests',
@@ -22,8 +25,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', ...desktop, use: { ...devices['Desktop Chrome'], launchOptions: channel } },
-    { name: 'firefox', ...desktop, use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', ...desktop, use: { ...devices['Desktop Safari'] } },
+    { name: 'firefox', ...otherDesktop, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', ...otherDesktop, use: { ...devices['Desktop Safari'] } },
     { name: 'pixel', ...phone, use: { ...devices['Pixel 7'], launchOptions: channel } },
     { name: 'iphone', ...phone, use: { ...devices['iPhone 15'] } },
     { name: 'ipad', ...phone, use: { ...devices['iPad (gen 11)'] } },

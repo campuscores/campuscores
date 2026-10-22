@@ -66,6 +66,7 @@ const MESSAGES = {
   SCORER_NOT_FOUND: 'No scorer account uses this email.',
   NOT_A_SCORER: 'This email belongs to an account that is not a Match Scorer.',
   INVITE_PENDING: 'An invitation to this email is waiting to be accepted.',
+  MANAGER_NOT_ELIGIBLE: 'Enter the email of an active Tournament Manager who is not already on this sport.',
   DUPLICATE_NAME: 'This name is already used in this sport.',
   STAGE_TAKEN: 'This stage is already used in this sport.',
   SPORT_EXISTS: 'This sport is already in the tournament.',
@@ -85,7 +86,7 @@ const MESSAGES = {
   INVITE_CLOSED: 'This invitation was already accepted, cancelled or has expired.',
   ASSIGNMENT_CONFLICT: 'Another scorer was assigned at the same time. Reload to see the current scorer.',
 };
-const FIELDS = { SCORER_NOT_FOUND: 'email', NOT_A_SCORER: 'email', INVITE_PENDING: 'email', DUPLICATE_NAME: 'name', STAGE_TAKEN: 'stage', SPORT_EXISTS: 'sport', REASON_REQUIRED: 'reason' };
+const FIELDS = { SCORER_NOT_FOUND: 'email', NOT_A_SCORER: 'email', INVITE_PENDING: 'email', MANAGER_NOT_ELIGIBLE: 'email', DUPLICATE_NAME: 'name', STAGE_TAKEN: 'stage', SPORT_EXISTS: 'sport', REASON_REQUIRED: 'reason' };
 const BY_STATUS = { 400: 'Check your entries and try again.', 403: MESSAGES.NOT_STAFF, 404: MESSAGES.NOT_FOUND, 409: 'This changed since you opened the page. Reload to see the latest.' };
 
 /** Field and fix of an error: `BAD_REQUEST` messages read "<field>: <fix>" (backend validate.js). */

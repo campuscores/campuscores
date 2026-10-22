@@ -27,7 +27,12 @@ export function useForm(initial, rules, apiError) {
     value: values[name],
     error: errors[name] || messageFor(apiError, name) || '',
     onChange: event => set(name, event.target.value),
-    onBlur: () => setErrors(current => ({ ...current, [name]: check(name, values) })),
+    onBlur: event => {
+      // A press on this form's submit button checks every field itself. An error shown now would push the button down
+      // before the press ends, so the click would miss it and the submit would be lost (Req 20.2).
+      if (event.target.form?.querySelector('[type="submit"]:active')) return;
+      setErrors(current => ({ ...current, [name]: check(name, values) }));
+    },
   });
   const submit = (onValid, names = Object.keys(rules)) => event => {
     event.preventDefault();

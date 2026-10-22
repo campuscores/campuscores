@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ErrorSummary from '../staff/ErrorSummary.jsx';
 import Field from '../staff/Field.jsx';
 import { playerRules, teamRules, useForm } from './forms.js';
@@ -12,10 +12,17 @@ const playerText = (player, teamSport) => [player.name, teamSport && player.numb
  * Side_Record form for Setup step 3 and Teams (Req 11.1 to 11.6, 19.7, 19.9): the name first, then branch, year and
  * players behind one "Add details" disclosure. Six fields at most: name, branch, year, player name, jersey number,
  * captain. `team` prefills an edit; `onCancel` adds a Cancel button. `onSubmit({ name, branch, year, players })`.
+ * Player_Entries here use `number` for the jersey; the API uses `jersey`, so the container maps both ways.
+ * Optional `onDirtyChange(dirty)` reports values that differ from `team` (or an empty form), for the unsaved guard;
+ * optional `id` names the form for a "Try again" button outside it.
  */
-export default function TeamForm({ sport, team, saving, error, submitLabel, onSubmit, onCancel }) {
+export default function TeamForm({ id, sport, team, saving, error, submitLabel, onSubmit, onCancel, onDirtyChange }) {
   const form = useForm(fromTeam(team), teamRules, error);
   const player = useForm({ playerName: '', number: '', captain: false }, playerRules);
+  const dirty = JSON.stringify(form.values) !== JSON.stringify(fromTeam(team))
+    || player.values.playerName.trim() !== '' || player.values.number !== '';
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [open, setOpen] = useState(Boolean(team?.branch || team?.year || team?.players?.length));
   const teamSport = TEAM_SPORTS.includes(sport);
   const players = form.values.players;
@@ -39,7 +46,7 @@ export default function TeamForm({ sport, team, saving, error, submitLabel, onSu
   }));
 
   return (
-    <form className="staff-form" noValidate onSubmit={event => {
+    <form id={id} className="staff-form" noValidate onSubmit={event => {
       if (saving) return event.preventDefault();
       if (form.values.branch || form.values.year) setOpen(true);
       save(event);

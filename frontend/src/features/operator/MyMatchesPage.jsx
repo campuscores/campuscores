@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import HorizontalRail from '../../components/HorizontalRail.jsx';
 import { apiFetch } from '../../services/api.js';
+import StaffShell from '../staff/StaffShell.jsx';
 import OperatorMatchCard from './OperatorMatchCard.jsx';
 import { dayOf, sectionOf } from './operatorMatches.js';
 import './MyMatches.css';
@@ -45,13 +46,11 @@ export default function MyMatchesPage({ getToken }) {
   const scheduled = by('scheduled');
   // Chips only for days that have a scheduled match, in schedule order (the API sorts by scheduled time).
   const scheduledDates = [...new Map(scheduled.map(match => dayOf(match.scheduledAt)).filter(Boolean).map(day => [day.date, day])).values()];
+  // Match_Scorer start screen: no Back link (Req 4.10).
   return (
-    <main className="operator-page">
-      <header className="sport-section operator-title">
-        <h1>My Matches</h1>
-        <p>Matches assigned to you to score.</p>
-      </header>
-      {error ? <p className="sport-section text-error" role="alert">{error.status === 403
+    <StaffShell role="MATCH_OPERATOR" title="My Matches" current="my-matches">
+      <p className="operator-intro">Matches assigned to you to score.</p>
+      {error ? <p className="sport-section screen-error" role="alert">{error.status === 403
           ? 'Only event staff have assigned matches. Ask a Tournament Manager for an invitation.'
           : `Could not load your matches: ${error.message}. Reload the page to try again.`}</p>
         : !matches ? <p className="sport-section sport-empty" role="status">Loading your matches…</p>
@@ -61,6 +60,6 @@ export default function MyMatchesPage({ getToken }) {
             <Section id="op-scheduled" title="Scheduled" matches={scheduled} dates={scheduledDates} selectedDate={scheduledDate} onSelectDate={setScheduledDate} empty="No scheduled matches right now." />
             <Section id="op-completed" title="Completed" matches={by('completed')} empty="No submitted matches yet." />
           </>}
-    </main>
+    </StaffShell>
   );
 }

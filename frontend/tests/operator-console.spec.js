@@ -38,6 +38,7 @@ async function mockApi(page, actions) {
   };
   await page.addInitScript(stubClerk, TOKEN);
   await page.route('https://clerk.operator.test/**', route => route.abort()); // nothing may reach a real Clerk host
+  await page.route(`${API}/me`, route => reply(route, 200, { role: 'MATCH_OPERATOR', status: 'ACTIVE' })); // the staff role gate
   await page.route(`${API}/operator/matches`, authed(route => reply(route, 200, { matches: [live, scheduled] })));
   await page.route(`${API}/matches/7`, route => reply(route, 200, { match: { id: 7, seq: 3, snapshot: { sides: [{ name: 'Alpha', points: 1 }, { name: 'Bravo', points: 0 }] } } }));
   await page.route(`${API}/matches/7/lease`, authed(route => {
@@ -201,7 +202,8 @@ test('keyboard-only flow from My Matches to scoring, with 44px targets on phone 
   await expect(scoreRow(page, 'Bravo')).toHaveText(['0', '0']);
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    const targets = page.locator('main button, main .text-actions > a');
+    // The Back link now comes from StaffShell above the h1 (Req 4.10), not the console's bottom link row.
+    const targets = page.locator('main button, main .text-actions > a, main .staff-back');
     expect(await targets.count()).toBeGreaterThanOrEqual(4);
     for (const box of await targets.evaluateAll(els => els.map(el => [el.textContent, el.getBoundingClientRect().width, el.getBoundingClientRect().height]))) {
       expect(Math.min(box[1], box[2]), `${width}px ${box[0]}`).toBeGreaterThanOrEqual(44);

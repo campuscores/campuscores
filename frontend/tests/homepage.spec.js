@@ -191,6 +191,8 @@ test('menus and legacy links navigate and close correctly', async ({ page }) => 
   await page.goto('/missing-page');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.getByRole('link', { name: 'Return home' }).click();
+  // The public header has no staff link (staff roles Req 4.1).
+  await expect(page.locator('header a[href^="/operator"]')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   const menu = page.locator('.mobile-menu > summary');
   await expect(menu).toHaveText('');

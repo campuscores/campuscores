@@ -10,9 +10,10 @@ const STAGES = ['', 'SF1', 'SF2', 'FINAL'];
  * The six match fields for Setup step 4 and the Match editor (Req 12.1 to 12.5): date, time, stage, two sides and
  * venue. A new match starts on the tournament start date at the tournament venue. `match.date` and `match.time` are
  * the event date and time (YYYY-MM-DD, HH:MM); `zone` is the event time zone label shown with the time.
- * `onSubmit({ date, time, stage, sideA, sideB, venue })`, with null for no stage or an empty FINAL side.
+ * `onSubmit({ date, time, stage, sideA, sideB, venue })`, with null for no stage or an empty FINAL side. Optional `id`
+ * names the form for a "Try again" button outside it.
  */
-export default function MatchForm({ tournament, teams, match, today, zone, saving, error, submitLabel, onSubmit }) {
+export default function MatchForm({ id, tournament, teams, match, today, zone, saving, error, submitLabel, onSubmit }) {
   const form = useForm(match
     ? { date: match.date, time: match.time, stage: match.stage ?? '', sideA: match.sides?.[0]?.id ?? '', sideB: match.sides?.[1]?.id ?? '', venue: match.venue ?? '' }
     : { date: tournament.startsOn, time: '', stage: '', sideA: '', sideB: '', venue: tournament.venue ?? '' },
@@ -33,7 +34,7 @@ export default function MatchForm({ tournament, teams, match, today, zone, savin
     </Field>
   );
   return (
-    <form className="staff-form" noValidate onSubmit={event => (saving ? event.preventDefault() : save(event))}>
+    <form id={id} className="staff-form" noValidate onSubmit={event => (saving ? event.preventDefault() : save(event))}>
       <ErrorSummary errors={form.summary} />
       <Field type="date" label="Date" min={tournament.startsOn} max={tournament.endsOn}
         help={`From ${dateText(tournament.startsOn)} to ${dateText(tournament.endsOn)}.`} {...form.field('date')} />

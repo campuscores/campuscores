@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import fc from 'fast-check';
 import { DEFAULT_FORMATS, validateFormat } from '../../shared/scoring.mjs';
 import { formatSummary } from '../src/features/staff/formatSummary.js';
+import { messageFor } from '../src/features/staff/labels.js';
 
 test.skip(({ browserName }) => browserName !== 'chromium', 'Pure Node logic: run in one project only.');
 
@@ -60,4 +61,11 @@ test('Property 12: format summary is plain language (Req 10.8)', () => {
     expect(has(summary, `win by ${f.winBy}`)).toBe(true);
     if (f.cap != null) expect(has(summary, `capped at ${f.cap}`)).toBe(true);
   }), { numRuns: 100 });
+});
+
+// The Sport_Manager add route returns one generic 400 that names no account state (Req 3.5).
+test('MANAGER_NOT_ELIGIBLE shows a plain sentence on the email field', () => {
+  const err = { status: 400, code: 'MANAGER_NOT_ELIGIBLE', message: 'server text' };
+  expect(messageFor(err, 'email')).toBe('Enter the email of an active Tournament Manager who is not already on this sport.');
+  expect(messageFor(err, 'name')).toBeNull();
 });

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import SportIcon from '../../../components/SportIcon.jsx';
 import { sportLabel, sideName } from '../operatorMatches.js';
 import { DEFAULT_FORMATS, RULE_SOURCES, periodLabel, validateFormat } from '../../../../../shared/scoring.mjs';
@@ -60,9 +59,9 @@ export default function ScoringPage({ match, snapshot, accepted, disabled, pendi
   const endedPeriods = snapshot?.periods?.filter(p => !p.current).length ?? 0;
   const currentPeriod = snapshot?.periods?.find(p => p.current);
   const waitingExtra = format?.model === 'periods' && !currentPeriod && winner == null;
-  return <main className="scoring-page" data-sport={match.sport}>
-    <header className="scoring-top"><Link className="scoring-back" to="/operator/matches">My Matches</Link><p className="scoring-meta"><span className="scoring-sport"><SportIcon sport={match.sport} className="scoring-sport-icon" />{sportLabel(match.sport)}</span><span>{match.venue}</span></p><p className="scoring-sync console-status" role="status" aria-live="polite">{status}</p></header>
-    <h1 className="scoring-title">{name(0)} vs {name(1)}</h1>
+  // Content of the StaffShell <main>: the shell gives the "<A> vs <B>" h1 and the Back link (ScoreConsole).
+  return <div className="scoring-page" data-sport={match.sport}>
+    <header className="scoring-top"><p className="scoring-meta"><span className="scoring-sport"><SportIcon sport={match.sport} className="scoring-sport-icon" />{sportLabel(match.sport)}</span><span>{match.venue}</span></p><p className="scoring-sync console-status" role="status" aria-live="polite">{status}</p></header>
     {error && <p className="text-error" role="alert">{error}</p>}
     {!format ? <FormatForm match={match} disabled={disabled} onAction={onAction} /> : <>
       <div className="score-board" style={{ '--board-bg': `url('/assets/${match.sport}-background.webp')` }}>
@@ -99,5 +98,5 @@ export default function ScoringPage({ match, snapshot, accepted, disabled, pendi
         <div className="scoring-dialog-actions"><button type="button" className="scoring-action" onClick={close}>Cancel</button><button type="submit" className="scoring-action is-primary" disabled={disabled}>{dialog === 'final' ? 'Confirm and lock result' : 'Confirm'}</button></div>
       </form>
     </Dialog>}
-  </main>;
+  </div>;
 }

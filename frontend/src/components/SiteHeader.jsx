@@ -53,7 +53,6 @@ export default function SiteHeader() {
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link className="nav-link" to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
           <Link className="nav-link" to="/#tournaments">Tournaments</Link>
-          <Link className="nav-link" to="/operator/matches" aria-current={location.pathname.startsWith('/operator/matches') ? 'page' : undefined}>My Matches</Link>
           <SportsDropdown />
           {signInLink && <Link className="nav-link" to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
         </nav>
@@ -65,7 +64,6 @@ export default function SiteHeader() {
           <nav className="mobile-menu-panel" aria-label="Main navigation">
             <Link to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
             <Link to="/#tournaments">Tournaments</Link>
-            <Link to="/operator/matches" aria-current={location.pathname.startsWith('/operator/matches') ? 'page' : undefined}>My Matches</Link>
             <SportsDropdown />
             {signInLink && <Link to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
           </nav>

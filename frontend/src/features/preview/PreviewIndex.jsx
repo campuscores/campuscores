@@ -15,18 +15,6 @@ import TournamentsView from '../tournaments/TournamentsView.jsx';
 import TournamentView from '../tournaments/TournamentView.jsx';
 import TournamentSportView from '../tournaments/TournamentSportView.jsx';
 import SignInChoiceView from '../auth/SignInChoiceView.jsx';
-import ManagerHomeView from '../manage/ManagerHomeView.jsx';
-import SetupDetailsView from '../manage/SetupDetailsView.jsx';
-import SetupSportsView from '../manage/SetupSportsView.jsx';
-import SetupTeamsView from '../manage/SetupTeamsView.jsx';
-import SetupMatchesView from '../manage/SetupMatchesView.jsx';
-import SetupScorersView from '../manage/SetupScorersView.jsx';
-import TournamentOverviewView from '../manage/TournamentOverviewView.jsx';
-import TournamentDetailsView from '../manage/TournamentDetailsView.jsx';
-import SportSetupView from '../manage/SportSetupView.jsx';
-import TeamsView from '../manage/TeamsView.jsx';
-import MatchesView from '../manage/MatchesView.jsx';
-import MatchEditorView from '../manage/MatchEditorView.jsx';
 import AssignScorerView from '../manage/AssignScorerView.jsx';
 import InviteScorerView from '../manage/InviteScorerView.jsx';
 import AdminHomeView from '../admin/AdminHomeView.jsx';
@@ -82,10 +70,7 @@ function MatchDialogPreview({ sport, scoring, match }) {
 const VIEWS = {
   home: HomePreview, tournaments: TournamentsView, tournament: TournamentView, 'tournament-sport': TournamentSportView,
   'sport-page': TournamentSportView, 'match-dialog': MatchDialogPreview, 'sign-in-choice': SignInChoiceView,
-  'manager-home': ManagerHomeView, 'setup-details': SetupDetailsView, 'setup-sports': SetupSportsView, 'setup-teams': SetupTeamsView,
-  'setup-matches': SetupMatchesView, 'setup-scorers': SetupScorersView, 'tournament-overview': TournamentOverviewView,
-  'tournament-details': TournamentDetailsView, 'sport-setup': SportSetupView, teams: TeamsView, matches: MatchesView,
-  'match-editor': MatchEditorView, 'assign-scorer': AssignScorerView, 'invite-scorer': InviteScorerView,
+  'assign-scorer': AssignScorerView, 'invite-scorer': InviteScorerView,
   'admin-home': AdminHomeView, 'all-tournaments': AllTournamentsView, 'staff-list': StaffListView, 'invite-staff': InviteStaffView,
   'staff-member': StaffMemberView, 'pending-invitations': PendingInvitationsView,
 };
@@ -166,7 +151,7 @@ function Index() {
   return (
     <StaffShell title="Layout preview">
       <p>Stage 1 layouts of every screen for review. Each screen uses fake data and sends nothing to the server, so buttons do not save.</p>
-      <p className="staff-meta">25 layouts: the 24 screens of every role and the sign-in choice. Create tournament has one layout for each of its five steps. Open a state to see a screen loading, empty, failed or without access.</p>
+      <p className="staff-meta">Screens that already use the API are not listed here; the navigation maps still show them as text. Open a state to see a screen loading, empty, failed or without access.</p>
       {GROUPS.map((group, i) => {
         const rows = group.screens.flatMap(screen => (screen.steps ?? [screen]).map(row => ({ ...row, roleName: group.roleName, layout: screen.steps && screen.title })));
         return (

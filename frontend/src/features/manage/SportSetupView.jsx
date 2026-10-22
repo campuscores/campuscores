@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import StaffShell from '../staff/StaffShell.jsx';
 import ScreenState, { NoAccess } from '../staff/ScreenState.jsx';
@@ -17,15 +17,19 @@ import './manage.css';
  * Tournament_Owner and Super_Admins (`isOwner`), its sport managers. `sport` is `{ sport, defaultFormat, teamCount,
  * managers }`. `onSaveFormat(format)` gets a format that passed `validateFormat`; the container reports
  * "No change to save" in `status` when it equals the stored one. `confirm` is the Sport_Manager being removed.
+ * Optional: `onDirtyChange(dirty)` reports unsaved format edits; `onSignInAgain` shows "Sign in again" after a 401.
  */
 export default function SportSetupView({ role, state, onRetry, tournament, isOwner, sport, saving, error, status,
-  onSaveFormat, confirm, onRequestRemove, onConfirm, onCancel, onAddManager }) {
+  onSaveFormat, confirm, onRequestRemove, onConfirm, onCancel, onAddManager, onDirtyChange, onSignInAgain }) {
   if (state === 'forbidden') return <NoAccess role={role} />;
   const name = sport ? sportLabel(sport.sport) : 'Sport';
   return (
     <StaffShell role={role} title={`${name} setup`} current={tournamentNav(role)} status={status}
       alert={confirm ? '' : alertFor(error, ['email'])}
       back={tournament && { to: tournamentPath(tournament.slug), label: tournament.name }}>
+      {error?.status === 401 && onSignInAgain && (
+        <div className="page-actions"><button type="button" className="button-primary" onClick={onSignInAgain}>Sign in again</button></div>
+      )}
       <ScreenState state={state} what="the sport" onRetry={onRetry}>
         {tournament && sport && <>
           <section aria-labelledby="sport-format">
@@ -33,7 +37,7 @@ export default function SportSetupView({ role, state, onRetry, tournament, isOwn
             <p>Current format: {formatSummary(sport.sport, sport.defaultFormat)}.</p>
             {isLocked(tournament.status)
               ? <p>This tournament is locked, so its formats cannot change.</p>
-              : <FormatEditor key={JSON.stringify(sport.defaultFormat ?? {})} sport={sport} saving={saving} onSave={onSaveFormat} />}
+              : <FormatEditor key={JSON.stringify(sport.defaultFormat ?? {})} sport={sport} saving={saving} onSave={onSaveFormat} onDirtyChange={onDirtyChange} />}
             <p className="staff-meta">Scorers can still choose another official or custom format for one match before it starts. Live and final matches keep their format.</p>
           </section>
 
@@ -55,15 +59,20 @@ export default function SportSetupView({ role, state, onRetry, tournament, isOwn
   );
 }
 
-function FormatEditor({ sport, saving, onSave }) {
+function FormatEditor({ sport, saving, onSave, onDirtyChange }) {
   const preset = DEFAULT_FORMATS[sport.sport];
   const stored = { ...preset, ...sport.defaultFormat };
+  const storedText = stored.scoreValues?.join(', ') ?? '';
   const [format, setFormat] = useState(stored);
-  const [scoreText, setScoreText] = useState(stored.scoreValues?.join(', ') ?? '');
+  const [scoreText, setScoreText] = useState(storedText);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const change = (key, value) => { setFormat(current => ({ ...current, [key]: value })); setError(''); };
   const input = sport.sport === 'basketball' ? { ...format, scoreValues: scoreText.split(',').map(value => Number(value.trim())) } : format;
+  // Both objects start from `stored`, so their key order matches. NaN (an empty number box) stringifies as null.
+  const dirty = JSON.stringify(format) !== JSON.stringify(stored) || scoreText !== storedText;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   let preview = '';
   try { preview = formatSummary(sport.sport, validateFormat(sport.sport, input)); } catch { /* the save shows the reason */ }
   function save(event) {

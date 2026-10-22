@@ -3,7 +3,7 @@
 /* `hidden` must win over the display of .staff-form and other layout classes. */
 .staff [hidden] { display: none !important; }
 
-.staff-main h3 { margin: 0 0 12px; font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; }
+:where(.staff-main) h3 { margin: 0 0 12px; font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; }
 .page-actions { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 32px; }
 .staff-section-tight { margin: 0 0 24px; }
 .list-group + .list-group { margin-top: 32px; }

@@ -122,6 +122,7 @@ test('phone header menu opens sports and closes after navigation', async ({ page
     await menu.locator(':scope > summary').tap();
     await expect(menu).toHaveAttribute('open', '');
     await panel.locator('summary').tap();
+    await expect(panel.getByRole('link', { name: 'My Matches' })).toHaveCount(0); // staff roles Req 4.1
     const targets = panel.locator('a:visible, summary:visible');
     for (const box of await targets.evaluateAll(list => list.map(el => el.getBoundingClientRect().height))) expect(box, 'menu target height').toBeGreaterThanOrEqual(44);
     await panel.locator(`a[href="/sports/${id}/"]`).tap();

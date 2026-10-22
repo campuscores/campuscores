@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { SCREENS } from '../src/features/preview/previewScreens.js';
+import { overflow, smallTargets } from './helpers.js';
 // Stage 1 layout preview (design "Stage 1 layout preview"; Req 1.5, 1.7, 1.11, 19.6, 21.4, 21.9). The preview runs on
 // the live-mode build (port 4176), built with VITE_LAYOUT_PREVIEW=1 and VITE_API_BASE as on staging, so any API call or
 // socket would show up as a request. The production build on 4175 has no flag.
@@ -8,8 +9,11 @@ const WIDTHS = [390, 1440];
 const NO_ACCESS = 'You do not have access to this page';
 
 // The Primary_Action of these screens acts on no loaded data: it opens a create or invite page (top of a list screen)
-// or ends the optional step 5. It is part of the frame, like the headings, so it stays while the list loads or fails.
-const FRAME_PRIMARY = new Set(['manager-home', 'matches', 'admin-home', 'all-tournaments', 'staff-list', 'pending-invitations', 'setup-scorers']);
+// It is part of the frame, like the headings, so it stays while the list loads or fails.
+const FRAME_PRIMARY = new Set(['admin-home', 'all-tournaments', 'staff-list', 'pending-invitations']);
+// Screens connected to the API in Stage 2; their preview entries are deleted (Req 1.11).
+const CONNECTED = ['manager-home', 'setup-details', 'setup-sports', 'setup-teams', 'setup-matches', 'setup-scorers',
+  'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor'];
 
 /**
  * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). Viewer pages and the sign-in
@@ -37,19 +41,6 @@ function watchRequests(page) {
   return leaks;
 }
 
-/**
- * Visible targets smaller than 44×44 CSS pixels (Req 19.1). A radio or checkbox is measured by its label, which is the
- * clickable target. Screen-reader-only text (1px) and closed menus or dialogs (no box) are skipped.
- */
-const smallTargets = page => page.evaluate(() => [...document.querySelectorAll('a[href], button, input, select, textarea, summary')]
-  .map(el => (el.matches('[type="checkbox"], [type="radio"]') && el.closest('label')) || el)
-  .filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
-  .map(el => ({ el, box: el.getBoundingClientRect() }))
-  .filter(({ box }) => box.width > 1 && (box.width < 44 || box.height < 44))
-  .map(({ el, box }) => `${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') || el.textContent).trim().slice(0, 40)}" ${Math.round(box.width)}×${Math.round(box.height)}`));
-
-const overflow = page => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-
 /** What each state must show, from the design's state rules. */
 async function expectState(page, state) {
   if (state === 'loading') await expect(page.getByText(/^Loading .+…$/).first()).toBeVisible();
@@ -75,8 +66,8 @@ test.describe('layout preview', () => {
   });
 
   test('screens without a preview route show page-not-found', async ({ page }) => {
-    for (const screen of SCREENS.filter(entry => entry.capturedBySpecs)) {
-      await page.goto(`${APP}/preview/${screen.key}`);
+    for (const key of [...SCREENS.filter(entry => entry.capturedBySpecs).map(entry => entry.key), ...CONNECTED]) {
+      await page.goto(`${APP}/preview/${key}`);
       await expect(page.locator('h1')).toHaveText('Page not found');
     }
   });
@@ -114,7 +105,7 @@ test.describe('layout preview', () => {
 
 // The production build (4175, no VITE_LAYOUT_PREVIEW) registers no preview route (Req 1.11).
 test('the production build shows page-not-found at /preview', async ({ page }) => {
-  for (const path of ['/preview', '/preview/manager-home?state=ready']) {
+  for (const path of ['/preview', '/preview/admin-home?state=ready']) {
     await page.goto(path);
     await expect(page.locator('h1')).toHaveText('Page not found');
   }

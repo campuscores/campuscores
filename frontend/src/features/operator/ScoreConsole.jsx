@@ -1,8 +1,8 @@
 import { activeActions, checkReversal, scoreMatch, validateFormat } from '../../../../shared/scoring.mjs';
 import ScoringPage from './scoring/ScoringPage.jsx';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import { apiFetch } from '../../services/api.js';
+import StaffShell from '../staff/StaffShell.jsx';
 import { emptyQueue, nextClientSeq, nextToSend, queueReducer, restoreQueue, retryDelay } from './queue.js';
 import { deviceId, loadActions, saveAction } from './queueStore.js';
 import { isClosed, sideName, sportLabel, stageLabel } from './operatorMatches.js';
@@ -30,6 +30,13 @@ function statusLine(queue, online) {
   const last = queue.items.findLast(i => i.status === 'synced');
   return last ? `Synced up to seq ${last.seq}` : 'Online';
 }
+/**
+ * Match_Scorer frame: My Matches marked current and Back to My Matches (Req 4.9, 4.10).
+ * Task 16.4: Tournament_Managers and Super_Admins also reach this console from Matches; then the nav role and the
+ * Back target (Matches) must follow the caller's role from `GET /api/me` instead of these fixed values.
+ */
+const BACK = { to: '/operator/matches', label: 'My Matches' };
+const shell = (title, content) => <StaffShell role="MATCH_OPERATOR" title={title} current="my-matches" back={BACK}>{content}</StaffShell>;
 const describe = (item, match) => item.type === 'POINT' ? `Point to ${sideName(match, item.payload.side)}` : 'Undo';
 const itemStatus = item => item.status === 'synced' ? `synced, seq ${item.seq}` : item.status;
 /**
@@ -165,16 +172,9 @@ export default function ScoreConsole({ matchId, getToken }) {
       setBusy(false);
     }
   }
-  if (loadError) {
-    return (
-      <main className="text-page">
-        <h1>Score match</h1>
-        <p className="text-error" role="alert">{loadError.status === 403 ? 'Only event staff can score matches.' : `Could not load this match: ${loadError.message}`}</p>
-        <div className="text-actions"><Link to="/operator/matches">Back to My Matches</Link></div>
-      </main>
-    );
-  }
-  if (!match) return <main className="text-page"><h1>Score match</h1><p role="status">Loading the match…</p></main>;
+  if (loadError) return shell('Score console', <p className="screen-error" role="alert">{loadError.status === 403 ? 'Only event staff can score matches.' : `Could not load this match: ${loadError.message}`}</p>);
+  if (!match) return shell('Score console', <p role="status">Loading the match…</p>);
+  const title = `${sideName(match, 0)} vs ${sideName(match, 1)}`;
   const notices = <>
       {scoring && leaseError && (
         <div className="console-notice" role="alert">
@@ -210,19 +210,18 @@ export default function ScoreConsole({ matchId, getToken }) {
       catch (err) { projectionError = err.message; }
     }
     const undo = activeActions(history).findLast(a => !['START', 'FINALIZE'].includes(a.type));
-    return <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || !match.isToday || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={statusLine(queue, online)} error={actionError || projectionError || storeError}>
+    return shell(title, <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || !match.isToday || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={statusLine(queue, online)} error={actionError || projectionError || storeError}>
       {notices}
       {!scoringLoaded && <p role="status">Loading accepted scoring actions…</p>}
-    </ScoringPage>;
+    </ScoringPage>);
   }
   const reversed = new Set(queue.items.map(i => i.reversesActionId).filter(Boolean));
   const undoTarget = queue.items.findLast(i => i.type === 'POINT' && !reversed.has(i.actionId));
   const pending = pendingPoints(accepted, queue.items);
   const canRecord = ready && !busy && !storeError;
-  return (
-    <main className="text-page score-console">
+  return shell(title,
+    <div className="text-page score-console">
       <p className="console-meta">{[sportLabel(match.sport), stageLabel(match), match.venue].filter(Boolean).join(' · ')}</p>
-      <h1>{sideName(match, 0)} vs {sideName(match, 1)}</h1>
       <p className="console-status" role="status" aria-live="polite">{statusLine(queue, online)}</p>
       <table className="console-score">
         <caption className="sr-only">Score</caption>
@@ -250,7 +249,6 @@ export default function ScoreConsole({ matchId, getToken }) {
           </ol>
         </>
       )}
-      <div className="text-actions"><Link to="/operator/matches">Back to My Matches</Link></div>
-    </main>
+    </div>,
   );
 }

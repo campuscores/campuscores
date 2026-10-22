@@ -16,6 +16,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
   await page.route(`${API}/**`, async route => {
     const req = route.request(), path = new URL(req.url()).pathname;
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (path === '/api/me') return reply(route, { role: 'MATCH_OPERATOR', status: 'ACTIVE' }); // the staff role gate
     if (path === '/api/operator/matches') return reply(route, { matches: [match] });
     if (path === '/api/operator/matches/7/scoring') return reply(route, { seq: server.seq, snapshot: server.snapshot, actions: server.actions });
     if (path === '/api/matches/7') return reply(route, { match: { ...match, seq: server.seq, snapshot: server.snapshot } });
@@ -92,7 +93,7 @@ test('deciding score can be undone; final acceptance is retry-safe, read-only af
   const finals = server.requests.filter(a => a.type === 'FINALIZE'); expect(finals.length).toBeGreaterThan(1); expect(finals[0].actionId).toBe(finals[1].actionId);
   await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible(); await expect(point(page)).toHaveCount(0);
   await page.reload(); await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible();
-  await page.getByRole('main').getByRole('link', { name: 'My Matches', exact: true }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Back to My Matches', exact: true }).click(); // StaffShell Back (Req 4.10)
   await expect(page.locator('#op-completed [data-match-id="7"]')).toBeVisible();
 });
 test('football cards and substitutions use display names while goals belong only to teams', async ({ page }) => {
@@ -123,7 +124,7 @@ test('scoring layout and custom settings fit phones through desktop with keyboar
     await page.setViewportSize({ width, height: 900 });
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`scoring-${width}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-    expect(await page.locator('.point-btn, .scoring-action, .scoring-back').evaluateAll(els => els.filter(el => el.getClientRects().length && el.getBoundingClientRect().height < 44).length)).toBe(0);
+    expect(await page.locator('.point-btn, .scoring-action, .staff-back').evaluateAll(els => els.filter(el => el.getClientRects().length && el.getBoundingClientRect().height < 44).length)).toBe(0);
   }
   await page.getByRole('button', { name: 'End set early' }).focus(); await page.keyboard.press('Enter'); await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);

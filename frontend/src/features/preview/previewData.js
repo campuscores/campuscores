@@ -9,7 +9,6 @@ import { sportFixtures } from '../sports/sportFixtures.js';
 export const done = () => new Promise(resolve => setTimeout(() => resolve(true), 300));
 
 const ZONE = 'IST';
-const TODAY = '2026-10-24';
 const TODAY_TEXT = '24 Oct 2026';
 
 const asha = { accountId: '12', name: 'Asha Verma (fake)', email: 'asha.verma@example.test' };
@@ -38,20 +37,9 @@ const final = row('3', 'football', [hostels[2], hostels[3]], 24, '10:00', { stag
 const notScored = row('4', 'badminton', [players[2], players[3]], 24, '09:00', { phase: 'past', canEdit: false, canAssign: false, canDelete: false });
 const finalTbd = row('5', 'football', [hostels[0]], 26, '16:00', { stage: 'FINAL' });
 const nextDay = row('6', 'badminton', [players[1], players[2]], 25, '10:00');
-const allMatches = [live, scheduled, final, notScored, finalTbd, nextDay];
 const group = items => ({ items, total: items.length });
 const todayMatches = { live: group([live]), scheduled: group([scheduled]), final: group([final]), notScored: group([notScored]) };
 const needsScorer = group([scheduled, nextDay, finalTbd]);
-
-const cupSports = [
-  { sport: 'football', teamCount: 4, matchCount: 3, managers: [asha] },
-  { sport: 'badminton', teamCount: 4, matchCount: 3, managers: [] },
-];
-const teams = [
-  { ...hostels[0], branch: 'Computer Science (fake)', year: 2026, players: [{ name: 'Arjun Mehta (fake)', number: 9, captain: true }, { name: 'Sahil Bose (fake)', number: 4 }], locked: true, used: true },
-  { ...hostels[1], branch: '', year: null, players: [], locked: false, used: true },
-  { ...hostels[2], branch: 'Mechanical (fake)', year: 2027, players: [], locked: false, used: false },
-];
 
 const sport = id => sports.find(entry => entry.id === id);
 const withPhase = (matches, phase) => matches.map(match => ({ ...match, phase }));
@@ -102,59 +90,6 @@ export const PREVIEW_DATA = {
   'sign-in-choice': {},
 
   // Tournament Manager screens.
-  'manager-home': {
-    data: { today: TODAY_TEXT, todayMatches, needsScorer, tournaments: [
-      { ...cup, isOwner: true, sports: ['football', 'badminton'] },
-      { ...draft, isOwner: false, sports: ['badminton'] },
-    ] },
-    empty: {}, emptyState: 'empty',
-  },
-  'setup-details': {},
-  'setup-sports': {
-    props: { tournament: draft },
-    data: { sports: [{ sport: 'football', matchCount: 0 }, { sport: 'badminton', matchCount: 2 }] },
-  },
-  'setup-teams': {
-    props: { tournament: draft },
-    data: { sports: [{ sport: 'football', teams: hostels }, { sport: 'badminton', teams: players }] },
-    empty: { sports: [{ sport: 'football', teams: [] }, { sport: 'badminton', teams: [] }] },
-  },
-  'setup-matches': {
-    props: { tournament: draft, today: TODAY, zone: ZONE },
-    data: { sports: [{ sport: 'football', teams: hostels, matches: [live, final, finalTbd] }, { sport: 'badminton', teams: players, matches: [] }] },
-    empty: { sports: [{ sport: 'football', teams: hostels, matches: [] }, { sport: 'badminton', teams: players, matches: [] }] },
-  },
-  'setup-scorers': {
-    props: { tournament: draft },
-    data: { matches: [scheduled, nextDay, finalTbd] },
-    empty: {}, emptyState: 'empty',
-  },
-  'tournament-overview': {
-    data: { tournament: cup, isOwner: true, nextStep: null, sports: cupSports },
-    empty: { tournament: cup, isOwner: true, nextStep: null, sports: [] },
-  },
-  'tournament-details': { data: { tournament: cup } },
-  'sport-setup': {
-    data: { tournament: cup, isOwner: true, sport: { sport: 'badminton', teamCount: 4, managers: [asha] } },
-    empty: { tournament: cup, isOwner: true, sport: { sport: 'badminton', teamCount: 0, managers: [] } },
-  },
-  teams: {
-    props: { sport: 'football' },
-    data: { tournament: cup, teams },
-    empty: { tournament: cup }, emptyState: 'empty',
-  },
-  matches: {
-    props: { filters: {} },
-    data: { matches: allMatches, total: allMatches.length },
-    empty: {}, emptyState: 'empty',
-  },
-  'match-editor': {
-    props: { today: TODAY, zone: ZONE },
-    data: {
-      tournament: cup, sport: 'badminton', teams: players,
-      match: { ...nextDay, date: '2026-10-25', time: '10:00' },
-    },
-  },
   'assign-scorer': { data: { match: scheduled } },
   'invite-scorer': {},
 

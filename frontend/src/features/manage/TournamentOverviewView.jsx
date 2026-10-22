@@ -43,7 +43,19 @@ function dialogFor(confirm, tournament, sports) {
         'Removes every scorer assignment and sport manager of this tournament.', 'This cannot be undone.'],
     };
   }
-  return removeManagerDialog(confirm.manager, tournament.name);
+  // The remove endpoint takes no reason, so the dialog asks for none (Req 20.4).
+  return { ...removeManagerDialog(confirm.manager, tournament.name), reason: undefined };
+}
+
+/** "Sign in again" after a 401 and "Reload" after a 403, 404 or 409 (Req 20.8, 20.9). */
+export function ErrorActions({ onSignIn, onReload }) {
+  if (!onSignIn && !onReload) return null;
+  return (
+    <div className="page-actions">
+      {onSignIn && <button type="button" className="button-secondary" onClick={onSignIn}>Sign in again</button>}
+      {onReload && <button type="button" className="button-secondary" onClick={onReload}>Reload</button>}
+    </div>
+  );
 }
 
 /**
@@ -51,15 +63,16 @@ function dialogFor(confirm, tournament, sports) {
  * controls; a Sport_Manager gets only their `sports` and no tournament control. `nextStep` is the first incomplete
  * Guided_Setup step. `confirm` is the open request: `{ kind: 'status', to }`, `{ kind: 'delete' }` or
  * `{ kind: 'removeManager', manager }`; `onRequest(request)` asks to open it, `onConfirm(reason)` sends it.
- * `onAddManager({ sport, email })` adds a Sport_Manager.
+ * `onAddManager({ sport, email })` adds a Sport_Manager. `onSignIn` and `onReload`, when set, show those actions.
  */
 export default function TournamentOverviewView({ role, state, onRetry, tournament, isOwner, nextStep, sports = [], saving, error, status,
-  confirm, onRequest, onConfirm, onCancel, onAddManager }) {
+  confirm, onRequest, onConfirm, onCancel, onAddManager, onSignIn, onReload }) {
   if (state === 'forbidden') return <NoAccess role={role} />;
   const dialog = tournament ? dialogFor(confirm, tournament, sports) : { title: '', effects: [] };
   return (
     <StaffShell role={role} title={tournament?.name ?? 'Tournament'} current={tournamentNav(role)} back={overviewBack(role)}
       status={status} alert={confirm ? '' : alertFor(error, ['email', 'sport'])}>
+      <ErrorActions onSignIn={onSignIn} onReload={onReload} />
       <ScreenState state={state} what="the tournament" onRetry={onRetry}>
         {tournament && <Overview key={tournament.status} tournament={tournament} isOwner={isOwner} nextStep={nextStep} sports={sports} saving={saving} error={error}
           onRequest={onRequest} onAddManager={onAddManager} />}

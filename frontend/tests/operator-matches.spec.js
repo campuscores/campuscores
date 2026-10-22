@@ -36,13 +36,10 @@ test('operator routes need sign-in and load no Clerk code without a key', async 
   }
   expect(requests.filter(url => /clerk/i.test(url))).toEqual([]);
 });
-test('the header My Matches tab navigates from the home page', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+// Req 4.1 replaced the header My Matches tab: staff reach My Matches through sign-in and the staff navigation.
+test('the public header has no My Matches link on desktop or in the phone menu', async ({ page }) => {
   await page.goto('/');
-  const tab = page.locator('.desktop-nav .nav-link', { hasText: 'My Matches' });
-  await expect(tab).toHaveAttribute('href', '/operator/matches');
-  await tab.click();
-  await expect(page).toHaveURL(/\/operator\/matches$/);
-  await expect(page.locator('h1')).toHaveText('Sign-in unavailable');
-  await expect(tab).toHaveAttribute('aria-current', 'page');
+  // CSS locators include the hidden copy (desktop nav on phones, closed phone menu on desktops). Keyless build: no Sign in.
+  for (const nav of ['.desktop-nav', '.mobile-menu-panel']) await expect(page.locator(`${nav} > a`), nav).toHaveText(['Home', 'Tournaments']);
+  await expect(page.locator('header a[href^="/operator"]')).toHaveCount(0);
 });

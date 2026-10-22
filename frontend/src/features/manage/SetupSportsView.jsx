@@ -7,24 +7,27 @@ import { formatSummary } from '../staff/formatSummary.js';
 import { sports as SPORTS } from '../../data/sports.js';
 import { tournamentNav } from './manage.js';
 import { stepBack, stepTitle } from './setup.js';
+import { SaveRecovery } from './SetupDetailsView.jsx';
 import './manage.css';
 
 /**
  * Guided_Setup step 2 (Req 9.1, 10.1, 10.8): six on/off choices, each with its Default_Format summary. A sport that
  * has matches stays on (Req 10.9). `sports` is the tournament's `[{ sport, matchCount }]`; `onSubmit(sportKeys)`.
+ * `onDirty(changed)` reports whether the choice differs from the saved sports (Req 20.7); `onSignIn` follows a 401.
  */
-export default function SetupSportsView({ role, state, onRetry, tournament, sports = [], saving, error, onSubmit }) {
+export default function SetupSportsView({ role, state, onRetry, tournament, sports = [], saving, error, onSubmit, onDirty, onSignIn }) {
   if (state === 'forbidden') return <NoAccess role={role} />;
   return (
     <StaffShell role={role} title={stepTitle(2)} current={tournamentNav(role)} back={stepBack(role, tournament?.slug, 2)} alert={messageFor(error)}>
       <ScreenState state={state} what="the tournament" onRetry={onRetry}>
-        <SportsForm key={tournament?.slug} sports={sports} saving={saving} onSubmit={onSubmit} />
+        <SportsForm key={tournament?.slug} sports={sports} saving={saving} onSubmit={onSubmit} onDirty={onDirty} />
+        <SaveRecovery error={error} onSignIn={onSignIn} formId="save-sports" />
       </ScreenState>
     </StaffShell>
   );
 }
 
-function SportsForm({ sports, saving, onSubmit }) {
+function SportsForm({ sports, saving, onSubmit, onDirty }) {
   const prefix = useId();
   const [chosen, setChosen] = useState(() => new Set(sports.map(entry => entry.sport)));
   const [summary, setSummary] = useState([]);
@@ -33,6 +36,7 @@ function SportsForm({ sports, saving, onSubmit }) {
     const next = new Set(chosen);
     if (on) next.add(sport); else next.delete(sport);
     setChosen(next);
+    onDirty?.(next.size !== sports.length || sports.some(entry => !next.has(entry.sport)));
     if (next.size) setSummary([]);
   };
   function save(event) {
@@ -42,7 +46,7 @@ function SportsForm({ sports, saving, onSubmit }) {
     onSubmit(SPORTS.map(sport => sport.id).filter(id => chosen.has(id)));
   }
   return (
-    <form className="staff-form" noValidate onSubmit={save}>
+    <form id="save-sports" className="staff-form" noValidate onSubmit={save}>
       <ErrorSummary errors={summary} />
       <fieldset>
         <legend>Sports in this tournament</legend>

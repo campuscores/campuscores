@@ -62,58 +62,6 @@ export const GROUPS = [
   {
     title: 'Tournament Manager screens', roleName: 'Tournament Manager', role: 'TOURNAMENT_MANAGER',
     screens: [
-      { key: 'manager-home', title: 'Manager home', states: READS,
-        purpose: 'See what needs attention today.', primary: 'Create tournament',
-        entry: ['Start screen after sign-in', 'Staff navigation: Home'],
-        exit: ['Create tournament to Step 1', 'Tournament name to Tournament overview', 'Assign scorer to Assign scorer', 'See all matches to Matches'] },
-      { key: 'create-tournament', title: 'Create tournament (guided setup)',
-        purpose: 'Set up a tournament step by step.', primary: 'One per step',
-        steps: [
-          { key: 'setup-details', title: 'Step 1 of 5: Tournament details', states: FORM,
-            purpose: 'Name the tournament and set its dates.', primary: 'Save and continue',
-            entry: ['Create tournament on Manager home or All tournaments'],
-            exit: ['Save and continue to Step 2', 'Back to Manager home'] },
-          { key: 'setup-sports', title: 'Step 2 of 5: Sports', states: READS_NO_EMPTY,
-            purpose: 'Choose the sports of the tournament.', primary: 'Save and continue',
-            entry: ['Step 1', 'Continue setup on Tournament overview'],
-            exit: ['Save and continue to Step 3', 'Back to Step 1'] },
-          { key: 'setup-teams', title: 'Step 3 of 5: Teams', states: READS,
-            purpose: 'Add the teams or players of each sport.', primary: 'Add team',
-            entry: ['Step 2', 'Continue setup on Tournament overview'],
-            exit: ['Continue to Step 4', 'Back to Step 2'] },
-          { key: 'setup-matches', title: 'Step 4 of 5: Matches', states: READS,
-            purpose: 'Schedule the matches of each sport.', primary: 'Save match',
-            entry: ['Step 3', 'Continue setup on Tournament overview'],
-            exit: ['Continue to Step 5', 'Back to Step 3'] },
-          { key: 'setup-scorers', title: 'Step 5 of 5: Scorers', states: READS,
-            purpose: 'Give each match a scorer if you know one, then finish setup.', primary: 'Finish setup',
-            entry: ['Step 4'],
-            exit: ['Assign scorer to Assign scorer', 'Invite the scorer to Invite scorer', 'Finish setup to Tournament overview', 'Back to Step 4'] },
-        ] },
-      { key: 'tournament-overview', title: 'Tournament overview', states: READS,
-        purpose: 'See one tournament and its sports at a glance.', primary: 'By status: Continue setup, Publish tournament, Add match or Change status',
-        entry: ['Your tournaments on Manager home', 'Tournament name on All tournaments'],
-        exit: ['Sport setup', 'Edit details to Tournament details', 'Add match to Match editor', 'Continue setup to the next setup step', 'Back to Manager home'] },
-      { key: 'tournament-details', title: 'Tournament details', states: READS_NO_EMPTY,
-        purpose: 'Change the name, dates, venue, description and photo of a tournament.', primary: 'Save changes',
-        entry: ['Edit details on Tournament overview'],
-        exit: ['Back to Tournament overview'] },
-      { key: 'sport-setup', title: 'Sport setup', states: READS,
-        purpose: 'Set the scoring format and sport managers of one sport.', primary: 'Save format',
-        entry: ['Sport setup on Tournament overview'],
-        exit: ['Open teams to Teams', 'Back to Tournament overview'] },
-      { key: 'teams', title: 'Teams', states: READS,
-        purpose: 'Add and change the teams or players of one sport.', primary: 'Add team',
-        entry: ['Open teams on Sport setup'],
-        exit: ['Back to Sport setup'] },
-      { key: 'matches', title: 'Matches', states: READS,
-        purpose: 'Find every match you manage and act on it.', primary: 'Add match',
-        entry: ['Staff navigation: Matches', 'See all matches on Manager home'],
-        exit: ['Add match or Edit to Match editor', 'Assign scorer to Assign scorer', 'Score to Score console', 'Back to Manager home'] },
-      { key: 'match-editor', title: 'Match editor', states: READS_NO_EMPTY,
-        purpose: 'Add a match or change a scheduled one.', primary: 'Save match',
-        entry: ['Add match or Edit on Matches', 'Add match on Tournament overview'],
-        exit: ['Save match to Matches', 'Back to Matches'] },
       { key: 'assign-scorer', title: 'Assign scorer', states: READS_NO_EMPTY,
         purpose: 'Give one match its scorer.', primary: 'Assign scorer, or Reassign scorer when it has one',
         entry: ['Assign scorer on Matches, Manager home or Step 5'],
@@ -171,7 +119,7 @@ export const findScreen = key => SCREENS.find(screen => screen.key === key);
 
 /**
  * Navigation map per role (Req 1.4, design "Navigation maps"): `[screen, parent]` pairs, where the parent is the
- * screen's Back target; `start` is the role's start screen. Names that are not preview keys are shown as text.
+ * screen's Back target; `start` is the role's start screen. Names that are not preview keys (such as screens already connected to the API) are shown as text.
  * `previewRole` opens the Tournament Manager screens with the Super Admin navigation.
  */
 export const NAV_MAPS = [
@@ -180,16 +128,16 @@ export const NAV_MAPS = [
     ['sport-page', 'home'], ['match-dialog', 'sport-page'], ['sign-in-choice', 'home'],
   ] },
   { roleName: 'Match Scorer', start: 'my-matches', links: [['score-console', 'my-matches'], ['Account', 'my-matches']] },
-  { roleName: 'Tournament Manager', start: 'manager-home', links: [
-    ['setup-details', 'manager-home'], ['setup-sports', 'setup-details'], ['setup-teams', 'setup-sports'], ['setup-matches', 'setup-teams'], ['setup-scorers', 'setup-matches'],
-    ['tournament-overview', 'manager-home'], ['tournament-details', 'tournament-overview'], ['sport-setup', 'tournament-overview'], ['teams', 'sport-setup'],
-    ['matches', 'manager-home'], ['match-editor', 'matches'], ['assign-scorer', 'matches'], ['score-console', 'matches'],
-    ['invite-scorer', 'manager-home'], ['Account', 'manager-home'],
+  { roleName: 'Tournament Manager', start: 'Manager home', links: [
+    ['Step 1 of 5: Tournament details', 'Manager home'], ['Step 2 of 5: Sports', 'Step 1 of 5: Tournament details'], ['Step 3 of 5: Teams', 'Step 2 of 5: Sports'], ['Step 4 of 5: Matches', 'Step 3 of 5: Teams'], ['Step 5 of 5: Scorers', 'Step 4 of 5: Matches'],
+    ['Tournament overview', 'Manager home'], ['Tournament details', 'Tournament overview'], ['Sport setup', 'Tournament overview'], ['Teams', 'Sport setup'],
+    ['Matches', 'Manager home'], ['Match editor', 'Matches'], ['assign-scorer', 'Matches'], ['score-console', 'Matches'],
+    ['invite-scorer', 'Manager home'], ['Account', 'Manager home'],
   ] },
   { roleName: 'Super Admin', start: 'admin-home', previewRole: 'SUPER_ADMIN', links: [
-    ['all-tournaments', 'admin-home'], ['tournament-overview', 'all-tournaments'], ['tournament-details', 'tournament-overview'], ['sport-setup', 'tournament-overview'], ['teams', 'sport-setup'],
-    ['setup-details', 'admin-home'], ['setup-sports', 'setup-details'], ['setup-teams', 'setup-sports'], ['setup-matches', 'setup-teams'], ['setup-scorers', 'setup-matches'],
-    ['matches', 'admin-home'], ['match-editor', 'matches'], ['assign-scorer', 'matches'], ['score-console', 'matches'], ['invite-scorer', 'admin-home'],
+    ['all-tournaments', 'admin-home'], ['Tournament overview', 'all-tournaments'], ['Tournament details', 'Tournament overview'], ['Sport setup', 'Tournament overview'], ['Teams', 'Sport setup'],
+    ['Step 1 of 5: Tournament details', 'admin-home'], ['Step 2 of 5: Sports', 'Step 1 of 5: Tournament details'], ['Step 3 of 5: Teams', 'Step 2 of 5: Sports'], ['Step 4 of 5: Matches', 'Step 3 of 5: Teams'], ['Step 5 of 5: Scorers', 'Step 4 of 5: Matches'],
+    ['Matches', 'admin-home'], ['Match editor', 'Matches'], ['assign-scorer', 'Matches'], ['score-console', 'Matches'], ['invite-scorer', 'admin-home'],
     ['staff-list', 'admin-home'], ['invite-staff', 'staff-list'], ['staff-member', 'staff-list'], ['pending-invitations', 'admin-home'], ['Account', 'admin-home'],
   ] },
 ];
