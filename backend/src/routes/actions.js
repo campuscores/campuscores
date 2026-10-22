@@ -88,7 +88,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
       const { seq } = decision;
       const snapshot = toPublic('snapshot', data);
       const card = toPublic('card', {
-        id: match.id, sport: match.sport, status: data.status, competition: match.tournamentName,
+        id: match.id, sport: match.sport, status: data.status, competition: match.tournamentName, tournamentId: String(match.tournamentId),
         sides: snapshot.sides.map(({ name }) => ({ name })), score: snapshot.sides.map(({ points }) => points), clock: null,
         periods: snapshot.periods, winner: snapshot.winner, format: snapshot.format, finalizedAt: snapshot.finalizedAt, events: snapshot.events?.slice(-20), gamePoints: snapshot.gamePoints, serve: snapshot.serve,
       });

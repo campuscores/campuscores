@@ -1,19 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import SiteHeader from '../../components/SiteHeader.jsx';
-import SportIcon from '../../components/SportIcon.jsx';
 import StaffShell from '../staff/StaffShell.jsx';
 import DataList from '../manage/DataList.jsx';
-import Hero from '../home/Hero.jsx';
-import SportsFilters from '../home/SportsFilters.jsx';
-import LiveMatches from '../matches/LiveMatches.jsx';
-import Tournaments from '../tournaments/Tournaments.jsx';
-import { sampleMatches } from '../matches/sampleMatches.js';
-import { sampleTournaments } from '../tournaments/sampleTournaments.js';
-import SportMatchDialog from '../sports/SportMatchDialog.jsx';
-import TournamentsView from '../tournaments/TournamentsView.jsx';
-import TournamentView from '../tournaments/TournamentView.jsx';
-import TournamentSportView from '../tournaments/TournamentSportView.jsx';
 import SignInChoiceView from '../auth/SignInChoiceView.jsx';
 import AdminHomeView from '../admin/AdminHomeView.jsx';
 import AllTournamentsView from '../admin/AllTournamentsView.jsx';
@@ -23,51 +11,11 @@ import StaffMemberView from '../admin/StaffMemberView.jsx';
 import PendingInvitationsView from '../admin/PendingInvitationsView.jsx';
 import { findScreen, GROUPS, NAV_MAPS, STATE_LABELS } from './previewScreens.js';
 import { PREVIEW_DATA } from './previewData.js';
-import '../home/HomePage.css';
-import '../sports/SportPage.css';
 import '../manage/manage.css';
-
-/** Home with its Display_Fixtures and no live feed, so the preview opens no socket. Tiles filter in place. */
-function HomePreview() {
-  const [sport, setSport] = useState('all');
-  const matches = sport === 'all' ? sampleMatches : sampleMatches.filter(match => match.sport === sport);
-  return (
-    <>
-      <SiteHeader />
-      <main>
-        <Hero />
-        <SportsFilters selectedSport={sport} onSelect={setSport} />
-        <LiveMatches matches={matches} selectedSport={sport} />
-        <Tournaments tournaments={sampleTournaments} />
-      </main>
-    </>
-  );
-}
-
-/** The Sport page frame with its match detail dialog open; "Open match details" opens it again after Close. */
-function MatchDialogPreview({ sport, scoring, match }) {
-  const [open, setOpen] = useState(match);
-  const theme = {
-    '--match-background': `url('/assets/${sport.id}-background.webp')`,
-    '--match-background-phone': `url('/assets/${sport.id}-background-640.webp')`,
-    '--sport-color': sport.color,
-  };
-  return (
-    <>
-      <SiteHeader />
-      <main className="sport-page" style={theme}>
-        <header className="sport-section sport-title"><h1><SportIcon sport={sport.id} />{sport.label}</h1></header>
-        <p className="sport-section"><button type="button" className="date-chip" onClick={() => setOpen(match)}>Open match details</button></p>
-        <SportMatchDialog sport={sport} scoring={scoring} match={open} onClose={() => setOpen(null)} />
-      </main>
-    </>
-  );
-}
 
 // The real View of each preview key. Public Views take `status`; staff Views take `state` and `role`.
 const VIEWS = {
-  home: HomePreview, tournaments: TournamentsView, tournament: TournamentView, 'tournament-sport': TournamentSportView,
-  'sport-page': TournamentSportView, 'match-dialog': MatchDialogPreview, 'sign-in-choice': SignInChoiceView,
+  'sign-in-choice': SignInChoiceView,
   'admin-home': AdminHomeView, 'all-tournaments': AllTournamentsView, 'staff-list': StaffListView, 'invite-staff': InviteStaffView,
   'staff-member': StaffMemberView, 'pending-invitations': PendingInvitationsView,
 };

@@ -102,6 +102,8 @@ test('"Invite as Match Scorer" opens Invite scorer with the email; the invitatio
   await expect(field(page, 'Email')).toHaveValue('nobody@example.com');
   await expect(main(page)).toContainText('Role: Match Scorer');
   await button(page, 'Send invitation').click();
+  // The click can resolve before the mocked POST runs; wait for it before reading the expiry.
+  await expect.poll(() => api.state.invitations.length).toBe(1);
   const ms = Date.parse(api.state.invitations[0].expiresAt);
   const day = new Date(`${istDate(ms)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   await expect(status(page, `Invitation sent to nobody@example.com. It expires on ${day}, ${timeText(ms)}.`)).toBeVisible();

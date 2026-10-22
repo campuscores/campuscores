@@ -73,6 +73,40 @@ test.describe('homepage live row', () => {
     await expect(page.locator('header').first()).toBeVisible();
   });
 });
+test.describe('homepage tournament row', () => {
+  const json = body => ({ headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify(body) });
+  // Shape copies GET /api/tournaments in backend/src/routes/public.js.
+  const cup = { id: '5', slug: 'cup', name: 'Cup', startsOn: '2026-10-20', endsOn: '2026-10-30', status: 'ONGOING', phase: 'live', imageKey: 'court', venue: null, description: null };
+  const row = page => page.locator('#tournaments');
+  test('shows only API Live tournaments, linked by slug, from one read', async ({ page }) => {
+    const calls = [];
+    // The second tournament's dates cover today, but its API phase is upcoming, so device time must not show it.
+    await page.route('http://api.test/api/tournaments', route => { calls.push(route.request().url()); return route.fulfill(json({ tournaments: [cup, { ...cup, id: '6', slug: 'later', name: 'Later', startsOn: '2000-01-01', endsOn: '2999-12-31', phase: 'upcoming' }, { ...cup, id: '7', slug: 'old', name: 'Old', phase: 'past' }] })); });
+    await page.goto(`${LIVE}/`);
+    await expect(row(page).locator('.tournament-card')).toHaveCount(1);
+    await expect(row(page).locator('.tournament-card')).toHaveAttribute('href', '/tournaments/cup');
+    await expect(row(page).locator('.tournament-card h3')).toHaveText('Cup');
+    await expect(row(page).locator('img')).toHaveAttribute('src', '/assets/tournament-court.webp');
+    expect(calls).toHaveLength(1);
+  });
+  test('keeps the heading with the empty message when none are live', async ({ page }) => {
+    await page.route('http://api.test/api/tournaments', route => route.fulfill(json({ tournaments: [{ ...cup, phase: 'past' }] })));
+    await page.goto(`${LIVE}/`);
+    await expect(row(page).getByRole('heading', { level: 2, name: 'Tournaments' })).toBeVisible();
+    await expect(row(page)).toContainText('No tournaments are live right now.');
+    await expect(row(page).locator('.tournament-card')).toHaveCount(0);
+  });
+  test('a failed read shows the unavailable message in the row only and Try again reads once more', async ({ page }) => {
+    let reads = 0;
+    await page.route('http://api.test/api/tournaments', route => { reads += 1; return reads === 1 ? route.abort() : route.fulfill(json({ tournaments: [cup] })); });
+    await page.goto(`${LIVE}/`);
+    await expect(row(page).getByRole('status')).toHaveText('Scores are unavailable right now.');
+    await expect(page.getByRole('heading', { level: 2, name: 'Live Matches' })).toBeVisible();
+    await row(page).getByRole('button', { name: 'Try again' }).click();
+    await expect(row(page).locator('.tournament-card')).toHaveCount(1);
+    expect(reads).toBe(2);
+  });
+});
 test('fixture mode makes no API or live socket request', async ({ page }) => {
   const urls = [];
   page.on('request', request => urls.push(request.url()));

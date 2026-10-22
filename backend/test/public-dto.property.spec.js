@@ -20,7 +20,7 @@ const MATCH = {
 const SPECS = {
   snapshot: SNAPSHOT,
   match: MATCH,
-  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true, format: FORMAT, periods: PERIOD, winner: true, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
+  card: { id: true, sport: true, status: true, competition: true, tournamentId: true, sides: SIDE, score: true, clock: true, seq: true, format: FORMAT, periods: PERIOD, winner: true, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
   tournament: {
     id: true, slug: true, name: true, startsOn: true, endsOn: true, status: true,
     phase: true, imageKey: true, venue: true, description: true, sports: true, matches: MATCH,

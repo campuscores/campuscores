@@ -13,11 +13,12 @@ const NO_ACCESS = 'You do not have access to this page';
 const FRAME_PRIMARY = new Set(['admin-home', 'all-tournaments', 'staff-list', 'pending-invitations']);
 // Screens connected to the API in Stage 2; their preview entries are deleted (Req 1.11).
 const CONNECTED = ['manager-home', 'setup-details', 'setup-sports', 'setup-teams', 'setup-matches', 'setup-scorers',
-  'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor', 'assign-scorer', 'invite-scorer'];
+  'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor', 'assign-scorer', 'invite-scorer',
+  'home', 'tournaments', 'tournament', 'tournament-sport', 'sport-page', 'match-dialog'];
 
 /**
- * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). Viewer pages and the sign-in
- * choice have none by design. A staff screen shows one when ready or empty (the frame stays). Loading and error show
+ * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). The sign-in choice has none
+ * by design. A staff screen shows one when ready or empty (the frame stays). Loading and error show
  * no content, so only a frame Primary_Action stays. No access shows nothing but the start-page link. An empty staff
  * member detail means the account no longer exists, so there is nothing to act on.
  */
@@ -46,7 +47,6 @@ async function expectState(page, state) {
   if (state === 'loading') await expect(page.getByText(/^Loading .+…$/).first()).toBeVisible();
   if (state === 'error') await expect(page.getByRole('button', { name: 'Try again' }).first()).toBeVisible();
   if (state === 'forbidden') await expect(page.locator('h1')).toHaveText(NO_ACCESS);
-  if (state === 'not-found') await expect(page.locator('h1')).toHaveText('Tournament not found');
 }
 
 test.describe('layout preview', () => {
@@ -92,8 +92,7 @@ test.describe('layout preview', () => {
             await expect(page.locator('h1:visible'), `one h1, ${at}`).toHaveCount(1);
             await expect(page.locator('.button-primary:visible'), `Primary_Action count, ${at}`).toHaveCount(primaryCount(screen, state));
             expect(await overflow(page), `page overflow, ${at}`).toBeLessThanOrEqual(0);
-            // The not-found state reuses the site's page-not-found frame, which this feature does not change.
-            if (state !== 'not-found') expect(await smallTargets(page), `targets under 44×44, ${at}`).toEqual([]);
+            expect(await smallTargets(page), `targets under 44×44, ${at}`).toEqual([]);
           }
         });
       }

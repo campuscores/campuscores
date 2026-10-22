@@ -76,7 +76,7 @@ const MATCH = {
 const PUBLIC = {
   snapshot: SNAPSHOT,
   match: MATCH,
-  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
+  card: { id: true, sport: true, status: true, competition: true, tournamentId: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
   tournament: {
     id: true,
     slug: true,

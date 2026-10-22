@@ -1,9 +1,7 @@
 // Clearly fake sample data for the Stage 1 layout preview (Req 1.7). Every person, team and tournament name ends in
-// "(fake)", like the seed; emails use the reserved example.test domain. Public pages reuse the Display_Fixtures.
+// "(fake)", like the seed; emails use the reserved example.test domain.
 // Times arrive as formatted text, as the containers will pass them. This file is a Display_Fixture: the
 // Event_Time_Zone guard (task 11.1) skips it, so the "IST" text may live here only.
-import { sports } from '../../data/sports.js';
-import { sportFixtures } from '../sports/sportFixtures.js';
 
 /** Stands in for an accepted API request, so success notices show. Sends nothing. */
 export const done = () => new Promise(resolve => setTimeout(() => resolve(true), 300));
@@ -41,52 +39,12 @@ const group = items => ({ items, total: items.length });
 const todayMatches = { live: group([live]), scheduled: group([scheduled]), final: group([final]), notScored: group([notScored]) };
 const needsScorer = group([scheduled, nextDay, finalTbd]);
 
-const sport = id => sports.find(entry => entry.id === id);
-const withPhase = (matches, phase) => matches.map(match => ({ ...match, phase }));
-const fixtureMatches = ({ liveMatches, upcomingMatches, pastMatches }) =>
-  [...withPhase(liveMatches, 'live'), ...withPhase(upcomingMatches, 'upcoming'), ...withPhase(pastMatches, 'past')];
-const badminton = sportFixtures.badminton;
-const football = sportFixtures.football;
-
 /**
  * Per preview key: `props` always reach the View (the role comes from previewScreens.js); `data` only in the ready
  * state and `empty` only in the empty state, as a container passes data only after a load. In the empty state the
  * View gets `emptyState`: 'empty' when it has its own empty state, else 'ready' with the empty data.
  */
 export const PREVIEW_DATA = {
-  // Viewer screens: Display_Fixtures.
-  home: {},
-  tournaments: {
-    data: { tournaments: [
-      { ...cup, phase: 'live' },
-      { slug: 'river-relay-fake', name: 'River Relay (fake)', startsOn: '2026-10-20', endsOn: '2026-10-27', imageKey: 'track', phase: 'live' },
-      { slug: 'winter-league-fake', name: 'Winter League (fake)', startsOn: '2026-11-10', endsOn: '2026-11-14', imageKey: 'court', phase: 'upcoming' },
-      { slug: 'racquet-open-fake', name: 'Racquet Open (fake)', startsOn: '2026-11-20', endsOn: '2026-11-22', imageKey: 'tennis', phase: 'upcoming' },
-      { slug: 'monsoon-cup-fake', name: 'Monsoon Cup (fake)', startsOn: '2026-08-03', endsOn: '2026-08-09', imageKey: 'field', phase: 'past' },
-    ] },
-    empty: { tournaments: [] },
-  },
-  tournament: {
-    data: { tournament: { ...cup, sports: ['football', 'badminton', 'volleyball'] } },
-    empty: { tournament: { ...cup, sports: [] } },
-  },
-  'tournament-sport': {
-    props: { sport: sport('badminton'), scoring: badminton.scoring },
-    data: { tournament: cup, matches: fixtureMatches(badminton) },
-    empty: { tournament: cup, matches: [] },
-  },
-  'sport-page': {
-    props: { sport: sport('football'), scoring: football.scoring },
-    data: { matches: fixtureMatches(football) },
-    empty: { matches: [] },
-  },
-  'match-dialog': {
-    props: {
-      sport: sport('badminton'), scoring: badminton.scoring,
-      // A FINAL with one side still open shows "To be decided" (Req 12.11).
-      match: { ...badminton.upcomingMatches.find(match => match.round === 'Final'), sides: [badminton.upcomingMatches[0].sides[0], { name: 'To be decided', team: 'To be decided', players: [] }] },
-    },
-  },
   'sign-in-choice': {},
 
   // Super Admin screens.

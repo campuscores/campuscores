@@ -203,23 +203,23 @@ test('menus and legacy links navigate and close correctly', async ({ page }) => 
   await page.mouse.click(8, 130);
   await expect(page.locator('.mobile-menu')).not.toHaveAttribute('open');
   await menu.click();
-  await page.locator('.mobile-menu-panel a[href="/#tournaments"]').click();
-  await expect(page).toHaveURL(/#tournaments$/);
+  await page.locator('.mobile-menu-panel a[href="/tournaments"]').click();
+  await expect(page).toHaveURL(/\/tournaments$/);
   await expect(page.locator('.mobile-menu')).not.toHaveAttribute('open');
-  await expect(page.locator('#tournaments')).toBeInViewport();
+  await expect(page.getByRole('heading', { level: 1, name: 'Tournaments' })).toBeInViewport();
   expect(errors).toEqual([]);
 });
 
 // Keep each click/refresh/back journey inside its own timeout budget on slower runners.
-const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id }))];
-for (const { destination, sport } of destinations) {
+const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id, title: event.name }))];
+for (const { destination, sport, title } of destinations) {
   test('homepage destination ' + destination + ' opens, refreshes and returns with Back', async ({ page }) => {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto('/');
     if (sport) await page.locator('.desktop-nav .sports-dropdown summary').click();
     await page.locator('a[href="' + destination + '"]').first().click();
     await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    const ready = () => sport ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    const ready = () => expect(page.getByRole('heading', { level: 1, name: sport ? sport.label : title })).toBeVisible();
     await ready(); expect((await page.reload()).status()).toBe(200); await ready();
     await page.goBack(); await expect(page.locator('.hero')).toBeVisible(); expect(errors).toEqual([]);
   });
@@ -236,11 +236,15 @@ test('repeat Home and Tournaments navigation scrolls and closes phone menus', as
       await page.evaluate(() => window.scrollTo(0, 0));
       if (width < 768) await menu.locator(':scope > summary').click();
       await navigation.getByRole('link', { name: 'Tournaments', exact: true }).click();
-      await expect(page).toHaveURL(/\/#tournaments$/);
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
-      await expect(page.locator('#tournaments')).toBeInViewport();
+      await expect(page).toHaveURL(/\/tournaments$/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Tournaments' })).toBeInViewport();
+      await expect(navigation.locator('a[href="/tournaments"]')).toHaveAttribute('aria-current', 'page');
       if (width < 768) await expect(menu).not.toHaveAttribute('open');
     }
+    // The header opens the Tournaments page; the /#tournaments anchor still scrolls to the homepage section.
+    await page.goto('/#tournaments');
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+    await expect(page.locator('#tournaments')).toBeInViewport();
     const home = navigation.getByRole('link', { name: 'Home', exact: true });
     for (let repeat = 0; repeat < 2; repeat++) {
       await page.evaluate(() => window.scrollTo(0, 0));

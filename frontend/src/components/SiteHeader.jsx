@@ -21,6 +21,7 @@ export default function SiteHeader() {
   const headerRef = useRef(null);
   const location = useLocation();
   const signInCurrent = location.pathname.startsWith('/sign-in') ? 'page' : undefined;
+  const tournamentsCurrent = /^\/tournaments\/?$/.test(location.pathname) ? 'page' : undefined;
 
   useEffect(() => {
     const header = headerRef.current;
@@ -52,7 +53,7 @@ export default function SiteHeader() {
         <Link className="site-name" to="/" aria-label="Thaparlympics home">Thaparlympics</Link>
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link className="nav-link" to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
-          <Link className="nav-link" to="/#tournaments">Tournaments</Link>
+          <Link className="nav-link" to="/tournaments" aria-current={tournamentsCurrent}>Tournaments</Link>
           <SportsDropdown />
           {signInLink && <Link className="nav-link" to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
         </nav>
@@ -63,7 +64,7 @@ export default function SiteHeader() {
           <summary aria-label="Menu" />
           <nav className="mobile-menu-panel" aria-label="Main navigation">
             <Link to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
-            <Link to="/#tournaments">Tournaments</Link>
+            <Link to="/tournaments" aria-current={tournamentsCurrent}>Tournaments</Link>
             <SportsDropdown />
             {signInLink && <Link to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
           </nav>

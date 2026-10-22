@@ -4,10 +4,11 @@ import HomePage from '../features/home/HomePage.jsx';
 import SportPage from '../features/sports/SportPage.jsx';
 import PrivacyPage from '../features/legal/PrivacyPage.jsx';
 import SignInUnavailable from '../features/auth/SignInUnavailable.jsx';
+import TournamentsPage from '../features/tournaments/TournamentsPage.jsx';
+import TournamentPage from '../features/tournaments/TournamentPage.jsx';
+import TournamentSportPage from '../features/tournaments/TournamentSportPage.jsx';
 import { sportFixtures } from '../features/sports/sportFixtures.js';
 import { sports } from '../data/sports.js';
-
-function ReservedPage() { return null; }
 
 // Clerk code loads only in this lazy chunk, and only when the build has a Clerk key (Req 11.8, 13.3).
 // `staff(screen)` renders the AuthArea screen with that key (see SCREENS and PAGES in AuthArea.jsx).
@@ -31,6 +32,7 @@ export default function App() {
   useEffect(() => {
     // StaffShell sets the title of staff screens; this effect runs after it and must not overwrite it.
     if (!shellTitled(pathname)) document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
+      : /^\/tournaments\/?$/.test(pathname) ? 'Tournaments | Thaparlympics'
       : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
       : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics'
       : pathname === '/privacy' ? 'Privacy | Thaparlympics'
@@ -50,7 +52,9 @@ export default function App() {
       } replace />} />
       {/* Every sport gets the shared sport page with its display fixtures; key resets its state between sports. */}
       {sports.map(sport => <Route key={sport.id} path={`/sports/${sport.id}`} element={<SportPage key={sport.id} sport={sport} fixtures={sportFixtures[sport.id]} />} />)}
-      <Route path="/tournaments/:tournament" element={<ReservedPage />} />
+      <Route path="/tournaments" element={<TournamentsPage />} />
+      <Route path="/tournaments/:slug" element={<TournamentPage />} />
+      <Route path="/tournaments/:slug/:sport" element={<TournamentSportPage />} />
       {/* Pages that need an account live in the lazy Clerk area (design "Information architecture"). */}
       <Route path="/sign-in" element={staff('sign-in')} />
       <Route path="/sign-in/scorer/*" element={staff('sign-in-scorer')} />

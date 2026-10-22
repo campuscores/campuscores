@@ -4,18 +4,10 @@ import SportIcon from '../../components/SportIcon.jsx';
 import SportSection from '../sports/SportSection.jsx';
 import SportMatchDialog from '../sports/SportMatchDialog.jsx';
 import { TournamentNotFound, UNAVAILABLE } from './TournamentView.jsx';
+import { datesOf, forDisplay } from './publicTournaments.js';
 import '../sports/SportPage.css';
 import './TournamentPages.css';
 
-const TO_BE_DECIDED = { name: 'To be decided', team: 'To be decided', players: [] };
-
-/** An empty FINAL side reads "To be decided" (Req 12.11); a Past match with no final result is Not scored (Req 17.4). */
-const forDisplay = match => ({
-  ...match,
-  sides: [0, 1].map(i => match.sides?.[i]?.name ? match.sides[i] : TO_BE_DECIDED),
-  status: match.phase === 'past' && match.status !== 'completed' ? 'not-scored' : match.status,
-});
-const datesOf = matches => [...new Map(matches.filter(m => m.date).map(m => [m.date, { date: m.date, label: m.dateLabel }])).values()];
 const byDate = (matches, date) => date === 'all' ? matches : matches.filter(match => match.date === date);
 
 /**

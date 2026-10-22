@@ -3,47 +3,15 @@
 // (Req 1.11); fake data for each key lives in previewData.js.
 //
 // States: 'ready', 'empty', 'loading', 'error' and 'forbidden' ("You do not have access to this page"). Staff screens
-// that read data support all five. Form-only screens read no data, so they have only 'ready' and 'forbidden'. Public
-// pages have no access check, so they have no 'forbidden'; single public pages add 'not-found'.
+// that read data support all five. Form-only screens read no data, so they have only 'ready' and 'forbidden'.
 
 const READS = ['ready', 'empty', 'loading', 'error', 'forbidden'];
 const FORM = ['ready', 'forbidden'];
-const PUBLIC_LIST = ['ready', 'empty', 'loading', 'error'];
-const PUBLIC_PAGE = [...PUBLIC_LIST, 'not-found'];
 
-export const STATE_LABELS = { ready: 'Ready', empty: 'Empty', loading: 'Loading', error: 'Error', forbidden: 'No access', 'not-found': 'Not found' };
+export const STATE_LABELS = { ready: 'Ready', empty: 'Empty', loading: 'Loading', error: 'Error', forbidden: 'No access' };
 
 /** One group per role. `role` is the stored role the Views get (null for public pages). */
 export const GROUPS = [
-  {
-    title: 'Viewer screens', roleName: 'Viewer', role: null,
-    screens: [
-      { key: 'home', title: 'Home', states: ['ready'],
-        purpose: 'See live matches and tournaments, and filter live matches by sport.', primary: 'None',
-        entry: ['Wordmark and Home link on every page', 'Continue as guest on Sign in'],
-        exit: ['Sport tiles filter live matches in place', 'Tournament card to Tournament', 'Header Tournaments to Tournaments', 'Header Sports to Sport page', 'Header Sign in to Sign-in choice'] },
-      { key: 'tournaments', title: 'Tournaments', states: PUBLIC_LIST,
-        purpose: 'Find a tournament that is live, upcoming or past.', primary: 'None',
-        entry: ['Header Tournaments link'],
-        exit: ['Tournament card to Tournament', 'Header Home'] },
-      { key: 'tournament', title: 'Tournament', states: PUBLIC_PAGE,
-        purpose: 'See the dates, venue and sports of one tournament.', primary: 'None',
-        entry: ['Tournament card on Home or Tournaments'],
-        exit: ['Sport tile to Tournament sport', 'Browser Back to Tournaments'] },
-      { key: 'tournament-sport', title: 'Tournament sport', states: PUBLIC_PAGE,
-        purpose: 'See the live, upcoming and past matches of one sport in one tournament.', primary: 'None',
-        entry: ['Sport tile on Tournament'],
-        exit: ['Match card to Match detail dialog', 'Browser Back to Tournament'] },
-      { key: 'sport-page', title: 'Sport page', states: PUBLIC_LIST,
-        purpose: 'See the matches of one sport across public tournaments.', primary: 'None',
-        entry: ['Header Sports menu'],
-        exit: ['Match card to Match detail dialog', 'Header Home'] },
-      { key: 'match-dialog', title: 'Match detail dialog', states: ['ready'],
-        purpose: 'See the score details of one match.', primary: 'Close',
-        entry: ['Match card on Sport page or Tournament sport'],
-        exit: ['Close or Escape returns to the page it opened from'] },
-    ],
-  },
   {
     title: 'Match Scorer screens', roleName: 'Match Scorer', role: 'MATCH_OPERATOR',
     // Existing screens: their captures come from the mocked operator browser specs, with the new staff navigation.
@@ -109,9 +77,9 @@ export const findScreen = key => SCREENS.find(screen => screen.key === key);
  * `previewRole` opens the Tournament Manager screens with the Super Admin navigation.
  */
 export const NAV_MAPS = [
-  { roleName: 'Viewer', start: 'home', links: [
-    ['tournaments', 'home'], ['tournament', 'tournaments'], ['tournament-sport', 'tournament'], ['match-dialog', 'tournament-sport'],
-    ['sport-page', 'home'], ['match-dialog', 'sport-page'], ['sign-in-choice', 'home'],
+  { roleName: 'Viewer', start: 'Home', links: [
+    ['Tournaments', 'Home'], ['Tournament', 'Tournaments'], ['Tournament sport', 'Tournament'], ['Match detail dialog', 'Tournament sport'],
+    ['Sport page', 'Home'], ['Match detail dialog', 'Sport page'], ['sign-in-choice', 'Home'],
   ] },
   { roleName: 'Match Scorer', start: 'my-matches', links: [['score-console', 'my-matches'], ['Account', 'my-matches']] },
   { roleName: 'Tournament Manager', start: 'Manager home', links: [

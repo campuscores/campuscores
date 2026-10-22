@@ -204,6 +204,9 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/matches/:id/actions against
       audit_after: { seq: 7, clientSeq: 2, deviceId: s.deviceId, type: 'POINT', payload: { side: 0 }, reversesActionId: null },
       same_tx: true,
     });
+    // The card carries its tournament ID as text, so a tournament page can scope a card its read lacks (Req 17.13).
+    const { id: tournamentId } = await one('SELECT tournament_id::text AS id FROM tournament_sports WHERE id = 2');
+    expect(stored.card.tournamentId).toBe(tournamentId);
     // The Match_Room holds seq 7, so a resend of it is refused.
     expect(await room(env, `match:${s.matchId}`).publish(second.snapshot, 7)).toBe(false);
   });
