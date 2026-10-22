@@ -2,6 +2,15 @@ import { env } from 'cloudflare:workers';
 import { afterAll, describe, expect, it } from 'vitest';
 import { api, db, one } from './helpers.js';
 
+// Match dates must be today or later (Requirement 12.3), so the fixtures use dates relative to now
+// rather than fixed calendar dates that drift into the past. ISO YYYY-MM-DD in UTC is close enough to
+// the India_Time date for these far-future offsets.
+const futureDate = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+const WIN_START = futureDate(30);
+const WIN_END = futureDate(60);
+const MATCH_DATE = futureDate(40);
+const MATCH_DATE_2 = futureDate(41);
+
 // Manager endpoint integration tests (task 7.6, Requirements 5.7, 23.2, 23.3).
 //
 // DB-gated like the other real-database suites: it runs in CI with REQUIRE_DB=1 and skips locally
@@ -36,9 +45,9 @@ async function fixture({ status = 'DRAFT' } = {}) {
   );
   const { id: tournamentId, slug } = await one(
     `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, venue, description, owner_account_id)
-     VALUES ($1, 'Manage test tournament (fake)', '2026-03-01', '2026-03-10', $2, 'Test Ground (fake)', 'Fake tournament for manage tests.', $3)
+     VALUES ($1, 'Manage test tournament (fake)', $4, $5, $2, 'Test Ground (fake)', 'Fake tournament for manage tests.', $3)
      RETURNING id, slug`,
-    [`test-manage-${suffix}`, status, accountId],
+    [`test-manage-${suffix}`, status, accountId, WIN_START, WIN_END],
   );
   // Extra tournaments this actor creates through the API (POST /api/manage/tournaments) are added
   // here so afterAll removes them even when a test fails before its own cleanup runs.
@@ -75,7 +84,7 @@ async function fixture({ status = 'DRAFT' } = {}) {
     one(
       `INSERT INTO matches (tournament_sport_id, kind, stage, side_a_team_id, side_b_team_id, scheduled_at, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [tsId, extra.kind ?? 'CUSTOM', extra.stage ?? null, extra.sideA ?? null, extra.sideB ?? null, extra.scheduledAt ?? '2026-03-05 10:00+05:30', extra.status ?? 'SCHEDULED'],
+      [tsId, extra.kind ?? 'CUSTOM', extra.stage ?? null, extra.sideA ?? null, extra.sideB ?? null, extra.scheduledAt ?? `${MATCH_DATE} 10:00+05:30`, extra.status ?? 'SCHEDULED'],
     );
   return f;
 }
@@ -118,7 +127,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager mutations each write exactly 
     };
 
     // --- create tournament: one TOURNAMENT_CREATED ---
-    const createRes = await call('POST', '/api/manage/tournaments', { name: 'Audit cup (fake)', startsOn: '2026-04-01', endsOn: '2026-04-02' });
+    const createRes = await call('POST', '/api/manage/tournaments', { name: 'Audit cup (fake)', startsOn: WIN_START, endsOn: WIN_END });
     expect(createRes.status).toBe(201);
     const createdSlug = (await createRes.json()).tournament.slug;
     // The new tournament belongs to the same actor; register it so cleanup removes it even if a
@@ -167,7 +176,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager mutations each write exactly 
     await bump('TEAM_UPDATED', 1, await call('PATCH', `/api/manage/teams/${teamId}`, { name: 'Smashers renamed (fake)' }));
 
     // --- create match: one MATCH_CREATED ---
-    const addMatch = await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: '2026-03-05', time: '10:00', stage: 'SF1', sideA: null, sideB: null });
+    const addMatch = await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: MATCH_DATE, time: '10:00', stage: 'FINAL', sideA: null, sideB: null });
     expect(addMatch.status, JSON.stringify(await addMatch.clone().json())).toBe(201);
     const matchId = (await addMatch.json()).match.id;
     await bump('MATCH_CREATED', 1, addMatch);
@@ -254,10 +263,10 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('refused manager mutations write no Au
     const f = await fixture();
     const call = asOwner(f);
     await f.addSport('badminton');
-    const first = await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: '2026-03-05', time: '10:00', stage: 'FINAL' });
+    const first = await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: MATCH_DATE, time: '10:00', stage: 'FINAL' });
     expect(first.status).toBe(201);
     const before = await f.snapshot();
-    expect(await code(await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: '2026-03-06', time: '10:00', stage: 'FINAL' }))).toEqual([409, 'STAGE_TAKEN']);
+    expect(await code(await call('POST', '/api/manage/matches', { tournament: f.slug, sport: 'badminton', date: MATCH_DATE_2, time: '10:00', stage: 'FINAL' }))).toEqual([409, 'STAGE_TAKEN']);
     expect(await f.snapshot()).toEqual(before);
   });
 
@@ -265,11 +274,11 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('refused manager mutations write no Au
     const f = await fixture();
     const call = asOwner(f);
     const { id: ts } = await f.addSport('badminton');
-    // A match on 2026-03-05, inside the tournament's 2026-03-01..03-10 window.
-    await f.addMatch(ts, { scheduledAt: '2026-03-05 10:00+05:30' });
+    // A match inside the fixture window; moving the end date before it must be refused.
+    await f.addMatch(ts, { scheduledAt: `${MATCH_DATE} 10:00+05:30` });
     const before = await f.snapshot();
     // Moving the end date before that match day must be refused.
-    expect(await code(await call('PATCH', `/api/manage/tournaments/${f.slug}`, { startsOn: '2026-03-01', endsOn: '2026-03-03' }))).toEqual([409, 'DATES_EXCLUDE_MATCHES']);
+    expect(await code(await call('PATCH', `/api/manage/tournaments/${f.slug}`, { startsOn: WIN_START, endsOn: futureDate(35) }))).toEqual([409, 'DATES_EXCLUDE_MATCHES']);
     expect(await f.snapshot()).toEqual(before);
   });
 
@@ -296,13 +305,13 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('validated field boundary values and a
   it('tournament name: 0 and 121 rejected, 1 and 120 accepted', async () => {
     const f = await fixture();
     const call = asOwner(f);
-    expect(await code(await call('POST', '/api/manage/tournaments', { name: '', startsOn: '2026-04-01' }))).toEqual([400, 'BAD_REQUEST']);
-    expect(await code(await call('POST', '/api/manage/tournaments', { name: 'x'.repeat(121), startsOn: '2026-04-01' }))).toEqual([400, 'BAD_REQUEST']);
+    expect(await code(await call('POST', '/api/manage/tournaments', { name: '', startsOn: WIN_START }))).toEqual([400, 'BAD_REQUEST']);
+    expect(await code(await call('POST', '/api/manage/tournaments', { name: 'x'.repeat(121), startsOn: WIN_START }))).toEqual([400, 'BAD_REQUEST']);
 
     // The two accepted tournaments belong to this actor; register them so afterAll removes them and
     // their audit rows (the actor owns them, so audit rows clear with the actor).
     for (const name of ['a', 'y'.repeat(120)]) {
-      const ok = await call('POST', '/api/manage/tournaments', { name, startsOn: '2026-04-01' });
+      const ok = await call('POST', '/api/manage/tournaments', { name, startsOn: WIN_START });
       expect(ok.status).toBe(201);
       f.extraTournamentIds.push((await one('SELECT id FROM tournaments WHERE slug = $1', [(await ok.json()).tournament.slug])).id);
     }

@@ -83,16 +83,27 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
       id: '1', slug: 'test-fake-cup', status: 'ONGOING', phase: 'past', imageKey: 'field',
       sports: ['badminton', 'football'],
     });
-    // Regular (CUSTOM) matches are public now, so all four seed matches appear, in schedule order.
-    expect(tournament.matches.map((m) => m.id)).toEqual(SEED_MATCH_ORDER);
-    tournament.matches.forEach((m) => expectSeedMatch(m, SEED_MATCHES[m.id]));
+    // Regular (CUSTOM) matches are public now, so the four seed matches appear in schedule order.
+    // Other specs insert throwaway CUSTOM matches into the seed tournament's badminton sport in
+    // parallel, so filter to the seed match ids before asserting order and fields.
+    const seedRows = tournament.matches.filter((m) => SEED_MATCHES[m.id]);
+    expect(seedRows.map((m) => m.id)).toEqual(SEED_MATCH_ORDER);
+    seedRows.forEach((m) => expectSeedMatch(m, SEED_MATCHES[m.id]));
   });
 
   it('returns the same tournament by slug as by ID', async () => {
     const byId = await worker('/api/tournaments/1');
     const bySlug = await worker('/api/tournaments/test-fake-cup');
     expect(bySlug.status).toBe(byId.status);
-    expect(await bySlug.json()).toEqual(await byId.json());
+    const a = (await byId.json()).tournament;
+    const b = (await bySlug.json()).tournament;
+    // Stable tournament fields match between the two keys (the match list can shift if another spec
+    // inserts a throwaway match in the seed tournament between the two reads).
+    const facts = (t) => { const copy = { ...t }; delete copy.matches; return copy; };
+    expect(facts(b)).toEqual(facts(a));
+    // The seed matches are identical in both responses.
+    const seed = (t) => t.matches.filter((m) => SEED_MATCHES[m.id]);
+    expect(seed(b)).toEqual(seed(a));
   });
 
   it('returns a match with its snapshot, including the Regular (CUSTOM) match', async () => {
@@ -157,6 +168,14 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
         const shared = (a, b) => a.filter((m) => b.some((n) => n.id === m.id));
         expect(shared(body.matches, signedBody.matches).map((m) => m.id), path).toContain('1');
         expect(shared(signedBody.matches, body.matches), path).toEqual(shared(body.matches, signedBody.matches));
+      } else if (body.tournament) {
+        // The single tournament embeds its match list, which other suites can grow with throwaway
+        // matches in the seed tournament between the two calls; compare facts and the shared matches.
+        const facts = (t) => { const copy = { ...t }; delete copy.matches; return copy; };
+        expect(facts(signedBody.tournament), path).toEqual(facts(body.tournament));
+        const shared = (x, y) => x.filter((m) => y.some((n) => n.id === m.id));
+        expect(shared(signedBody.tournament.matches, body.tournament.matches), path)
+          .toEqual(shared(body.tournament.matches, signedBody.tournament.matches));
       } else {
         expect(signedBody, path).toEqual(body);
       }

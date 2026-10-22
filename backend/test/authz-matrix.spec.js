@@ -284,7 +284,7 @@ function manageFixtures() {
     const email = `test-authz-${crypto.randomUUID()}@example.test`;
     const { id } = await one(
       'INSERT INTO admin_accounts (clerk_user_id, role, status, email, name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [user, role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz fixture (fake)'],
+      [user, role === 'DISABLED_MEMBER' ? 'TOURNAMENT_MANAGER' : role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz fixture (fake)'],
     );
     accounts.push(id);
     return { id: String(id), user, email };
@@ -294,7 +294,7 @@ function manageFixtures() {
 }
 
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix', () => {
-  it('applies the Requirement 5.1 status and code to every /api/manage/* endpoint and writes nothing on refusal', async () => {
+  it('applies the Requirement 5.1 status and code to every /api/manage/* endpoint and writes nothing on refusal', { timeout: 120000 }, async () => {
     const f = manageFixtures();
     // The seed owner (account 2) owns the seed tournament; a fresh tree keeps the seed untouched and
     // lets the owner/out-of-scope split be exact.
@@ -319,7 +319,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
         `INSERT INTO tournament_sports (tournament_id, sport, config, config_version) VALUES ($1, 'badminton', $2, 1) RETURNING id`,
         [tId, { format: DEFAULT_BADMINTON }],
       )).rows[0];
-      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id) VALUES ($1, $2)', [tsId, sportMgr.id]);
+      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id, added_by) VALUES ($1, $2, $3)', [tsId, sportMgr.id, owner.id]);
       const { id: teamId } = (await client.query(
         `INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz Team (fake)') RETURNING id`,
         [tsId],
@@ -388,6 +388,8 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
     ];
 
     try {
+      // Running baseline of the fixture's rows; refusals must never move it off this value.
+      let baseline = await fixtureState(f, tree);
       for (const ep of ENDPOINTS) {
         for (const caller of CALLERS) {
           const expected = caller.expect(ep.level);
@@ -397,8 +399,6 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
           // (for example PATCH tournament for tournament level, GET teams for sport level), so for a
           // destructive endpoint only the refusal callers run here. Refusals never write.
           if (!expected && ep.mutates) continue;
-          // Snapshot the fixture's audit rows and child-row counts before a refusal, to prove no write.
-          const before = expected ? await fixtureState(f, tree) : null;
           const res = await api(ep.method, ep.path, { ...caller.ctx, body: ep.body });
           const payload = await res.json().catch(() => ({}));
           const got = [res.status, payload.error?.code];
@@ -406,8 +406,9 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
 
           if (expected) {
             expect(got, label).toEqual(expected);
-            // Nothing changed on refusal: no new Audit_Row for the fixture, child rows unchanged.
-            expect(await fixtureState(f, tree), `${label} wrote nothing`).toEqual(before);
+            // A refusal (401/403) happens before any write, so the fixture state still equals the
+            // running baseline. One snapshot per refusal (not two) keeps this ~190-call test in budget.
+            expect(await fixtureState(f, tree), `${label} wrote nothing`).toEqual(baseline);
           } else {
             // Allowed: the call passed authorization. Status is not an authz refusal and the code,
             // if any, is a non-authz error (a minimal body may still hit 400/409, which is fine here).
@@ -419,6 +420,8 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
             if (ep.name === 'POST tournaments' && res.status === 201 && payload.tournament?.id) {
               f.tournaments.push(Number(payload.tournament.id));
             }
+            // An allowed call may have written; re-baseline so later refusal comparisons stay valid.
+            baseline = await fixtureState(f, tree);
           }
         }
       }
@@ -517,7 +520,7 @@ function assignFixtures() {
     const email = `test-authz8-${crypto.randomUUID()}@example.test`;
     const { id } = await one(
       'INSERT INTO admin_accounts (clerk_user_id, role, status, email, name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [user, role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz8 fixture (fake)'],
+      [user, role === 'DISABLED_MEMBER' ? 'TOURNAMENT_MANAGER' : role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz8 fixture (fake)'],
     );
     accounts.push(id);
     return { id: String(id), user, email };
@@ -588,7 +591,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matri
         `INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, 'badminton') RETURNING id`,
         [tId],
       )).rows[0];
-      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id) VALUES ($1, $2)', [tsId, sportMgr.id]);
+      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id, added_by) VALUES ($1, $2, $3)', [tsId, sportMgr.id, owner.id]);
       const { id: teamId } = (await client.query(`INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz8 Team (fake)') RETURNING id`, [tsId])).rows[0];
       const { id: team2Id } = (await client.query(`INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz8 Team 2 (fake)') RETURNING id`, [tsId])).rows[0];
       // A LIVE match (not closed) scheduled far ahead, with one ACTIVE assignment to the scorer.

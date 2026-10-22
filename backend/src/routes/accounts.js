@@ -8,10 +8,6 @@ import { parseId } from './public.js';
 // Shared by POST /api/accounts/:id/disable and DELETE /api/me. IDs are bigint strings, as pg returns them.
 export function disableAccount(client, { accountId, actorId, reason, requestId }) {
   return withTx(client, async (tx) => {
-    // A Tournament_Owner must transfer ownership first (Requirement 3.14). Read on the uncached pool inside the
-    // transaction so a concurrent transfer is seen; throwing here rolls back before any disable write or Clerk call.
-    const owned = await tx.query('SELECT 1 FROM tournaments WHERE owner_account_id = $1 LIMIT 1', [accountId]);
-    if (owned.rows.length) throw new AppError(409, 'OWNER_TRANSFER_REQUIRED', 'Transfer tournament ownership first');
     // Locks the target and every active Super Admin in id order, so concurrent disables cannot remove the last one.
     const { rows } = await tx.query(
       `SELECT id, role, status FROM admin_accounts
@@ -24,6 +20,10 @@ export function disableAccount(client, { accountId, actorId, reason, requestId }
     if (target.role === 'SUPER_ADMIN' && target.status === 'ACTIVE' && activeSupers === 1) {
       throw new AppError(409, 'LAST_SUPER_ADMIN', 'Cannot disable the last active Super Admin');
     }
+    // A Tournament_Owner must transfer ownership first (Requirement 3.14), checked after the
+    // last-Super-Admin guard so that guard takes precedence; still before any write or Clerk call.
+    const owned = await tx.query('SELECT 1 FROM tournaments WHERE owner_account_id = $1 LIMIT 1', [accountId]);
+    if (owned.rows.length) throw new AppError(409, 'OWNER_TRANSFER_REQUIRED', 'Transfer tournament ownership first');
     await tx.query(`UPDATE admin_accounts SET status = 'DISABLED', updated_at = now() WHERE id = $1`, [accountId]);
     const revoked = await tx.query(
       `UPDATE match_operator_assignments

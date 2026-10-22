@@ -44,7 +44,7 @@ function tournamentScope(account, tAlias, startIndex) {
 const VENUE_KEYS = ['field', 'stadium', 'court', 'tennis', 'track'];
 const TOURNAMENT_COLUMNS = `t.id::text AS id, t.slug, t.name, t.status,
   t.starts_on::text AS "startsOn", t.ends_on::text AS "endsOn", t.venue, t.description,
-  COALESCE(t.image_key, $KEYS[((t.id - 1) % 5) + 1]) AS "imageKey", t.owner_account_id::text AS "ownerId"`;
+  COALESCE(t.image_key, ($KEYS::text[])[((t.id - 1) % 5) + 1]) AS "imageKey", t.owner_account_id::text AS "ownerId"`;
 
 // A tournament DTO for the client: drops ownerId, adds isOwner for the caller.
 const toTournament = (row, account) => {
@@ -101,7 +101,7 @@ async function insertTournamentWithSlug(tx, base, values) {
     for (let n = 2; taken.has(slug) || slug === 'new'; n += 1) slug = `${base}-${n}`;
     try {
       const { rows: [created] } = await tx.query(
-        `INSERT INTO tournaments (slug, name, starts_on, ends_on, venue, description, status, owner_account_id)
+        `INSERT INTO tournaments AS t (slug, name, starts_on, ends_on, venue, description, status, owner_account_id)
          VALUES ($1, $2, $3, $4, $5, $6, 'DRAFT', $7)
          RETURNING ${TOURNAMENT_COLUMNS.replace('$KEYS', '$8')}`,
         [slug, values.name, values.startsOn, values.endsOn, values.venue, values.description, values.ownerId, VENUE_KEYS],
@@ -392,7 +392,7 @@ manageRoutes.patch('/manage/tournaments/:slug', ...guard, async (c) => {
       }
 
       const { rows: [row] } = await tx.query(
-        `UPDATE tournaments SET name = $2, starts_on = $3, ends_on = $4, venue = $5, description = $6, image_key = $7
+        `UPDATE tournaments AS t SET name = $2, starts_on = $3, ends_on = $4, venue = $5, description = $6, image_key = $7
          WHERE id = $1 RETURNING ${TOURNAMENT_COLUMNS.replace('$KEYS', '$8')}`,
         [current.id, name, startsOn, endsOn, venue, description, imageKey, VENUE_KEYS],
       );
@@ -434,7 +434,7 @@ manageRoutes.post('/manage/tournaments/:slug/status', ...guard, async (c) => {
       if (code) throw new AppError(409, code, `Cannot change status from ${current.status} to ${to}.`);
 
       const { rows: [row] } = await tx.query(
-        `UPDATE tournaments SET status = $2 WHERE id = $1 RETURNING ${TOURNAMENT_COLUMNS.replace('$KEYS', '$3')}`,
+        `UPDATE tournaments AS t SET status = $2 WHERE id = $1 RETURNING ${TOURNAMENT_COLUMNS.replace('$KEYS', '$3')}`,
         [current.id, to, VENUE_KEYS],
       );
       await audit(tx, {
@@ -690,8 +690,8 @@ manageRoutes.post('/manage/tournaments/:slug/sports/:sport/managers', ...guard, 
       if (existing.rowCount > 0) throw notEligible(); // already a Sport_Manager of this sport
 
       await tx.query(
-        'INSERT INTO tournament_sport_managers (tournament_sport_id, account_id) VALUES ($1, $2)',
-        [ts.id, target.id],
+        'INSERT INTO tournament_sport_managers (tournament_sport_id, account_id, added_by) VALUES ($1, $2, $3)',
+        [ts.id, target.id, account.id],
       );
       await audit(tx, {
         actorId: account.id, action: 'SPORT_MANAGER_ADDED', entity: 'tournament_sports', entityId: String(ts.id), requestId,

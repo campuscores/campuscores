@@ -47,7 +47,8 @@ const matchSelect = (extra = '') => `
   JOIN tournament_sports ts ON ts.id = m.tournament_sport_id
   JOIN tournaments t ON t.id = ts.tournament_id AND ${PUBLIC_TOURNAMENT}
   LEFT JOIN teams a ON a.id = m.side_a_team_id
-  LEFT JOIN teams b ON b.id = m.side_b_team_id`;
+  LEFT JOIN teams b ON b.id = m.side_b_team_id
+  WHERE true`;
 const MATCH_SELECT = matchSelect();
 
 // Public reads take no auth and use the cached pool only.
@@ -66,7 +67,10 @@ const withTournamentPhase = (t) => ({
 });
 
 // Add the Worker_Time Match_Phase.
-const withMatchPhase = (m) => ({ ...m, phase: matchPhase(m, Date.now()) });
+const withMatchPhase = (m) => ({
+  ...m,
+  phase: matchPhase({ status: m.status, scheduledAt: m.scheduledAt ? Date.parse(m.scheduledAt) : null }, Date.now()),
+});
 
 export const publicRoutes = new Hono();
 
