@@ -156,26 +156,23 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
       expect(signed.status, path).toBe(anon.status);
       const body = await anon.json();
       const signedBody = await signed.json();
+      // Other spec files create, edit and score their own throwaway tournaments and matches (some in the
+      // seed tournament) between the two calls, so rows they own can change. Compare only the seed rows,
+      // which no spec changes; the field allow-list check below still covers every row.
       if (body.tournaments) {
-        // Other spec files insert and delete public tournaments in the shared DB between the two calls,
-        // so compare only the rows both lists contain.
-        const shared = (a, b) => a.filter((t) => b.some((u) => u.id === t.id));
-        expect(shared(body.tournaments, signedBody.tournaments).map((t) => t.id), path).toContain('1');
-        expect(shared(signedBody.tournaments, body.tournaments), path).toEqual(shared(body.tournaments, signedBody.tournaments));
+        const seed = (list) => list.filter((t) => t.id === '1');
+        expect(seed(body.tournaments), path).toHaveLength(1);
+        expect(seed(signedBody.tournaments), path).toEqual(seed(body.tournaments));
       } else if (body.matches) {
-        // The sport read spans every public tournament, so other suites' rows may appear between the two
-        // calls; compare only the rows both responses hold.
-        const shared = (a, b) => a.filter((m) => b.some((n) => n.id === m.id));
-        expect(shared(body.matches, signedBody.matches).map((m) => m.id), path).toContain('1');
-        expect(shared(signedBody.matches, body.matches), path).toEqual(shared(body.matches, signedBody.matches));
+        const seed = (list) => list.filter((m) => SEED_MATCHES[m.id]);
+        expect(seed(body.matches).map((m) => m.id), path).toEqual(SEED_MATCH_ORDER);
+        expect(seed(signedBody.matches), path).toEqual(seed(body.matches));
       } else if (body.tournament) {
-        // The single tournament embeds its match list, which other suites can grow with throwaway
-        // matches in the seed tournament between the two calls; compare facts and the shared matches.
         const facts = (t) => { const copy = { ...t }; delete copy.matches; return copy; };
         expect(facts(signedBody.tournament), path).toEqual(facts(body.tournament));
-        const shared = (x, y) => x.filter((m) => y.some((n) => n.id === m.id));
-        expect(shared(signedBody.tournament.matches, body.tournament.matches), path)
-          .toEqual(shared(body.tournament.matches, signedBody.tournament.matches));
+        const seed = (t) => t.matches.filter((m) => SEED_MATCHES[m.id]);
+        expect(seed(body.tournament).map((m) => m.id), path).toEqual(SEED_MATCH_ORDER);
+        expect(seed(signedBody.tournament), path).toEqual(seed(body.tournament));
       } else {
         expect(signedBody, path).toEqual(body);
       }

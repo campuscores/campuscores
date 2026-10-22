@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import { DEFAULT_FORMATS, validateFormat } from '../../../shared/scoring.mjs';
 import { EVENT_TIME_ZONE, istDate, istToUtc, matchPhase, needsScorer } from '../../../shared/time.mjs';
-import { clerkAuth, loadAccount, requireRole } from '../auth.js';
+import { canAccess, clerkAuth, loadAccount, requireRole } from '../auth.js';
 import { audit, withClient, withTx } from '../db.js';
 import { AppError, jsonBody } from '../http.js';
 import { requireScope, scopeFilter } from '../scope.js';
@@ -235,27 +235,44 @@ manageRoutes.get('/manage/home', ...guard, async (c) => {
 
 // --- GET /api/manage/tournaments -----------------------------------------
 // Tournaments in the caller's scope, sorted by start date then name (Requirement 8.1 order).
+// Owner rows (every row for a Super_Admin) also carry `owner: { accountId, name, email }` and
+// `sportManagers: [{ sport, accountId, name, email }]` (Requirement 16.1); a row the caller sees only as a
+// Sport_Manager carries neither. Both come from correlated subqueries in the same statement (no N+1).
 manageRoutes.get('/manage/tournaments', ...guard, async (c) => {
   const account = c.get('account');
   const tScope = tournamentScope(account, 't', 1);
   const sScope = scopeFilter(account, 't', 'ts', tScope.params.length + 1);
   const keysIndex = tScope.params.length + sScope.params.length + 1;
+  const ownerIndex = keysIndex + 1;
+  // NULL owner parameter = Super_Admin, who is the owner of every row.
+  const ownerRow = `($${ownerIndex}::bigint IS NULL OR t.owner_account_id = $${ownerIndex}::bigint)`;
   const { rows } = await uncached(c, (client) =>
     client.query(
       `SELECT ${TOURNAMENT_COLUMNS.replace('$KEYS', `$${keysIndex}`)},
               COALESCE((SELECT json_agg(ts.sport ORDER BY ts.sport)
                         FROM tournament_sports ts
                         WHERE ts.tournament_id = t.id
-                          ${sScope.text ? `AND ${sScope.text}` : ''}), '[]') AS sports
+                          ${sScope.text ? `AND ${sScope.text}` : ''}), '[]') AS sports,
+              CASE WHEN ${ownerRow} THEN
+                (SELECT json_build_object('accountId', o.id::text, 'name', o.name, 'email', o.email)
+                 FROM admin_accounts o WHERE o.id = t.owner_account_id) END AS owner,
+              CASE WHEN ${ownerRow} THEN
+                COALESCE((SELECT json_agg(json_build_object('sport', ts.sport, 'accountId', sm.account_id::text, 'name', ma.name, 'email', ma.email)
+                                          ORDER BY ts.sport, sm.account_id)
+                          FROM tournament_sports ts
+                          JOIN tournament_sport_managers sm ON sm.tournament_sport_id = ts.id
+                          JOIN admin_accounts ma ON ma.id = sm.account_id
+                          WHERE ts.tournament_id = t.id), '[]') END AS "sportManagers"
        FROM tournaments t
        WHERE ${tScope.text}
        ORDER BY t.starts_on NULLS LAST, t.name, t.id`,
-      [...tScope.params, ...sScope.params, VENUE_KEYS],
+      [...tScope.params, ...sScope.params, VENUE_KEYS, account.role === 'SUPER_ADMIN' ? null : account.id],
     ),
   );
   const tournaments = rows.map((row) => {
-    const { ownerId, ...rest } = row;
-    return { ...rest, isOwner: account.role === 'SUPER_ADMIN' || String(ownerId) === String(account.id) };
+    const { ownerId, owner, sportManagers, ...rest } = row;
+    const isOwner = account.role === 'SUPER_ADMIN' || String(ownerId) === String(account.id);
+    return isOwner ? { ...rest, isOwner, owner, sportManagers } : { ...rest, isOwner };
   });
   return c.json({ tournaments });
 });
@@ -276,6 +293,12 @@ manageRoutes.post('/manage/tournaments', ...guard, async (c) => {
 
   const created = await uncached(c, (client) =>
     withTx(client, async (tx) => {
+      // Lock the caller's account FOR SHARE and re-check it, so a concurrent disable or demotion
+      // (accounts.js lockAccount, FOR UPDATE) either commits first and is seen here, or waits and then
+      // sees this tournament (OWNER_TRANSFER_REQUIRED). No other row is locked before it.
+      const { rows: [self] } = await tx.query('SELECT role, status FROM admin_accounts WHERE id = $1 FOR SHARE', [account.id]);
+      const access = canAccess(self ?? null, 'manager');
+      if (!access.ok) throw new AppError(403, access.code, 'Not allowed');
       const base = slugify(name);
       const row = await insertTournamentWithSlug(tx, base, { name, startsOn, endsOn, venue, description, ownerId: account.id });
       await audit(tx, {
@@ -677,7 +700,8 @@ manageRoutes.post('/manage/tournaments/:slug/sports/:sport/managers', ...guard, 
 
       // Resolve the email to an eligible account. Any non-eligible case → one generic 400.
       const { rows: [target] } = await tx.query(
-        'SELECT id, name, email FROM admin_accounts WHERE email = $1 AND status = $2 AND role = $3',
+        // FOR SHARE waits for a concurrent role change or disable, which deletes Sport_Manager rows.
+        'SELECT id, name, email FROM admin_accounts WHERE email = $1 AND status = $2 AND role = $3 FOR SHARE',
         [wanted, 'ACTIVE', 'TOURNAMENT_MANAGER'],
       );
       if (!target) throw notEligible();

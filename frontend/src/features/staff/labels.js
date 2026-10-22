@@ -99,8 +99,12 @@ const MESSAGES = {
   ALREADY_DISABLED: 'This account is already disabled.',
   ALREADY_ACTIVE: 'This account is already active.',
   INVITE_CLOSED: 'This invitation was already accepted, cancelled or has expired.',
+  ACCOUNT_EXISTS: 'Another active staff account uses this email, so this account cannot be re-enabled.',
   ASSIGNMENT_CONFLICT: 'Another scorer was assigned at the same time. Reload to see the current scorer.',
 };
+// A 409 with these codes is about the account being changed, not the caller's own access (403), e.g. a role change
+// of a disabled account (backend accounts.js).
+const CONFLICTS = { ACCOUNT_DISABLED: 'This account is disabled. Re-enable it before you change its role.' };
 const FIELDS = { SCORER_NOT_FOUND: 'email', NOT_A_SCORER: 'email', INVITE_PENDING: 'email', MANAGER_NOT_ELIGIBLE: 'email', DUPLICATE_NAME: 'name', STAGE_TAKEN: 'stage', SPORT_EXISTS: 'sport', REASON_REQUIRED: 'reason' };
 const BY_STATUS = { 400: 'Check your entries and try again.', 403: MESSAGES.NOT_STAFF, 404: MESSAGES.NOT_FOUND, 409: 'This changed since you opened the page. Reload to see the latest.' };
 
@@ -115,7 +119,7 @@ function parse(err) {
     return { text: n ? `${n} ${n === 1 ? 'match falls' : 'matches fall'} outside these dates. Move ${n === 1 ? 'it' : 'them'} first.` : 'Some matches fall outside these dates. Move them first.' };
   }
   const text = !err.status ? 'Could not reach the server. Your changes are still here.'
-    : MESSAGES[err.code] ?? BY_STATUS[err.status] ?? MESSAGES.INTERNAL;
+    : (err.status === 409 && CONFLICTS[err.code]) || MESSAGES[err.code] || BY_STATUS[err.status] || MESSAGES.INTERNAL;
   return { field: FIELDS[err.code], text };
 }
 

@@ -1,11 +1,12 @@
-// Staff layout of every Manager screen (task 14.8; Req 19.6, 19.7, 21.2, 21.3, 21.7, 21.9, 21.11 to 21.13, 23.5).
-// Live-mode build with a stub Clerk and the stateful manager fakes (manage-fakes.js), whose replies copy
-// backend/src/routes/manage.js. Each test opens one screen with its data, opens every disclosure, types a value into
+// Staff layout of every Manager and Super Admin screen (tasks 14.8, 20.6; Req 19.6, 19.7, 21.2, 21.3, 21.7, 21.9,
+// 21.11 to 21.13, 23.5). Live-mode build with a stub Clerk and the stateful manager and admin fakes (manage-fakes.js,
+// admin-fakes.js), whose replies copy backend/src/routes/manage.js, admin.js, accounts.js and invites.js. Each test opens one screen with its data, opens every disclosure, types a value into
 // the first text field and then resizes through the widths, checking the layout rules at each width. Chromium only
 // (playwright.config.js): the checks measure CSS layout, and the phone projects already run the manager specs.
 import { test, expect } from '@playwright/test';
 import { apiError, mockManage, mockStaff, overflow, REPLIES, smallTargets, STAFF_APP as APP } from './helpers.js';
 import { matchesFake, TEAMS, TODAY, TOURNAMENT, tournamentFake, tournamentRow } from './manage-fakes.js';
+import { adminApi, fillerStaff, STAFF } from './admin-fakes.js';
 
 // Each side of the design breakpoints (767, 1023, 1199) and the 320px to 3840px range of Req 21.9.
 const WIDTHS = [320, 390, 767, 768, 1023, 1024, 1199, 1200, 1440, 2560, 3840];
@@ -31,6 +32,15 @@ const SCREENS = [
   { name: 'Match editor (new)', path: '/manage/matches/new?tournament=spring-cup&sport=badminton', h1: 'Add match' },
   { name: 'Match editor (edit)', path: '/manage/matches/21', h1: 'Edit match' },
   { name: 'Match editor (live)', path: '/manage/matches/22', h1: 'Edit match', primary: 0 },
+  // Super Admin screens (task 20.6) on the admin fake (admin-fakes.js). Staff list pages 56 rows, so "Load more" shows.
+  { name: 'Admin home', path: '/admin', h1: 'Admin home', lists: true, admin: true },
+  { name: 'All tournaments', path: '/admin/tournaments', h1: 'All tournaments', lists: true, admin: true },
+  { name: 'Staff list', path: '/admin/staff', h1: 'Staff list', lists: true, admin: { staff: [...STAFF(), ...fillerStaff(51)] } },
+  { name: 'Invite staff', path: '/admin/staff/invite', h1: 'Invite staff', admin: true },
+  { name: 'Staff member (active)', path: '/admin/staff/3', h1: 'Kabir Rao', admin: true },
+  { name: 'Staff member (owner)', path: '/admin/staff/2', h1: 'Mira Coach', admin: true },
+  { name: 'Staff member (disabled)', path: '/admin/staff/5', h1: 'Dev Old', admin: true },
+  { name: 'Pending invitations', path: '/admin/invitations', h1: 'Pending invitations', lists: true, admin: true },
 ];
 
 /**
@@ -93,10 +103,19 @@ const crowdedSections = page => page.evaluate(() => {
   });
 });
 
-/** Shown list forms: `cards` and `tables` counts of displayed `.data-cards` and `.data-table` in main (Req 21.11). */
+/**
+ * Shown list forms (Req 21.11): `cards` and `tables` counts in main. Manager lists render `.data-cards` and `.data-table`
+ * and show one; a Super Admin `.staff-table` is one table that admin.css stacks into cards (no header row) below 768px.
+ */
 const listForms = page => page.evaluate(() => {
   const shown = selector => [...document.querySelectorAll(`main ${selector}`)].filter(el => getComputedStyle(el).display !== 'none').length;
-  return { cards: shown('.data-cards'), tables: shown('.data-table'), lists: document.querySelectorAll('main .data-cards').length };
+  const staffTables = [...document.querySelectorAll('main .staff-table')];
+  const asTable = staffTables.filter(el => getComputedStyle(el).display === 'table' && getComputedStyle(el.tHead).display !== 'none').length;
+  const asCards = staffTables.filter(el => getComputedStyle(el).display === 'block' && getComputedStyle(el.tHead).display === 'none').length;
+  return {
+    cards: shown('.data-cards') + asCards, tables: shown('.data-table') + asTable,
+    lists: document.querySelectorAll('main .data-cards').length + staffTables.length,
+  };
 });
 
 /** Primary_Actions narrower than their container's content box (Req 21.11: across the content width at <=767px). */
@@ -140,8 +159,9 @@ test.afterEach(async ({ page }) => { expect(page.errors).toEqual([]); });
 
 for (const screen of SCREENS) {
   test(`${screen.name}: layout rules at every width from 320px to 3840px`, async ({ page }) => {
-    await mockStaff(page, { me: REPLIES.manager });
-    await managerApi(page);
+    await mockStaff(page, { me: screen.admin ? REPLIES.admin : REPLIES.manager });
+    if (screen.admin) await adminApi(page, screen.admin === true ? {} : screen.admin);
+    else await managerApi(page);
     await page.setViewportSize({ width: WIDTHS[0], height: 900 });
     await page.goto(`${APP}${screen.path}`);
     const h1 = page.locator('main h1');

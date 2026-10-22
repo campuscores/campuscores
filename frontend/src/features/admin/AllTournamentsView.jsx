@@ -13,12 +13,16 @@ import './admin.css';
  * `tournaments`: `[{ slug, name, status, dates, owner: { name, email }, sports: [{ sport, managers: [{ name, email }] }] }]`
  * with display `dates` text. `state` is 'loading', 'error', 'ready' or 'forbidden'.
  * `onTransferOwner(tournament, email, reason)` resolves truthy when the API accepted it; `saving` and `error` (the
- * `apiFetch` error) belong to that request.
+ * `apiFetch` error) belong to that request. `onReset()` clears that error when the dialog opens; `onSignIn` offers
+ * "Sign in again" after a 401.
  */
-export default function AllTournamentsView({ role = 'SUPER_ADMIN', state, tournaments = [], onRetry, onTransferOwner, saving = false, error = null }) {
+export default function AllTournamentsView({ role = 'SUPER_ADMIN', state, tournaments = [], onRetry, onTransferOwner, onReset, onSignIn, saving = false, error = null }) {
   const [target, setTarget] = useState(null);
   const [notice, setNotice] = useState('');
   if (state === 'forbidden') return <NoAccess role={role} />;
+  const open = tournament => { onReset?.(); setTarget(tournament); };
+  // The sign-in window is inert behind a modal dialog, so the dialog closes first.
+  const signIn = onSignIn && (() => { setTarget(null); onSignIn(); });
   async function transfer(email, reason) {
     if (await onTransferOwner(target, email, reason)) {
       setNotice(`${email} now owns ${target.name}.`);
@@ -50,7 +54,7 @@ export default function AllTournamentsView({ role = 'SUPER_ADMIN', state, tourna
                   ) : 'No sports yet'}
                 </Cell>
                 <td>
-                  <button type="button" className="button-text" onClick={() => setTarget(tournament)}>
+                  <button type="button" className="button-text" onClick={() => open(tournament)}>
                     Transfer ownership<span className="sr-only"> of {tournament.name}</span>
                   </button>
                 </td>
@@ -60,7 +64,7 @@ export default function AllTournamentsView({ role = 'SUPER_ADMIN', state, tourna
         </ScreenState>
       </section>
       <TransferOwnerDialog tournament={target} owner={target?.owner} saving={saving} error={target ? error : null}
-        onConfirm={transfer} onCancel={() => setTarget(null)} />
+        onSignIn={signIn} onConfirm={transfer} onCancel={() => setTarget(null)} />
     </StaffShell>
   );
 }

@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { canInvite, clerkAuth, loadAccount, requireRole } from '../auth.js';
-import { withClient, withTx } from '../db.js';
+import { audit, withClient, withTx } from '../db.js';
 import { AppError, jsonBody } from '../http.js';
+import { text } from '../validate.js';
+import { parseId } from './public.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_DAYS = 7;
@@ -66,6 +68,52 @@ inviteRoutes.post('/invites', clerkAuth, loadAccount, requireRole('manager'), as
     await clerk.invitations.revokeInvitation(clerkInvite.id).catch(() => {});
     throw err;
   }
+});
+
+// Super_Admin cancel (Requirements 6.6, 6.7). The Clerk revoke runs first, outside any transaction, so no
+// row lock is held across the network call. A conditional update then closes the row only while it is
+// still PENDING and unexpired; a concurrent accept or cancel that won leaves no row → 409 INVITE_CLOSED.
+// Clerk 404 means the Clerk invitation no longer exists, so it can no longer be used: the row is closed.
+// Any other Clerk failure is 502 CLERK_UNAVAILABLE and the row stays PENDING.
+inviteRoutes.post('/invites/:id/cancel', clerkAuth, loadAccount, requireRole('superAdmin'), async (c) => {
+  const id = parseId(c.req.param('id'));
+  if (!id) throw new AppError(400, 'BAD_REQUEST', 'Malformed ID');
+  const reason = text((await jsonBody(c)).reason, 'reason', 500, { what: 'a reason' }) || null;
+  const closed = () => new AppError(409, 'INVITE_CLOSED', 'This invitation is no longer pending');
+
+  const { rows: [invite] } = await uncached(c, (client) =>
+    client.query(
+      `SELECT clerk_invitation_id AS "clerkId", status = 'PENDING' AND expires_at > now() AS open
+       FROM staff_invitations WHERE id = $1`,
+      [id],
+    ),
+  );
+  if (!invite) throw new AppError(404, 'NOT_FOUND', 'Invitation not found');
+  if (!invite.open) throw closed(); // checked before Clerk, so a closed row sends no Clerk call
+
+  try {
+    await c.get('clerk').invitations.revokeInvitation(invite.clerkId);
+  } catch (err) {
+    if (err?.status !== 404) throw clerkDown();
+  }
+
+  const invitation = await uncached(c, (client) =>
+    withTx(client, async (tx) => {
+      const { rows: [row] } = await tx.query(
+        `UPDATE staff_invitations SET status = 'REVOKED', updated_at = now()
+         WHERE id = $1 AND status = 'PENDING' AND expires_at > now()
+         RETURNING id::text AS id, status, email, role`,
+        [id],
+      );
+      if (!row) throw closed();
+      await audit(tx, {
+        actorId: c.get('account').id, action: 'INVITE_CANCELLED', entity: 'staff_invitations', entityId: row.id,
+        requestId: c.get('requestId'), reason, before: { status: 'PENDING' }, after: { status: 'REVOKED', email: row.email, role: row.role },
+      });
+      return { id: row.id, status: row.status };
+    }),
+  );
+  return c.json({ invitation });
 });
 
 inviteRoutes.post('/invites/accept', clerkAuth, async (c) => {

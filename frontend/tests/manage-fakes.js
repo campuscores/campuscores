@@ -1,5 +1,5 @@
 // Stateful fakes of the manager endpoints in backend/src/routes/manage.js (and assignments.js, invites.js), shared by
-// manage-setup.spec.js, manage-matches.spec.js, manage-assign.spec.js and staff-layout.spec.js. Each `*Fake` returns `{ state, reply(request) }`: `reply` gives a
+// manage-setup.spec.js, manage-matches.spec.js, manage-assign.spec.js, staff-layout.spec.js and admin-fakes.js. Each `*Fake` returns `{ state, reply(request) }`: `reply` gives a
 // [status, body] pair for the paths it knows and undefined for any other path, so specs can combine fakes.
 import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 import { istDate, istToUtc } from '../../shared/time.mjs';

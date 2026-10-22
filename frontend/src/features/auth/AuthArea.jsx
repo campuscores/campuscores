@@ -1,8 +1,14 @@
 import { useEffect, useEffectEvent, useState } from 'react';
 import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import { apiFetch } from '../../services/api.js';
+import AdminHomePage from '../admin/AdminHomePage.jsx';
+import AllTournamentsPage from '../admin/AllTournamentsPage.jsx';
+import InviteStaffPage from '../admin/InviteStaffPage.jsx';
+import PendingInvitationsPage from '../admin/PendingInvitationsPage.jsx';
+import StaffListPage from '../admin/StaffListPage.jsx';
+import StaffMemberPage from '../admin/StaffMemberPage.jsx';
 import AssignScorerPage from '../manage/AssignScorerPage.jsx';
 import CreateTournamentPage from '../manage/CreateTournamentPage.jsx';
 import InviteScorerPage from '../manage/InviteScorerPage.jsx';
@@ -39,8 +45,7 @@ function ScorePage({ getToken, role }) {
 
 /**
  * Staff_Area screens (design "Information architecture"): `title` (h1 and document title of the gate states), `roles`
- * that may open it, `nav` (the StaffNav item it marks, per role when it differs) and `Page`. A screen without `Page`
- * is not built yet (the admin pages arrive in a later task) and shows `InterimPage`, never preview data.
+ * that may open it, `nav` (the StaffNav item it marks, per role when it differs) and `Page`, which every screen has.
  * Every state of a staff screen renders inside StaffShell, which owns the only SiteHeader and the document title.
  */
 const SCREENS = {
@@ -57,24 +62,13 @@ const SCREENS = {
   'match-editor': { title: 'Match editor', roles: MANAGERS, nav: 'matches', Page: MatchEditorPage },
   'assign-scorer': { title: 'Assign scorer', roles: MANAGERS, nav: 'matches', Page: AssignScorerPage },
   'invite-scorer': { title: 'Invite scorer', roles: MANAGERS, nav: { TOURNAMENT_MANAGER: 'invite', SUPER_ADMIN: 'staff' }, Page: InviteScorerPage },
-  'admin-home': { title: 'Admin home', roles: ADMIN, nav: 'home' },
-  'all-tournaments': { title: 'All tournaments', roles: ADMIN, nav: 'tournaments' },
-  'staff-list': { title: 'Staff list', roles: ADMIN, nav: 'staff' },
-  'invite-staff': { title: 'Invite staff', roles: ADMIN, nav: 'staff' },
-  'staff-member': { title: 'Staff member detail', roles: ADMIN, nav: 'staff' },
-  invitations: { title: 'Pending invitations', roles: ADMIN, nav: 'staff' },
+  'admin-home': { title: 'Admin home', roles: ADMIN, nav: 'home', Page: AdminHomePage },
+  'all-tournaments': { title: 'All tournaments', roles: ADMIN, nav: 'tournaments', Page: AllTournamentsPage },
+  'staff-list': { title: 'Staff list', roles: ADMIN, nav: 'staff', Page: StaffListPage },
+  'invite-staff': { title: 'Invite staff', roles: ADMIN, nav: 'staff', Page: InviteStaffPage },
+  'staff-member': { title: 'Staff member detail', roles: ADMIN, nav: 'staff', Page: StaffMemberPage },
+  invitations: { title: 'Pending invitations', roles: ADMIN, nav: 'home', Page: PendingInvitationsPage },
 };
-
-/** A staff screen whose page is not built yet: the real frame and navigation, and one plain sentence. */
-function InterimPage({ screen, role }) {
-  const { pathname } = useLocation();
-  const start = startScreen(role);
-  return (
-    <StaffShell role={role} title={screen.title} current={screen.nav[role] ?? screen.nav} back={pathname === start ? undefined : { to: start, label: 'Home' }}>
-      <p>This page is not ready yet. Use the staff navigation to open another page.</p>
-    </StaffShell>
-  );
-}
 
 /** Signed out (Clerk) or 401 from the API: the existing operator behavior, a sign-in prompt (Req 2.8, 4.8). */
 function SignInPrompt({ screen, signInAgain }) {
@@ -96,7 +90,7 @@ function RoleGate({ screen }) {
   }
   if (me.status === 'signedOut') return <SignInPrompt screen={screen} signInAgain={signInAgain} />;
   if (!screen.roles.includes(me.role)) return <NoAccess role={me.role} />;
-  const Page = screen.Page ?? InterimPage;
+  const { Page } = screen;
   return <Page screen={screen} role={me.role} getToken={getToken} signInAgain={signInAgain} />;
 }
 

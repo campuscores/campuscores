@@ -134,9 +134,9 @@ export function held() {
   return { reply, release };
 }
 
-/** Press Tab (or `key`, such as 'Shift+Tab') until `target` has focus: keyboard only, at most 40 presses. */
-export async function tabTo(page, target, key = 'Tab') {
-  for (let n = 0; n < 40 && !(await target.evaluate(el => el === document.activeElement)); n++) await page.keyboard.press(key);
+/** Press Tab (or `key`, such as 'Shift+Tab') until `target` has focus: keyboard only, at most `max` presses. */
+export async function tabTo(page, target, key = 'Tab', max = 40) {
+  for (let n = 0; n < max && !(await target.evaluate(el => el === document.activeElement)); n++) await page.keyboard.press(key);
   await expect(target).toBeFocused();
 }
 

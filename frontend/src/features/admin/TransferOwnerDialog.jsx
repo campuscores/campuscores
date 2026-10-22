@@ -3,12 +3,14 @@ import ConfirmDialog from '../staff/ConfirmDialog.jsx';
 import Field from '../staff/Field.jsx';
 import { messageFor } from '../staff/labels.js';
 import { emailError, personName } from './adminText.js';
+import DialogRecovery from './DialogRecovery.jsx';
 
 /**
  * Ownership transfer confirmation (Req 3.11, 20.4): the new owner's email and an optional reason.
  * Open while `tournament` is set; `owner` is the current owner. `onConfirm(email, reason)` sends the request.
+ * `onSignIn` (optional) offers "Sign in again" after a 401.
  */
-export default function TransferOwnerDialog({ tournament, owner, saving, error, onConfirm, onCancel }) {
+export default function TransferOwnerDialog({ tournament, owner, saving, error, onConfirm, onCancel, onSignIn }) {
   const id = useId();
   const [email, setEmail] = useState('');
   const [invalid, setInvalid] = useState('');
@@ -37,7 +39,8 @@ export default function TransferOwnerDialog({ tournament, owner, saving, error, 
   return (
     <ConfirmDialog open={Boolean(tournament)} title={`Transfer ownership of ${tournament?.name ?? ''}`} effects={effects}
       confirmLabel="Transfer ownership" reason="optional" saving={saving}
-      error={messageFor(error, 'email') ? null : messageFor(error)} onConfirm={confirm} onCancel={onCancel}>
+      error={messageFor(error, 'email') ? null : messageFor(error)} actions={<DialogRecovery error={error} onSignIn={onSignIn} />}
+      onConfirm={confirm} onCancel={onCancel}>
       <Field id={id} label="New owner's email" type="email" inputMode="email" autoComplete="off" autoCapitalize="none"
         spellCheck={false} maxLength={254} value={email} error={fieldError}
         onChange={event => { setEmail(event.target.value); if (!emailError(event.target.value)) setInvalid(''); }}

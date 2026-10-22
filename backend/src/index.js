@@ -3,6 +3,7 @@ import { AppError, onError, requestId } from './http.js';
 import { sweep } from './outbox.js';
 import { parseRoom } from './rooms.js';
 import { accountRoutes } from './routes/accounts.js';
+import { adminRoutes } from './routes/admin.js';
 import { actionRoutes } from './routes/actions.js';
 import { assignmentRoutes } from './routes/assignments.js';
 import { inviteRoutes } from './routes/invites.js';
@@ -29,6 +30,7 @@ app.route('/api', inviteRoutes); // clerkAuth (+ loadAccount for staff), uncache
 app.route('/api', accountRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', assignmentRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', manageRoutes); // clerkAuth + loadAccount + requireRole('manager'), uncached pool
+app.route('/api', adminRoutes); // clerkAuth + loadAccount + requireRole('superAdmin'), uncached pool
 app.route('/api', leaseRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', actionRoutes); // clerkAuth; the chain SELECT loads the account, uncached pool
 app.notFound(() => {

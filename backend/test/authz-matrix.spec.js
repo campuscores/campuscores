@@ -703,3 +703,179 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('DELETE /api/me owner refusal', () => 
     }
   });
 });
+
+// --- Super Admin endpoint authorization matrix (task 20.3) ---------------
+// Every Super_Admin-only endpoint × the nine Requirement 5.1 callers (Requirements 3.13, 6.15, 23.1).
+// All routes are clerkAuth → loadAccount → requireRole('superAdmin') before any body, ID or entity
+// check, so every staff role other than Super_Admin gets ROLE_FORBIDDEN even with a valid body and a
+// real target; scope never applies. Each refusal is checked against a snapshot of every row the
+// endpoint could write, and invitation cancel runs under a Clerk stub that must record no call.
+// Refused bodies are valid on purpose: a missing guard would then succeed and change the snapshot.
+// The Super_Admin runs the reads in the loop; its writes run once at the end on fixture targets.
+// The disable × Match_Scorer cell is the 'blocks an operator from the revoke and disable routes' case above.
+
+async function adminState(f, tree) {
+  return db(async (client) => {
+    const ids = f.accounts.map(Number);
+    const { rows: [r] } = await client.query(
+      `SELECT
+         (SELECT count(*)::int FROM admin_audit_log WHERE actor_account_id = ANY($1::bigint[])) AS audits,
+         (SELECT count(*)::int FROM admin_audit_log WHERE (entity = 'admin_accounts' AND entity_id = ANY($1::bigint[]::text[]))
+            OR (entity = 'tournaments' AND entity_id = $2::bigint::text) OR (entity = 'staff_invitations' AND entity_id = $3::bigint::text)
+            OR (entity = 'match_operator_assignments' AND entity_id = $5::text)) AS "targetAudits",
+         (SELECT json_agg(json_build_object('id', id::text, 'role', role, 'status', status) ORDER BY id)
+            FROM admin_accounts WHERE id = ANY($1::bigint[])) AS accounts,
+         (SELECT owner_account_id::text FROM tournaments WHERE id = $2::bigint) AS owner,
+         (SELECT status FROM staff_invitations WHERE id = $3::bigint) AS invitation,
+         (SELECT json_agg(json_build_object('id', id::text, 'status', status) ORDER BY id)
+            FROM match_operator_assignments WHERE match_id = $4) AS assignments,
+         (SELECT device_id::text FROM scorer_leases WHERE match_id = $4) AS lease,
+         (SELECT count(*)::int FROM tournament_sport_managers sm
+            JOIN tournament_sports ts ON ts.id = sm.tournament_sport_id WHERE ts.tournament_id = $2::bigint) AS "sportManagers"`,
+      [ids, Number(tree.tId), Number(tree.invId), Number(tree.matchId), tree.assignId],
+    );
+    return r;
+  });
+}
+
+async function cleanupAdminFixtures(f, tree) {
+  await db(async (client) => {
+    const ids = f.accounts.map(Number);
+    const tIds = f.tournaments.map(Number);
+    const { rows: sports } = await client.query('SELECT id FROM tournament_sports WHERE tournament_id = ANY($1)', [tIds]);
+    const sportIds = sports.map((r) => Number(r.id));
+    const { rows: matches } = await client.query('SELECT id FROM matches WHERE tournament_sport_id = ANY($1)', [sportIds]);
+    const matchIds = matches.map((r) => Number(r.id));
+    const { rows: assigns } = await client.query('SELECT id::text FROM match_operator_assignments WHERE match_id = ANY($1) OR account_id = ANY($2)', [matchIds, ids]);
+    await client.query(
+      `DELETE FROM admin_audit_log WHERE actor_account_id = ANY($1::bigint[])
+         OR (entity = 'admin_accounts' AND entity_id = ANY($1::bigint[]::text[]))
+         OR (entity = 'tournaments' AND entity_id = ANY($2::text[]))
+         OR (entity = 'staff_invitations' AND entity_id = ANY($3::text[]))
+         OR (entity = 'match_operator_assignments' AND entity_id = ANY($4))
+         OR (entity = 'scorer_leases' AND entity_id = ANY($5::text[]))`,
+      [ids, tIds, tree?.invId ? [tree.invId] : [], assigns.map((r) => r.id), matchIds],
+    );
+    await client.query('DELETE FROM scorer_leases WHERE match_id = ANY($1) OR account_id = ANY($2)', [matchIds, ids]);
+    await client.query('DELETE FROM match_operator_assignments WHERE match_id = ANY($1) OR account_id = ANY($2)', [matchIds, ids]);
+    await client.query('DELETE FROM matches WHERE id = ANY($1)', [matchIds]);
+    await client.query('DELETE FROM tournament_sport_managers WHERE tournament_sport_id = ANY($1) OR account_id = ANY($2)', [sportIds, ids]);
+    await client.query('DELETE FROM teams WHERE tournament_sport_id = ANY($1)', [sportIds]);
+    await client.query('DELETE FROM tournament_sports WHERE id = ANY($1)', [sportIds]);
+    await client.query('DELETE FROM tournaments WHERE id = ANY($1)', [tIds]);
+    await client.query('DELETE FROM staff_invitations WHERE invited_by = ANY($1) OR accepted_account_id = ANY($1)', [ids]);
+    await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [ids]);
+  });
+}
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('Super Admin endpoint authorization matrix', () => {
+  it('returns ROLE_FORBIDDEN to every other staff role, NOT_STAFF to a Viewer, and writes nothing on refusal', { timeout: 120000 }, async () => {
+    const f = assignFixtures();
+    let tree;
+    let calls = stubClerk(() => [500, { errors: [{ code: 'unexpected', message: 'a refused caller reached Clerk' }] }]);
+    try {
+      const owner = await f.account('TOURNAMENT_MANAGER'); // Tournament_Owner of the fixture tournament
+      const sportMgr = await f.account('TOURNAMENT_MANAGER'); // Sport_Manager in the fixture; the ownership transfer target
+      const outMgr = await f.account('TOURNAMENT_MANAGER'); // no scope on the fixture
+      const disabled = await f.account('DISABLED_MEMBER'); // DISABLED caller
+      const scorerCaller = await f.account('MATCH_OPERATOR'); // Match_Scorer caller
+      const target = await f.account('MATCH_OPERATOR'); // role change and disable target, with an assignment and a lease
+      const disabledTarget = await f.account('DISABLED_MEMBER'); // enable target
+      const viewer = { user: `test_authz8_viewer_${crypto.randomUUID()}` };
+
+      tree = await db(async (client) => {
+        const q = async (text, params) => (await client.query(text, params)).rows[0];
+        const slug = `test-authz20-${crypto.randomUUID().slice(0, 8)}`;
+        const { id: tId } = await q(
+          `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, owner_account_id)
+           VALUES ($1, 'Authz20 Fixture (fake)', '2999-01-10', '2999-01-10', 'DRAFT', $2) RETURNING id`,
+          [slug, owner.id],
+        );
+        f.tournaments.push(tId);
+        const { id: tsId } = await q(`INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, 'badminton') RETURNING id`, [tId]);
+        await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id, added_by) VALUES ($1, $2, $3)', [tsId, sportMgr.id, owner.id]);
+        const { id: matchId } = await q(`INSERT INTO matches (tournament_sport_id, kind, status) VALUES ($1, 'CUSTOM', 'LIVE') RETURNING id`, [tsId]);
+        const { id: assignId } = await q(
+          'INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, $3) RETURNING id',
+          [matchId, target.id, owner.id],
+        );
+        await client.query('INSERT INTO scorer_leases (match_id, account_id, device_id) VALUES ($1, $2, $3)', [matchId, target.id, crypto.randomUUID()]);
+        const clerkId = `inv_test_${crypto.randomUUID()}`;
+        const { id: invId } = await q(
+          `INSERT INTO staff_invitations (email, role, invited_by, clerk_invitation_id, expires_at)
+           VALUES ($1, 'MATCH_OPERATOR', $2, $3, now() + interval '1 day') RETURNING id`,
+          [`test-authz20-inv-${crypto.randomUUID()}@example.test`, owner.id, clerkId],
+        );
+        return { slug, tId: String(tId), matchId: String(matchId), assignId: String(assignId), invId: String(invId), clerkId };
+      });
+
+      const ENDPOINTS = [
+        { name: 'GET staff', method: 'GET', path: '/api/admin/staff' },
+        { name: 'GET staff member', method: 'GET', path: `/api/admin/staff/${target.id}` },
+        { name: 'GET invitations', method: 'GET', path: '/api/admin/invitations' },
+        { name: 'POST owner', method: 'POST', path: `/api/admin/tournaments/${tree.slug}/owner`, body: { email: sportMgr.email, reason: 'x (fake)' }, mutates: true },
+        { name: 'POST cancel', method: 'POST', path: `/api/invites/${tree.invId}/cancel`, body: { reason: 'x (fake)' }, mutates: true },
+        { name: 'POST enable', method: 'POST', path: `/api/accounts/${disabledTarget.id}/enable`, body: { reason: 'x (fake)' }, mutates: true },
+        { name: 'POST role', method: 'POST', path: `/api/accounts/${target.id}/role`, body: { role: 'TOURNAMENT_MANAGER', reason: 'x (fake)' }, mutates: true },
+        { name: 'POST disable', method: 'POST', path: `/api/accounts/${target.id}/disable`, body: { reason: 'x (fake)' }, mutates: true, skip: ['match scorer'] },
+      ];
+      const forbidden = [403, 'ROLE_FORBIDDEN'];
+      const CALLERS = [
+        { name: 'anonymous', ctx: {}, expected: [401, 'UNAUTHENTICATED'] },
+        { name: 'invalid token', ctx: { token: 'not-a-jwt' }, expected: [401, 'UNAUTHENTICATED'] },
+        { name: 'viewer', ctx: { user: viewer.user }, expected: [403, 'NOT_STAFF'] },
+        { name: 'disabled', ctx: { user: disabled.user }, expected: [403, 'ACCOUNT_DISABLED'] },
+        { name: 'match scorer', ctx: { user: scorerCaller.user }, expected: forbidden },
+        { name: 'out-of-scope manager', ctx: { user: outMgr.user }, expected: forbidden },
+        { name: 'sport manager', ctx: { user: sportMgr.user }, expected: forbidden },
+        { name: 'owner', ctx: { user: owner.user }, expected: forbidden },
+        { name: 'super admin', ctx: { user: 'test_super_admin' }, expected: null },
+      ];
+
+      const before = await adminState(f, tree);
+      expect(before.invitation).toBe('PENDING');
+      for (const ep of ENDPOINTS) {
+        for (const caller of CALLERS) {
+          if (ep.skip?.includes(caller.name)) continue;
+          if (!caller.expected && ep.mutates) continue; // run once below, after every refusal
+          const label = `${ep.name} / ${caller.name}`;
+          const res = await api(ep.method, ep.path, { ...caller.ctx, body: ep.body });
+          const got = [res.status, (await res.json().catch(() => ({}))).error?.code];
+          if (caller.expected) expect(got, label).toEqual(caller.expected);
+          else expect(got, label).toEqual([200, undefined]);
+          expect(await adminState(f, tree), `${label} wrote nothing`).toEqual(before);
+        }
+      }
+      expect(calls, 'no refused caller reached Clerk').toEqual([]);
+
+      // The Super_Admin writes, each on its fixture target, checked directly.
+      vi.restoreAllMocks();
+      calls = stubClerk(() => [200, { object: 'invitation', id: tree.clerkId, status: 'revoked' }]);
+      const sa = (ep) => api(ep.method, ep.path, { user: 'test_super_admin', body: ep.body });
+      const [, , , ownerEp, cancelEp, enableEp, roleEp, disableEp] = ENDPOINTS;
+
+      expect((await sa(ownerEp)).status, 'owner / super admin').toBe(200);
+      let state = await adminState(f, tree);
+      expect([state.owner, state.sportManagers]).toEqual([sportMgr.id, 0]);
+
+      expect((await sa(cancelEp)).status, 'cancel / super admin').toBe(200);
+      expect(calls.map((c) => [c.method, c.path])).toEqual([['POST', `/v1/invitations/${tree.clerkId}/revoke`]]);
+      expect((await adminState(f, tree)).invitation).toBe('REVOKED');
+
+      expect((await sa(enableEp)).status, 'enable / super admin').toBe(200);
+      expect(await one('SELECT status FROM admin_accounts WHERE id = $1', [disabledTarget.id])).toEqual({ status: 'ACTIVE' });
+
+      expect((await sa(roleEp)).status, 'role / super admin').toBe(200);
+      state = await adminState(f, tree);
+      expect([state.assignments, state.lease]).toEqual([[{ id: tree.assignId, status: 'REVOKED' }], null]);
+      expect(await one('SELECT role FROM admin_accounts WHERE id = $1', [target.id])).toEqual({ role: 'TOURNAMENT_MANAGER' });
+
+      expect((await sa(disableEp)).status, 'disable / super admin').toBe(200);
+      expect(await one('SELECT status FROM admin_accounts WHERE id = $1', [target.id])).toEqual({ status: 'DISABLED' });
+      expect(calls, 'only the cancel called Clerk').toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      await cleanupAdminFixtures(f, tree);
+    }
+  });
+});

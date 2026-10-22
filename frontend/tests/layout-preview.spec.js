@@ -8,24 +8,21 @@ const APP = 'http://127.0.0.1:4176';
 const WIDTHS = [390, 1440];
 const NO_ACCESS = 'You do not have access to this page';
 
-// The Primary_Action of these screens acts on no loaded data: it opens a create or invite page (top of a list screen)
-// It is part of the frame, like the headings, so it stays while the list loads or fails.
-const FRAME_PRIMARY = new Set(['admin-home', 'all-tournaments', 'staff-list', 'pending-invitations']);
-// Screens connected to the API in Stage 2; their preview entries are deleted (Req 1.11).
+// Screens connected to the API in Stage 2, and the sign-in choice (the real /sign-in page); their preview entries are
+// deleted (Req 1.11).
 const CONNECTED = ['manager-home', 'setup-details', 'setup-sports', 'setup-teams', 'setup-matches', 'setup-scorers',
   'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor', 'assign-scorer', 'invite-scorer',
-  'home', 'tournaments', 'tournament', 'tournament-sport', 'sport-page', 'match-dialog'];
+  'home', 'tournaments', 'tournament', 'tournament-sport', 'sport-page', 'match-dialog',
+  'admin-home', 'all-tournaments', 'staff-list', 'invite-staff', 'staff-member', 'pending-invitations', 'sign-in-choice'];
 
 /**
- * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). The sign-in choice has none
- * by design. A staff screen shows one when ready or empty (the frame stays). Loading and error show
- * no content, so only a frame Primary_Action stays. No access shows nothing but the start-page link. An empty staff
- * member detail means the account no longer exists, so there is nothing to act on.
+ * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). A staff screen shows one when
+ * ready or empty (the frame stays). Loading and error show no content, so only a frame Primary_Action stays. No access
+ * shows nothing but the start-page link.
  */
 function primaryCount(screen, state) {
   if (!screen.role || state === 'forbidden') return 0;
-  if (screen.key === 'staff-member' && state === 'empty') return 0;
-  if (state === 'loading' || state === 'error') return FRAME_PRIMARY.has(screen.key) ? 1 : 0;
+  if (state === 'loading' || state === 'error') return 0;
   return 1;
 }
 

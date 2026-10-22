@@ -37,16 +37,16 @@ const SCREENS = [
   ['manager', '/manage/tournaments/spring-cup/sports/badminton', 'Home'],
   ['manager', '/manage/tournaments/spring-cup/sports/badminton/teams', 'Home'],
   ['admin', '/admin', 'Home', null, 'Admin home'],
-  ['admin', '/admin/tournaments', 'Tournaments', { label: 'Home', to: '/admin' }, 'All tournaments'],
+  ['admin', '/admin/tournaments', 'Tournaments', { label: 'Admin home', to: '/admin' }, 'All tournaments'],
   ['admin', '/manage/tournaments/spring-cup', 'Tournaments'],
   ['admin', '/manage/tournaments/spring-cup/details', 'Tournaments'],
   ['admin', '/manage/tournaments/spring-cup/sports/badminton/teams', 'Tournaments'],
   ['admin', '/manage/matches', 'Matches', undefined, 'Matches'],
   ['admin', '/manage/invite', 'Staff', { label: 'Admin home', to: '/admin' }, 'Invite scorer'],
-  ['admin', '/admin/staff', 'Staff', { label: 'Home', to: '/admin' }, 'Staff list'],
-  ['admin', '/admin/staff/invite', 'Staff'],
-  ['admin', '/admin/staff/5', 'Staff'],
-  ['admin', '/admin/invitations', 'Staff', { label: 'Home', to: '/admin' }, 'Pending invitations'],
+  ['admin', '/admin/staff', 'Staff', { label: 'Admin home', to: '/admin' }, 'Staff list'],
+  ['admin', '/admin/staff/invite', 'Staff', { label: 'Staff list', to: '/admin/staff' }, 'Invite staff'],
+  ['admin', '/admin/staff/5', 'Staff', { label: 'Staff list', to: '/admin/staff' }],
+  ['admin', '/admin/invitations', 'Home', { label: 'Admin home', to: '/admin' }, 'Pending invitations'],
 ];
 
 async function expectFrame(page, role, current) {
@@ -86,14 +86,14 @@ for (const [role, path, current, back, title] of SCREENS) {
   });
 }
 
-// Manager screens with a page (tasks 14.6, 16.4): each path opens its page, which reads /api/manage, not the interim
-// page. Create tournament and Invite scorer read nothing; their forms show instead.
+// Manager screens (tasks 14.6, 16.4): each path opens its page, which reads /api/manage. Create tournament and Invite
+// scorer read nothing; their forms show instead.
 const FORM_ONLY = { '/manage/tournaments/new': 'Save and continue', '/manage/invite': 'Send invitation' };
 for (const path of ['/manage', '/manage/tournaments/new', '/manage/tournaments/spring-cup/setup', '/manage/tournaments/spring-cup/setup/teams',
   '/manage/tournaments/spring-cup', '/manage/tournaments/spring-cup/details', '/manage/tournaments/spring-cup/sports/badminton',
   '/manage/tournaments/spring-cup/sports/badminton/teams', '/manage/matches', '/manage/matches/new', '/manage/matches/12',
   '/manage/matches/12/scorer', '/manage/invite']) {
-  test(`manager ${path} opens its page, not the interim page`, async ({ page }) => {
+  test(`manager ${path} opens its page`, async ({ page }) => {
     const reads = [];
     page.on('request', request => { if (request.method() === 'GET' && request.url().startsWith('http://api.test/api/manage/')) reads.push(request.url()); });
     await mockStaff(page, { me: REPLIES.manager });
@@ -101,7 +101,19 @@ for (const path of ['/manage', '/manage/tournaments/new', '/manage/tournaments/s
     if (FORM_ONLY[path]) await expect(page.getByRole('button', { name: FORM_ONLY[path] })).toBeVisible();
     else await expect.poll(() => reads.length).toBeGreaterThan(0);
     await expect(heading(page)).toHaveCount(1);
-    await expect(page.getByText('This page is not ready yet')).toHaveCount(0);
+  });
+}
+
+// Super Admin screens (task 20.5): each path reads its API. Invite staff reads nothing; its form shows instead.
+for (const path of ['/admin', '/admin/tournaments', '/admin/staff', '/admin/staff/invite', '/admin/staff/5', '/admin/invitations']) {
+  test(`admin ${path} opens its page`, async ({ page }) => {
+    const reads = [];
+    page.on('request', request => { if (request.method() === 'GET' && /^http:\/\/api\.test\/api\/(manage|admin)\//.test(request.url())) reads.push(request.url()); });
+    await mockStaff(page, { me: REPLIES.admin });
+    await page.goto(`${APP}${path}`);
+    if (path === '/admin/staff/invite') await expect(page.getByRole('button', { name: 'Send invitation' })).toBeVisible();
+    else await expect.poll(() => reads.length).toBeGreaterThan(0);
+    await expect(heading(page)).toHaveCount(1);
   });
 }
 

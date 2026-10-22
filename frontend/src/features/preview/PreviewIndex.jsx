@@ -2,23 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import StaffShell from '../staff/StaffShell.jsx';
 import DataList from '../manage/DataList.jsx';
-import SignInChoiceView from '../auth/SignInChoiceView.jsx';
-import AdminHomeView from '../admin/AdminHomeView.jsx';
-import AllTournamentsView from '../admin/AllTournamentsView.jsx';
-import StaffListView from '../admin/StaffListView.jsx';
-import InviteStaffView from '../admin/InviteStaffView.jsx';
-import StaffMemberView from '../admin/StaffMemberView.jsx';
-import PendingInvitationsView from '../admin/PendingInvitationsView.jsx';
 import { findScreen, GROUPS, NAV_MAPS, STATE_LABELS } from './previewScreens.js';
 import { PREVIEW_DATA } from './previewData.js';
 import '../manage/manage.css';
 
-// The real View of each preview key. Public Views take `status`; staff Views take `state` and `role`.
-const VIEWS = {
-  'sign-in-choice': SignInChoiceView,
-  'admin-home': AdminHomeView, 'all-tournaments': AllTournamentsView, 'staff-list': StaffListView, 'invite-staff': InviteStaffView,
-  'staff-member': StaffMemberView, 'pending-invitations': PendingInvitationsView,
-};
+// The real View of each preview key. Public Views take `status`; staff Views take `state` and `role`. Every screen is
+// now connected to the API, so none is left here.
+const VIEWS = {};
 
 // Handlers a container would wire to the API. In the preview they do nothing, so no request is sent (Req 1.7).
 const noop = () => {};

@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterAll, describe, expect, it } from 'vitest';
+import { toPublic } from '../src/http.js';
 import { api, db, one } from './helpers.js';
 
 // Match dates must be today or later (Requirement 12.3), so the fixtures use dates relative to now
@@ -345,5 +346,105 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('validated field boundary values and a
     const f = await fixture();
     const call = asOwner(f);
     expect(await code(await call('PATCH', '/api/manage/teams/abc', { name: 'x' }))).toEqual([400, 'BAD_REQUEST']);
+  });
+});
+
+// Tournament create locks the caller's account FOR SHARE (task 20.1 risk a). A disable that holds the
+// account row lock makes the create wait; once the disable commits, the create re-checks the account
+// and is refused, so a disabled manager never ends up owning a new tournament.
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('tournament create against a concurrent disable', () => {
+  it('waits for the account lock and then refuses with 403 ACCOUNT_DISABLED', async () => {
+    const f = await fixture();
+    const outcome = await db(async (holder) => {
+      await holder.query('BEGIN');
+      let pending;
+      try {
+        await holder.query(`UPDATE admin_accounts SET status = 'DISABLED' WHERE id = $1`, [f.accountId]);
+        const { rows: [{ pid }] } = await holder.query('SELECT pg_backend_pid() AS pid');
+        pending = api('POST', '/api/manage/tournaments', { user: f.user, body: { name: `Race ${f.suffix}`, startsOn: WIN_START } })
+          .then(async (res) => ({ status: res.status, body: await res.json() }));
+        let blocked = false;
+        for (let i = 0; i < 100 && !blocked; i += 1) {
+          blocked = (await one('SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [pid])).n > 0;
+          if (!blocked) await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await holder.query('COMMIT');
+        return { blocked, ...(await pending) };
+      } catch (err) {
+        await holder.query('ROLLBACK').catch(() => {});
+        if (pending) await pending.catch(() => {});
+        throw err;
+      }
+    });
+    if (outcome.body.tournament) f.extraTournamentIds.push(outcome.body.tournament.id);
+    expect(outcome.blocked).toBe(true);
+    expect([outcome.status, outcome.body.error?.code]).toEqual([403, 'ACCOUNT_DISABLED']);
+    expect((await one('SELECT count(*)::int AS n FROM tournaments WHERE owner_account_id = $1', [f.accountId])).n).toBe(1); // the fixture's own
+    expect(await f.auditActions()).toEqual([]);
+  });
+});
+
+// GET /api/manage/tournaments people fields (Requirement 16.1, design "Manager API"): `owner` and `sportManagers` on
+// Owner rows and on every row for a Super_Admin; absent for a caller who sees the row only as a Sport_Manager.
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('GET /api/manage/tournaments owner and sport managers', () => {
+  const extra = []; // throwaway accounts: { id, user, email, name }
+  let f;
+  afterAll(async () => {
+    if (!f) return;
+    await db(async (client) => {
+      // The fixture cleanup deletes the tournament and its owner account; give it back to that owner first.
+      await client.query('UPDATE tournaments SET owner_account_id = $2 WHERE id = $1', [f.tournamentId, f.accountId]);
+      await client.query(`DELETE FROM admin_audit_log WHERE entity = 'tournaments' AND entity_id = $1`, [String(f.tournamentId)]);
+      await client.query('DELETE FROM tournament_sport_managers WHERE account_id = ANY($1)', [extra.map((a) => a.id)]);
+      await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [extra.map((a) => a.id)]);
+    });
+  });
+  async function manager(label) {
+    const user = `test_manage_${label}_${crypto.randomUUID()}`;
+    const name = `Manage ${label} (fake)`;
+    const { id } = await one(
+      `INSERT INTO admin_accounts (clerk_user_id, role, email, name) VALUES ($1, 'TOURNAMENT_MANAGER', $2, $3) RETURNING id::text AS id`,
+      [user, `${user}@example.test`, name],
+    );
+    const a = { id, user, email: `${user}@example.test`, name };
+    extra.push(a);
+    return a;
+  }
+  const rowFor = async (user) => {
+    const res = await api('GET', '/api/manage/tournaments', { user });
+    expect(res.status).toBe(200);
+    return (await res.json()).tournaments.find((t) => t.slug === f.slug);
+  };
+
+  it('returns them to the Owner and the Super_Admin, not to a Sport_Manager, and follows an owner transfer', async () => {
+    f = await fixture();
+    const { id: footballId } = await f.addSport('football');
+    await f.addSport('badminton');
+    const sm = await manager('sm');
+    const next = await manager('next');
+    await one('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id, added_by) VALUES ($1, $2, $3) RETURNING account_id', [footballId, sm.id, f.accountId]);
+    const ownerOf = (a) => ({ accountId: String(a.accountId ?? a.id), name: a.name, email: a.email });
+    const smRow = { sport: 'football', ...ownerOf(sm) };
+    const original = ownerOf({ id: f.accountId, name: 'Manage test owner (fake)', email: `${f.user}@example.test` });
+
+    for (const user of [f.user, 'test_super_admin']) {
+      const row = await rowFor(user);
+      expect(row, user).toMatchObject({ isOwner: true, sports: ['badminton', 'football'], owner: original, sportManagers: [smRow] });
+    }
+    // Only a Sport_Manager here: the row is in scope with its own sport, without the people fields.
+    const asSm = await rowFor(sm.user);
+    expect(asSm).toMatchObject({ isOwner: false, sports: ['football'] });
+    expect(asSm).not.toHaveProperty('owner');
+    expect(asSm).not.toHaveProperty('sportManagers');
+    // The public Tournament DTO never carries them.
+    expect(toPublic('tournament', { ...asSm, owner: original, sportManagers: [smRow] })).not.toHaveProperty('owner');
+    expect(toPublic('tournament', { ...asSm, owner: original, sportManagers: [smRow] })).not.toHaveProperty('sportManagers');
+
+    const res = await api('POST', `/api/admin/tournaments/${f.slug}/owner`, { user: 'test_super_admin', body: { email: next.email } });
+    expect(res.status).toBe(200);
+    for (const user of [next.user, 'test_super_admin']) {
+      expect(await rowFor(user), user).toMatchObject({ isOwner: true, owner: ownerOf(next), sportManagers: [smRow] });
+    }
+    expect(await rowFor(f.user)).toBeUndefined(); // the previous owner has no scope left
   });
 });
