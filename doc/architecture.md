@@ -2,7 +2,7 @@
 
 ## Current implementation — 9 October 2026
 
-The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages with display fixtures and reserved tournament destinations. The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
+The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages and the public tournament pages ([Slice 4](#staff-roles-and-manager-console--slice-4-22-october-2026)). The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
 
 Update, 20 October 2026: the `backend/` Worker (Hono API, `MatchRoom` live rooms, Clerk sign-in, assignments, leases, the scoring write path with the Test_Engine, outbox sweep), the `db/` migrations, the operator console and the sign-in and privacy pages are implemented and deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). This integration adds real scoring with frozen presets/custom formats and operator final confirmation; see the current task in tasks.md for verification/publication. Not implemented: tournament, team, roster and match management; bracket advancement; standings. Manager result review is superseded. Sections below that describe these parts are the target design.
 
@@ -277,7 +277,8 @@ flowchart LR
 Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No authentication; every caller gets the same body through the cached configuration.
 
 - `GET /api/tournaments` → `{ tournaments: [tournament] }`
-- `GET /api/tournaments/:id` → `{ tournament }` with `sports` (sport keys) and `matches`
+- `GET /api/tournaments/:key` (ID or slug) → `{ tournament }` with `sports` (sport keys) and `matches`
+- `GET /api/sports/:sport/matches` → `{ matches }`: that sport's matches across public tournaments, each with `tournamentName` and `tournamentSlug`
 - `GET /api/matches/:id` → `{ match }` with `snapshot` (the latest Match_Room snapshot data, or `null`)
 - An ID is a positive integer without a leading zero, up to 18 digits. Otherwise 400 `BAD_REQUEST`. An unknown or non-public ID returns 404 `NOT_FOUND`.
 - Every body and Room_Message goes through `toPublic(kind, obj)` in [`backend/src/http.js`](../backend/src/http.js). It copies only the allow-listed fields for `tournament`, `match`, `snapshot` and `card`. Database IDs are strings; dates are ISO text.
@@ -420,6 +421,29 @@ Screens:
 - My Matches puts a Not_Scored match in Completed with the state "Not scored" and no scoring link.
 
 Shared staff components. `ConfirmDialog` cancels on a `close` event only when the dialog is closed at that moment: a queued `close` from an earlier opening could arrive after a reopen and close the new dialog. `StaffShell` moves focus to the `h1` when a status or alert appears and focus has fallen to the page body, for example after a save reloads the form.
+
+## Staff roles and manager console — Slice 4, 22 October 2026
+
+Slice 4 connects the public tournament and sport pages to the public read API (change 9) and shows Regular_Matches with their public tournament (change 4). No schema change and no new endpoint. Product behavior is in [prd.md](prd.md#public-tournament-pages-change-9-implemented-22-october-2026). Source: `frontend/src/features/tournaments/{TournamentsPage,TournamentPage,TournamentSportPage}.jsx`, [`publicTournaments.js`](../frontend/src/features/tournaments/publicTournaments.js), [`mergeCards.js`](../frontend/src/features/tournaments/mergeCards.js), `features/sports/SportPage.jsx`, `features/home/HomePage.jsx`.
+
+| Route | Read | Sections |
+| --- | --- | --- |
+| `/tournaments` | `GET /api/tournaments` | Live, Upcoming and Past Tournaments by each row's `phase` |
+| `/tournaments/:slug` | `GET /api/tournaments/:key` | Facts (dates, venue, description) and sport tiles in `sports.js` order |
+| `/tournaments/:slug/:sport` | `GET /api/tournaments/:key` (the sport's `matches`) | Live, Upcoming and Past Matches by `phase`, date chips, match dialog |
+| `/sports/:sport` | `GET /api/sports/:sport/matches` | Live from the home-room cards; Upcoming and Past from the read by `phase`, date chips from the read's India_Time dates |
+| `/` (tournament row) | `GET /api/tournaments` | Only rows with `phase: 'live'`; empty message "No tournaments are live right now." |
+
+Read rules. `usePublicRead(path)` wraps `useStaffData` with no token: one GET on entry and one per "Try again", no poll or timer (Requirement 22.1). A 404, or a 400 for a malformed key, is "Tournament not found". An unknown sport key sends no read. A failed read marks only the sections that use it. Without `VITE_API_BASE` the pages read nothing and show the Display_Fixtures (`fixtureTournaments`, `fixtureMatches`). The header "Tournaments" link opens `/tournaments` and has `aria-current` there.
+
+Live merge. Each page with matches merges `useHomeCards()` cards into the read with `mergeCards(matches, cards)`: every ID once, the card's `status` and `score` win, the read's time, venue, stage, phase and sides stay, and a card the read lacks is appended (Requirement 17.13; Property 15 in `frontend/tests/staff-helpers.property.spec.js`). A LIVE or APPROVED card gives its phase from its status; a SCHEDULED match keeps the API `phase`, because only Worker_Time knows when its day ended (Not scored).
+
+Card `tournamentId`. The Home_Room card gains `tournamentId` (string). `loadScoringContext` in `scoring.js` reads `t.id`, `routes/actions.js` puts it on the card, and the `card` allow-list in `http.js` passes it ([handoff.md](handoff.md#home_room-data)). A tournament sport page applies a card when its `tournamentId` names the tournament, so a match created after the cached read still shows. The Sport page filters cards by sport only.
+
+Current limits:
+
+- The public pages do not move focus to the `h1` on route entry; the scroll effect in `App.jsx` handles the position only.
+- A card in a room snapshot stored before `tournamentId` existed has no `tournamentId`. A tournament sport page applies it only when the read contains its match ID; the next published action replaces the card.
 
 ## Live updates and offline scoring
 

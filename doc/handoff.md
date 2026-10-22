@@ -1,6 +1,6 @@
 # Homepage handoff
 
-Updated 9 October 2026. A handoff is the current implementation map for the next team. It says what exists, which files to extend, and which contracts to preserve. Git transfers the files; this document explains how to continue safely.
+Updated 22 October 2026. A handoff is the current implementation map for the next team. It says what exists, which files to extend, and which contracts to preserve. Git transfers the files; this document explains how to continue safely.
 
 Publication: the homepage is published on `main`. See [tasks.md](tasks.md) for its confirmed revision, checks and any unpublished updates. Confirm the shared branch before extending it.
 
@@ -12,9 +12,9 @@ Use [local-development.md](local-development.md) to install and start the site. 
 - Responsive title and six-athlete diagonal gallery with local images and textured sport backgrounds. Both portrait layers use the same responsive source; phones share smaller textures with match cards. Originals remain available. The original blue dot matrix is confined to the hero. Title reveal and matrix respect reduced motion; canvas work stops offscreen, on a hidden tab and on route unmount.
 - Seven sport filter buttons, including All Sports. They affect live matches in place, update selection/accessibility status and reset the match rail without changing the URL or tournament row.
 - Live Matches heading with red dot and six sport cards. Native horizontal scrolling and a smaller, faded partial-card preview on phones, tablets and large screens.
-- Five tournament cards: venue photo above a white name/date area, native horizontal scrolling and the same spotlight treatment. Photos contain sports venues, not athletes.
-- Six sport pages (football, basketball, tennis, table tennis, badminton, volleyball) with Live, Upcoming and Past sections, date chips and a match detail dialog. They use frontend display fixtures only.
-- Registered tournament destinations. Their detail UI is intentionally unbuilt.
+- Tournament row: venue photo above a white name/date area, native horizontal scrolling and the same spotlight treatment. Photos contain sports venues, not athletes. With `VITE_API_BASE` it shows only Live tournaments from `GET /api/tournaments`, or "No tournaments are live right now."; without it, the five display fixtures.
+- Six sport pages (football, basketball, tennis, table tennis, badminton, volleyball) with Live, Upcoming and Past sections, date chips and a match detail dialog. With `VITE_API_BASE`, Live comes from the home room and Upcoming and Past from `GET /api/sports/:sport/matches`; without it, display fixtures.
+- Public Tournaments, Tournament and Tournament sport pages (`/tournaments`, `/tournaments/:slug`, `/tournaments/:slug/:sport`) from the public read API, with display fixtures without `VITE_API_BASE` ([contract](architecture.md#staff-roles-and-manager-console--slice-4-22-october-2026)).
 
 There is no autoplay/sliding hero carousel: the approved hero is the diagonal athlete gallery with animated background. Do not reintroduce abandoned animation variants or controls.
 
@@ -31,14 +31,15 @@ These fixtures are not a rules engine, live feed or confirmed competition format
 | Responsibility | File or folder | Contract |
 | --- | --- | --- |
 | Routes and app entry | `frontend/src/app/App.jsx`, `frontend/src/main.jsx` | Central React Router routes in `App.jsx`; `main.jsx` mounts them through `createBrowserRouter` (one splat route) so `useBlocker` works. Each navigation entry restores section/top scrolling, including a repeat click to the same destination. |
-| Homepage composition | `frontend/src/features/home/HomePage.jsx` | Owns selected sport and composes sections. Without `VITE_API_BASE` it shows `sampleMatches.js`; with it, the live row subscribes to the `home` room ([contract](#live-snapshot-to-card-contract)). The tournament row always shows `sampleTournaments.js`. |
+| Homepage composition | `frontend/src/features/home/HomePage.jsx` | Owns selected sport and composes sections. Without `VITE_API_BASE` it shows `sampleMatches.js`; with it, the live row subscribes to the `home` room ([contract](#live-snapshot-to-card-contract)). With it, the tournament row shows the Live rows of `GET /api/tournaments` (`usePublicRead`, `toEventProp`); without it, `sampleTournaments.js`. |
 | Header | `frontend/src/components/SiteHeader.jsx` | Homepage links and six sport destinations; filter buttons are separate. One `Sign in` link to `/sign-in` (desktop nav end, phone menu last item) renders only when the build sets `VITE_CLERK_PUBLISHABLE_KEY`. It reuses the existing nav link styles and 44px targets. |
 | Sign-in area | `frontend/src/features/auth/` (lazy chunk) | `AuthArea` renders every account and staff route by `screen` key (`staff('<screen>')` in `App.jsx`): `/sign-in` (choice page), `/sign-in/scorer/*`, `/sign-in/manager/*`, `/sign-up/*`, `/start`, `/account`, `/account/delete`, `/operator/...`, `/manage/...` and `/admin/...` ([architecture.md](architecture.md#staff-roles-and-manager-console--slice-2-22-october-2026)). `ClerkProvider` exists only inside this chunk, so public pages load no Clerk code. `/start` calls `POST /api/invites/accept` once (404 `INVITE_NOT_FOUND` and 409 `ACCOUNT_EXISTS` are ignored), then opens the start screen of the role from `GET /api/me`. `/account/delete` calls `DELETE /api/me`, then signs out. API base: `VITE_API_BASE`. Without a Clerk key the routes show a "sign-in unavailable" message. |
 | Privacy page | `frontend/src/features/legal/PrivacyPage.jsx` | `/privacy`, plain page, no Clerk. Contact: a mailto link to `bhatiaarnav05@gmail.com` ([memory.md](memory.md#backend-open-items) item 4). |
 | Native card rail | `frontend/src/components/HorizontalRail.jsx` | Receives card children, label, class, optional ID/reset key. Observes stable outer slots; scales inner surfaces only. Keyboard behavior: [design.md](design.md#horizontal-rails-and-spotlight). |
 | Match card | `frontend/src/features/matches/LiveMatchCard.jsx` | Receives `match`: ID, sport, display metadata, two sides and detail columns. Presentational; calculates no scores. Replace the white detail rendering when integrating sport-specific cards. |
-| Tournament card | `frontend/src/features/tournaments/TournamentCard.jsx` | Receives `event`: ID, title, local image/alt/crop, date values and labels. Links to the event route. |
-| Sport page | [`frontend/src/features/sports/SportPage.jsx`](../frontend/src/features/sports/SportPage.jsx) | `sport` (from `sports.js`), `fixtures`. Owns Upcoming/Past date state, the open match and focus return. Sets `--match-background`, `--match-background-phone` and `--sport-color` on `main.sport-page`. `App.jsx` renders it for all six sport ids with `key={sport.id}`. |
+| Tournament card | `frontend/src/features/tournaments/TournamentCard.jsx` | Receives `event`: ID (the slug for API rows, from `toEventProp` in `venues.js`), title, local image/alt/crop, date values and labels. Links to `/tournaments/<id>`. |
+| Public tournament pages | `frontend/src/features/tournaments/{TournamentsPage,TournamentPage,TournamentSportPage}.jsx`, [`publicTournaments.js`](../frontend/src/features/tournaments/publicTournaments.js), [`mergeCards.js`](../frontend/src/features/tournaments/mergeCards.js) | Thin containers around the approved `TournamentsView`, `TournamentView` and `TournamentSportView`. One public read on entry and on "Try again"; grouping by the API `phase`; live cards merged by match ID. Routes, reads and limits: [architecture.md](architecture.md#staff-roles-and-manager-console--slice-4-22-october-2026). |
+| Sport page | [`frontend/src/features/sports/SportPage.jsx`](../frontend/src/features/sports/SportPage.jsx) | `sport` (from `sports.js`), `fixtures`. With `VITE_API_BASE`, Upcoming and Past come from `GET /api/sports/:sport/matches` (`sportPageMatches`, date chips from `datesOf`). Owns Upcoming/Past date state, the open match and focus return. Sets `--match-background`, `--match-background-phone` and `--sport-color` on `main.sport-page`. `App.jsx` renders it for all six sport ids with `key={sport.id}`. |
 | Sport sections and cards | [`SportSection.jsx`](../frontend/src/features/sports/SportSection.jsx), [`SportMatchCard.jsx`](../frontend/src/features/sports/SportMatchCard.jsx) | Section: `sport, id, title, live, matches, dates, selectedDate, onSelectDate, onOpen`; renders chips, status text, the rail or an empty message. Card: `sport, match, onOpen(match, button)`; header-only, shows `match.score` or `VS`. |
 | Sport match dialog | [`SportMatchDialog.jsx`](../frontend/src/features/sports/SportMatchDialog.jsx) | `sport, scoring, match` (null = closed), `onClose`. Native `<dialog>` with `showModal()`; score table, legend, scorers and lineups (team sports), players or schedule, and match info. |
 | Match Operator dashboard and score console | `frontend/src/features/operator/MyMatchesPage.jsx`, `OperatorMatchCard.jsx`, `operatorMatches.js`, `ScoreConsole.jsx`, `queue.js`, `queueStore.js`, `MyMatches.css`; gate in `features/auth/AuthArea.jsx` | Both routes render inside the lazy Clerk area; a signed-out user sees a sign-in link, a keyless build shows Sign-in unavailable. My Matches lists `GET /api/operator/matches` and groups rows with `sectionOf` (map in [memory.md](memory.md), My Matches sections; a `notScored` row is in Completed). `ScoreConsole` takes the caller's `role` from `GET /api/me` for its frame and Back link, reads its row from the same list, acquires `POST /api/matches/:id/lease` (Take over scoring on `LEASE_HELD` or a `LEASE_REQUIRED` pause), saves each action to IndexedDB before showing it queued, then sends `POST /api/matches/:id/actions` one at a time. It shows a text status line, accepted score (with seq) beside the pending score, Connected `scoring/ScoringPage.jsx` selects/fixes a real format, enters sport scores, ends sets early, records team cards/substitutions, undoes live actions and confirms a locked final. Real scoring restores uncached private action history before syncing. Existing live matches without a format retain the legacy Test_Engine UI. |
@@ -71,6 +72,7 @@ A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. E
 | `sport` | One of the six ids in `frontend/src/data/sports.js`. |
 | `status` | `LIVE` or `APPROVED` in the array. |
 | `competition` | Tournament name (`tournaments.name`). |
+| `tournamentId` | Tournament ID as a string. Tournament sport pages scope cards by it; a card stored before this field existed has none. |
 | `sides` | `[{ name }, { name }]`; `name` is the team label, or `null` when the match has no team on that side. |
 | `score` | `[number, number]`: team points for period sports or sets won for set/tennis sports. |
 | `clock` | Always `null` now. No engine produces a clock. |
@@ -102,7 +104,7 @@ A viewer opens `/live/home` or `/live/match:<id>`. The socket is receive-only. E
 | `columns` | Set/period columns when `format` and `periods` exist, followed by total `T` | — |
 | `sides[i].values` | Per-set/period values, then `String(score[i])` | `['—']` |
 
-`useHomeCards.js` supplies the receive-only feed to homepage and sport pages. `liveCards.js` maps set/period values and bold winners to homepage cards. `liveSportMatches.js` maps safe game/serve/event data to the existing sport dialog. Wide custom score tables scroll horizontally. In API mode, Upcoming stays empty until a schedule read API exists. Without `VITE_API_BASE`, both pages retain display fixtures.
+`useHomeCards.js` supplies the receive-only feed to homepage and sport pages. `liveCards.js` maps set/period values and bold winners to homepage cards. `liveSportMatches.js` maps safe game/serve/event data to the existing sport dialog. Wide custom score tables scroll horizontally. In API mode, sport and tournament sport pages merge these cards into their public read with `mergeCards`. Without `VITE_API_BASE`, the pages retain display fixtures.
 
 START and FINALIZE publish committed cards through the same outbox as points. Legacy formatless matches appear after an accepted Test_Engine action. New real formats cannot be attached after existing actions; no played seed match is reset by this integration. Final cards are retained; pagination/history retention is not implemented.
 
@@ -112,7 +114,9 @@ START and FINALIZE publish committed cards through the same outbox as points. Le
 | --- | --- | --- |
 | `/` | Complete homepage with temporary card content | Homepage/shared UI team |
 | `/#tournaments` | Scrolls to the homepage tournament section | Homepage/shared UI team |
-| `/sports/<sport>/` | Shared sport page for all six sports: Live, Upcoming and Past matches from display fixtures, date chips and a match detail dialog | Respective sport teams |
+| `/sports/<sport>/` | Shared sport page for all six sports: Live from the home room, Upcoming and Past from the sports read (display fixtures without an API), date chips and a match detail dialog | Respective sport teams |
+| `/tournaments` | Live, Upcoming and Past tournaments | Tournament team |
+| `/tournaments/:slug`, `/tournaments/:slug/:sport` | Tournament facts and sport tiles; one sport's Live, Upcoming and Past matches of the tournament. An unknown tournament or sport shows "Tournament not found" | Tournament team |
 | `/operator/matches` | My Matches from `GET /api/operator/matches`, Live / Scheduled / Completed; inside the lazy Clerk area | Scorer / operator team |
 | `/operator/matches/:matchId/score` | Score console with lease, durable queue, frozen real format and final lock; inside the lazy Clerk area | Scorer / operator team |
 | `/sign-in` | Sign-in choice: Continue as guest, Sign in as Match Scorer, Sign in as Tournament Manager; a signed-in user goes to the role's start screen | Backend/auth team |
@@ -120,12 +124,11 @@ START and FINALIZE publish committed cards through the same outbox as points. Le
 | `/manage`, `/manage/tournaments/...`, `/manage/matches/...`, `/manage/invite` | Tournament Manager screens from the manager API, including Assign scorer (`/manage/matches/:matchId/scorer`) and Invite scorer; inside the lazy Clerk area. `/admin/...` shows "This page is not ready yet" until spec Slice 5 | Staff console team |
 | `/account/delete` | Lazy Clerk area: explains deletion; a signed-in user can delete the account | Backend/auth team |
 | `/privacy` | Privacy policy, no Clerk | Backend/auth team; policy owner Arnav |
-| `/tournaments/:tournament` | Deliberately blank tournament destination | Tournament team |
 | `/index.html` | Redirects to `/`; old preview query values are discarded | Compatibility only |
 | `/tournament.html?event=<id>` | Redirects to `/tournaments/<id>` | Compatibility only |
 | Other URLs | Page not found with a home link | App routing |
 
-Tournament-scoped sport routes, match routes and staff routes in the PRD remain planned. When integrating a page, replace its reserved route element, add the actual feature under the appropriate folder, and test entry from the homepage, direct loading, refresh, back and return-home navigation. Deployments need SPA history fallback.
+Match and team routes and the Super Admin screens in the PRD remain planned. When integrating a page, replace its reserved route element, add the actual feature under the appropriate folder, and test entry from the homepage, direct loading, refresh, back and return-home navigation. Deployments need SPA history fallback.
 
 ## Team workflow
 
@@ -140,7 +143,7 @@ Tournament-scoped sport routes, match routes and staff routes in the PRD remain 
 
 See [tasks.md](tasks.md) for current verification and publication state. Automated checks are in `frontend/tests/homepage.spec.js`, `frontend/tests/sport-pages.spec.js`, `frontend/tests/sport-edge-cases.spec.js` (desktop edge cases) and `frontend/tests/mobile.spec.js` (emulated phones and tablet). Screenshots/traces stay outside the shared source or in ignored test output. The local test preview refuses an occupied 4175 port.
 
-Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Real scoring is integrated on the current branch; publication/checks are in tasks.md. The Tournament Manager screens, including scorer assignment, are built (spec Slices 2 and 3, [architecture.md](architecture.md#staff-roles-and-manager-console--slice-3-22-october-2026)). Not built: Super Admin screens, public pages with real tournament data, bracket advancement and standings. Manager result review is superseded. Backend contracts are in [architecture.md](architecture.md#technology).
+Backend checks are in `backend/test/`. The backend, live rooms, sign-in and operator console are deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). Real scoring is integrated on the current branch; publication/checks are in tasks.md. The Tournament Manager screens, including scorer assignment, are built (spec Slices 2 and 3, [architecture.md](architecture.md#staff-roles-and-manager-console--slice-3-22-october-2026)). The public tournament and sport pages read real data (spec Slice 4, [architecture.md](architecture.md#staff-roles-and-manager-console--slice-4-22-october-2026)); their browser checks are in `frontend/tests/public-tournaments.spec.js` and `sport-live.spec.js`. Not built: Super Admin screens, bracket advancement and standings. Manager result review is superseded. Backend contracts are in [architecture.md](architecture.md#technology).
 
 ### Assigned scoring read/write contract
 

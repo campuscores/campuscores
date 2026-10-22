@@ -91,9 +91,8 @@ Operating rule: one active assignment per match and one primary scoring device p
 ### Public routes (proposed)
 
 - `/` — implemented homepage: hero, live-match sport filters, live cards and tournament cards.
-- `/sports/{sport}` — implemented global sport pages from the header: Live, Upcoming and Past matches with display fixtures and a match detail dialog.
-- `/tournaments/{tournament}` — tournament summary, enabled sports, live/upcoming matches, and results.
-- `/tournaments/{tournament}/sports/{sport}` — that tournament sport's matches, schedule, standings, and configured leaders.
+- `/sports/{sport}` — implemented global sport pages from the header: Live, Upcoming and Past matches of that sport across every public tournament, date chips and a match detail dialog ([public pages](#public-tournament-pages-change-9-implemented-22-october-2026)).
+- `/tournaments`, `/tournaments/{slug}` and `/tournaments/{slug}/{sport}` — implemented public tournament pages ([public pages](#public-tournament-pages-change-9-implemented-22-october-2026)). Standings and configured leaders on the tournament sport page remain planned.
 - `/matches/{match}` — detailed live/final score, score progression, player contributions, status, and correction notes.
 - `/teams/{team}` — sport-specific roster and match results, if useful for the first edition.
 
@@ -113,7 +112,7 @@ Operating rule: one active assignment per match and one primary scoring device p
 - `/operator/matches` — My Matches: only matches with an active assignment.
 - `/operator/matches/{match}/score` — sport-specific scoring console with connection/sync state.
 
-The homepage, global sport pages and reserved tournament routes are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
+The homepage, global sport pages and public tournament pages are registered in `frontend/src/app/App.jsx`; see `handoff.md`. Other routes above remain proposed. Coordinate route changes across teams and preserve existing navigation. Route visibility is a convenience; the server enforces every permission once protected features are implemented.
 
 ### Sign-in and staff entry (change 5, implemented 22 October 2026)
 
@@ -122,7 +121,19 @@ The homepage, global sport pages and reserved tournament routes are registered i
 - After sign-in through either staff choice, `/start` accepts a pending invitation once, reads the role from `GET /api/me` and opens the start screen of that role, independent of the choice used: Match Scorer → My Matches (`/operator/matches`), Tournament Manager → Manager home (`/manage`), Super Admin → Admin home (`/admin`). An account with no staff role sees "This account has no staff access" and a Home link.
 - Staff screens show the role's navigation (1 to 5 items, one marked current) and a "Back" link except on the start screen. A screen of another role shows "You do not have access to this page".
 - The implemented Tournament Manager routes are `/manage`, `/manage/tournaments/new`, `/manage/tournaments/{slug}` (with `/setup/{step}`, `/details`, `/sports/{sport}` and `/sports/{sport}/teams`), `/manage/matches`, `/manage/matches/new` and `/manage/matches/{match}`. They replace the proposed `/admin/...` manager routes above. The route list is in [architecture.md](architecture.md#staff-roles-and-manager-console--slice-2-22-october-2026).
-- Current limit: the header "Tournaments" link still opens `/#tournaments`. It opens the Tournaments page when the public tournament pages are built (spec Slice 4).
+
+### Public tournament pages (change 9, implemented 22 October 2026)
+
+- The header "Tournaments" link opens `/tournaments`. The homepage `/#tournaments` anchor still scrolls to the homepage tournament row.
+- `/tournaments` shows Live, Upcoming and Past tournaments. `/tournaments/{slug}` shows the tournament's name, dates, venue, description and sport tiles. `/tournaments/{slug}/{sport}` shows that sport's matches of the tournament in Live, Upcoming and Past, with date chips and the match detail dialog. These pages replace the intentionally blank `/tournaments/{tournament}` route.
+- Every match of an Ongoing or Completed tournament is public, including Regular_Matches (change 4). Draft and Archived tournaments are not public.
+- The homepage tournament row shows only Live tournaments. With none, it keeps the heading and shows "No tournaments are live right now."
+- A header Sports page shows that sport's matches from every public tournament: Live from the live feed, Upcoming and Past from the API, with date chips from the matches' India_Time dates.
+- Grouping follows the phase that the API returns; device time never decides a phase. Every public date and time shows in India_Time with "IST". An empty final side shows "To be decided"; a Past match with no result shows "Not scored".
+- Each page reads the API once on entry and on "Try again" only. While a read runs, each section keeps its heading and shows a text status. A failed read shows "Scores are unavailable right now." in the affected sections only. A missing tournament, a malformed key or a sport the tournament lacks shows "Tournament not found" with a link home.
+- Live and Final scores from the live feed update the cards in place, also for a match that the cached read does not contain yet.
+- Without `VITE_API_BASE` the pages show the display fixtures.
+- Current limits: the public pages do not move focus to the heading on route entry. A live card stored before cards carried `tournamentId` applies on a tournament sport page only when the read contains its match.
 
 ### Main journeys
 

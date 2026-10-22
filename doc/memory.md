@@ -113,7 +113,7 @@ Slice 3 delivers scorer assignment by email, the Assign scorer and Invite scorer
 
 ## Sport page decisions — 9 October 2026
 
-- With `VITE_API_BASE`, sport pages read live/final public cards; Upcoming is empty until scheduling reads exist. Without it, pages show official-baseline display fixtures. Match format controls are confirmed in [rules.md](rules.md); coaches choose event defaults.
+- With `VITE_API_BASE`, Live comes from the live/final public cards, and Upcoming and Past come from `GET /api/sports/:sport/matches`, grouped by the API `phase`, with live cards merged in place. Their date chips come from the read's India_Time dates, not the shared event calendar (updated 22 October 2026, spec Slice 4). Without it, pages show official-baseline display fixtures. Match format controls are confirmed in [rules.md](rules.md); coaches choose event defaults.
 - Default cards show only the textured match header. Activating a card opens a native modal dialog: full viewport on phones, a centered 760px panel from 768px. Close, Escape and a desktop backdrop click close it and return focus to the card. The dialog does not change the URL.
 - Details bold each completed set, game or period's winning score, colour the current one red with a text legend and labelled column, and mark the server with a dot plus screen-reader text. Winners also get a visible Winner tag.
 - Upcoming and Past have date chips that filter in place with `aria-pressed`, like homepage sport filters. One shared event calendar supplies the chip days for every sport, so a day can show an empty message (12 Oct has no matches yet).
@@ -129,7 +129,7 @@ Slice 3 delivers scorer assignment by email, the Assign scorer and Invite scorer
 
 - The React + Vite JavaScript homepage and backend live platform are implemented. See [tasks.md](tasks.md) for deployed scope and the scoring integration status. [Handoff](handoff.md) owns the current implementation map; [local-development.md](local-development.md) owns setup.
 - Phone users are the priority; tablets, desktops and larger screens remain supported. Preserve the full-width rectangular header, heavy Helvetica/Arial wordmark, icon-only phone menu, six-athlete diagonal gallery and original blue hero dot matrix. Reuse the exact visual language in [design.md](design.md).
-- Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. Tournament detail UI remains unbuilt. Sport pages follow the sport page decisions above.
+- Header Sports links navigate to sport destinations. Homepage sport buttons filter only Live Matches without changing the URL. The public tournament pages are built (change 9, [architecture.md](architecture.md#staff-roles-and-manager-console--slice-4-22-october-2026)). Sport pages follow the sport page decisions above.
 - Keep native horizontal match and tournament rails. Partial cards become smaller and less opaque until they enter the spotlight. Do not add pause controls, View All or scrolling arrows.
 - Preserve the approved match texture/color and white-detail shell, and the tournament venue-image/white-detail shell. Competitors, scores, clocks, columns, values, tournament identities and dates are temporary fixtures. Feature teams decide actual fields without redesigning the shell. Do not add public fixture explanations.
 - Keep approved artwork, originals, responsive variants and favicon local and portable. Record sources and licenses in [asset-sources.md](asset-sources.md).

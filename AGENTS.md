@@ -71,7 +71,7 @@ Node/npm and Git are setup requirements. App/test dependencies are pinned by `pa
 - Reuse the approved colors, typography, shapes, spacing and breakpoints in `doc/design.md`. No pause control, scrolling arrows or View All controls.
 - Homepage sport tiles filter live matches in place. Header Sports links navigate. Register routes in `frontend/src/app/App.jsx`.
 - Keep native horizontal rails and partial-card emphasis. Card detail fields are temporary; approved shells stay fixed.
-- Sport routes use the shared sport page with display fixtures. Tournament routes stay intentionally blank until their team implements them.
+- Sport routes use the shared sport page with display fixtures.
 - Keep portable local assets, originals, responsive variants and license/source records. Never put clipboard or agent-runtime paths in app/test code.
 
 ## Verify before marking complete
