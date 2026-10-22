@@ -60,7 +60,7 @@ Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spec
 ### Super Admin
 
 - Core platform/event team with full access.
-- Invites and disables Super Admins and Tournament Managers.
+- Invites every staff role. Lists staff, cancels pending invitations, disables and re-enables accounts, changes roles and transfers tournament ownership ([staff management](#staff-management-change-8-implemented-23-october-2026)).
 - Can do everything a Tournament Manager can.
 - Cannot edit a finalized result.
 - Performs audited corrections and resolves administrative access issues.
@@ -104,7 +104,7 @@ Operating rule: one active assignment per match and one primary scoring device p
 - `/admin/teams` — create teams; add and edit players; tile-based roster management; move players between active roster and substitutes.
 - `/admin/matches` — create, schedule, assign participants, and manage match state.
 - `/admin/matches/{match}/scorers` — assign, revoke, and reassign the match's scorer.
-- `/admin/access` — Super Admin only: invite/disable managers and Super Admins; view operator accounts.
+- `/admin/access` — replaced by the implemented Super Admin routes ([staff management](#staff-management-change-8-implemented-23-october-2026)).
 - `/admin/settings` — tournament details, playing conditions, standings settings, and public event details.
 
 ### Match Operator routes (proposed)
@@ -134,6 +134,24 @@ The homepage, global sport pages and public tournament pages are registered in `
 - Live and Final scores from the live feed update the cards in place, also for a match that the cached read does not contain yet.
 - Without `VITE_API_BASE` the pages show the display fixtures.
 - Current limits: the public pages do not move focus to the heading on route entry. A live card stored before cards carried `tournamentId` applies on a tournament sport page only when the read contains its match.
+
+### Staff management (change 8, implemented 23 October 2026)
+
+Before this change, a Super Admin could only disable an account. A Super Admin now has six screens. API contracts are in [architecture.md](architecture.md#staff-roles-and-manager-console--slice-5-23-october-2026).
+
+- Admin home (`/admin`) shows the Manager home sections across all tournaments and a "Pending invitations: N" link. Pending invitations is a child of Admin home.
+- All tournaments (`/admin/tournaments`) lists every tournament with its owner and its Sport_Managers per sport. "Transfer ownership" asks for the new owner's email in a confirmation dialog. The new owner must be an active Tournament Manager. The previous owner keeps no scope in that tournament.
+- Staff list (`/admin/staff`) lists every staff account: active first, then by email, 50 at a time with "Load more". The Role and Status filters stay in the URL, so reload, a shared link and Back keep them.
+- Invite staff (`/admin/staff/invite`) invites a Super Admin, Tournament Manager or Match Scorer.
+- Staff member detail (`/admin/staff/{id}`) shows the account, its owned tournaments, its sport scope and its active scorer assignments. An active account offers "Change role" and "Disable account"; a disabled account offers "Re-enable account". Each change opens a confirmation dialog that lists its effects.
+- Pending invitations (`/admin/invitations`) lists waiting invitations, soonest expiry first, with the expiry in IST. "Cancel invitation" stops the invitation link.
+- Rules:
+  - A role change or a disable removes the account's active scorer assignments, its scoring device leases and its Sport_Manager scope. Re-enable keeps the role and restores none of them.
+  - An owner of a tournament cannot change role or be disabled until a Super Admin transfers ownership. The screen shows "Transfer ownership of <tournament> first."
+  - The last active Super Admin cannot be disabled or change role, also under two requests at the same time.
+  - A repeated disable is refused with a plain message (409 `ALREADY_DISABLED`); a repeated re-enable is refused the same way.
+  - Messages are plain sentences. No error code or request ID shows.
+- Current limit: if the sign-in service reports a failure other than "not found" when an invitation is cancelled, the invitation stays pending and the screen says the sign-in service is unavailable. This includes a reply that means the invitation was already revoked in the sign-in service. Such a row stays pending until it expires ([memory.md](memory.md#staff-roles-and-manager-console--slice-5-23-october-2026)).
 
 ### Main journeys
 

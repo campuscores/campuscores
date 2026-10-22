@@ -119,7 +119,7 @@ Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OP
 | Create/edit teams and players | Yes | Yes | No | No |
 | Create/edit matches and bracket assignments | Yes | Yes | No | No |
 | Invite Match Operators | Yes | Yes | No | No |
-| Invite/disable Tournament Managers and Super Admins | Yes | No | No | No |
+| Invite Tournament Managers and Super Admins; list staff, cancel invitations, disable, re-enable, change role, transfer tournament ownership ([Slice 5](#staff-roles-and-manager-console--slice-5-23-october-2026)) | Yes | No | No | No |
 | Assign, revoke, reassign scorers | Yes | Yes | No | No |
 | View assigned match (private scoring view) | Yes, after self-assignment | Yes, after self-assignment | Assigned matches only | No |
 | Start scoring, enter live scores, undo live actions, finish match, submit result | With active assignment | With active assignment | With active assignment | No |
@@ -371,7 +371,7 @@ Staff entry (change 5). Every account page and staff route renders `AuthArea` wi
 | `/manage`, `/manage/tournaments/new`, `/manage/tournaments/:slug`, `.../setup`, `.../setup/:step`, `.../details`, `.../sports/:sport`, `.../sports/:sport/teams` | Manager home, Guided_Setup, Tournament overview, details, Sport setup, Teams |
 | `/manage/matches`, `/manage/matches/new`, `/manage/matches/:matchId` | Matches and Match editor |
 | `/manage/matches/:matchId/scorer`, `/manage/invite` | Assign scorer and Invite scorer (Slice 3, [below](#staff-roles-and-manager-console--slice-3-22-october-2026)) |
-| `/admin/...` | Registered; the page shows "This page is not ready yet" until spec Slice 5 builds it |
+| `/admin`, `/admin/tournaments`, `/admin/staff`, `/admin/staff/invite`, `/admin/staff/:accountId`, `/admin/invitations` | Super Admin screens (Slice 5, [below](#staff-roles-and-manager-console--slice-5-23-october-2026)) |
 
 Role gate. `AuthArea` `SCREENS` lists each screen's title, allowed roles, current navigation item and page. `useMe` reads `GET /api/me` once per Staff_Area mount. While it loads, the screen shows a text status; a network error or 5xx shows "Try again"; a 401 shows the sign-in prompt; a role that the screen does not allow shows "You do not have access to this page". The role comes only from `/api/me`. Start screens: Match Scorer `/operator/matches`, Tournament Manager `/manage`, Super Admin `/admin` (`STAFF_NAV` and `startScreen` in [`labels.js`](../frontend/src/features/staff/labels.js)).
 
@@ -444,6 +444,39 @@ Current limits:
 
 - The public pages do not move focus to the `h1` on route entry; the scroll effect in `App.jsx` handles the position only.
 - A card in a room snapshot stored before `tournamentId` existed has no `tournamentId`. A tournament sport page applies it only when the read contains its match ID; the next published action replaces the card.
+
+## Staff roles and manager console — Slice 5, 23 October 2026
+
+Slice 5 adds the Super Admin API and screens (change 8). No schema change. Product behavior is in [prd.md](prd.md#staff-management-change-8-implemented-23-october-2026); decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-5-23-october-2026). Source: [`routes/admin.js`](../backend/src/routes/admin.js), [`routes/accounts.js`](../backend/src/routes/accounts.js), [`routes/invites.js`](../backend/src/routes/invites.js), [`routes/manage.js`](../backend/src/routes/manage.js), `frontend/src/features/admin/*Page.jsx`.
+
+Every endpoint below is `clerkAuth` → `loadAccount` → `requireRole('superAdmin')` on the uncached pool. A Tournament_Manager or Match_Scorer gets 403 `ROLE_FORBIDDEN`; a Viewer gets 403 `NOT_STAFF` (`backend/test/authz-matrix.spec.js`). Each accepted change writes one Audit_Row; a refusal writes none. A malformed ID is 400 `BAD_REQUEST`.
+
+| Endpoint | Body | Reply | Refusals |
+| --- | --- | --- | --- |
+| `GET /api/admin/staff?role=&status=&offset=` | — | `{ staff: [{ id, name, email, role, status, tournaments: [name] }], nextOffset }`: ACTIVE first, then email, then ID; 50 per page; `nextOffset` is `null` on the last page. `tournaments` lists the owned tournaments and those with a managed sport | 400 for an unknown `role` or `status` |
+| `GET /api/admin/staff/:id` | — | `{ member: { id, name, email, role, status, owned: [{ slug, name }], sportScope: [{ tournament: { slug, name }, sport }], activeAssignments } }` | 404 `NOT_FOUND` |
+| `POST /api/accounts/:id/disable` | `{ reason }` | `{ account: { id, status: 'DISABLED', revokedAssignmentIds } }` | 409 `REASON_REQUIRED`; then in order 404, 409 `ALREADY_DISABLED`, `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
+| `POST /api/accounts/:id/enable` | `{ reason? }` | `{ account: { id, status: 'ACTIVE' } }`; the role stays, nothing else is restored | 404; 409 `ALREADY_ACTIVE`; 409 `ACCOUNT_EXISTS` when another ACTIVE account now holds the email (unique index) |
+| `POST /api/accounts/:id/role` | `{ role, reason? }` | `{ account: { id, role, status }, revokedAssignmentIds }` | 400 unknown role; then in order 404, 409 `ACCOUNT_DISABLED`, 400 same role, 409 `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
+| `POST /api/admin/tournaments/:slug/owner` | `{ email, reason? }` | `{ tournament: { slug, owner: { accountId, name, email } } }` | 404; 400 `email:` when the email is not an ACTIVE Tournament_Manager or is the current owner |
+| `GET /api/admin/invitations?offset=` | — | `{ invitations: [{ id, email, role, invitedBy, expiresAt }], nextOffset }`: PENDING and unexpired by database `now()`, soonest expiry first, 50 per page | — |
+| `POST /api/invites/:id/cancel` | `{ reason? }` | `{ invitation: { id, status: 'REVOKED' } }` | 404; 409 `INVITE_CLOSED`; 502 `CLERK_UNAVAILABLE` |
+
+Effects. Disable and role change revoke the account's ACTIVE Assignments, delete its `scorer_leases` rows and delete its `tournament_sport_managers` rows in the same transaction. An ownership transfer deletes the new owner's Sport_Manager rows in that tournament; the previous owner keeps no scope. `DELETE /api/me` treats `ALREADY_DISABLED` from a concurrent delete or disable as done and continues to the Clerk delete, like a retry.
+
+Lock rules. These keep the guards race-free and the lock order acyclic:
+
+- `lockAccount` (in `accounts.js`, shared by disable, enable and role change) locks the target and every ACTIVE Super_Admin `FOR UPDATE` in ID order. Two concurrent requests therefore cannot both remove the last ACTIVE Super_Admin (`backend/test/admin.spec.js` runs this race in a throwaway schema). Account rows are locked before any Assignment, lease or Sport_Manager row; these paths lock no match or tournament row.
+- Tournament, then account. The ownership transfer locks the tournament `FOR UPDATE`, then the new owner's account `FOR SHARE`. The Sport_Manager add in `manage.js` uses the same order. Tournament create locks the caller's own account `FOR SHARE` first and re-checks it, and locks no other row before it. A concurrent disable or role change of that account either commits first, so the share lock sees a non-eligible row and refuses, or waits and then sees the new tournament and refuses with 409 `OWNER_TRANSFER_REQUIRED`.
+
+Invitation cancel and Clerk. The route reads the row first: a missing row is 404 and a closed or expired row is 409 `INVITE_CLOSED` with no Clerk call. It then calls Clerk `revokeInvitation` outside any transaction, so no row lock is held across the network call. A Clerk 404 means the Clerk invitation no longer exists, so the row is closed as revoked. Any other Clerk failure is 502 `CLERK_UNAVAILABLE` and the row stays PENDING. Last, a conditional update closes the row only while it is still PENDING and unexpired; a concurrent accept or cancel that won gives 409 `INVITE_CLOSED`. Open gap: a non-404 Clerk reply that means "already revoked" also gives 502, and the row stays PENDING until it expires ([memory.md](memory.md#staff-roles-and-manager-console--slice-5-23-october-2026)).
+
+Manager reads for the Super Admin screens:
+
+- `GET /api/manage/tournaments`: a row the caller owns carries `owner: { accountId, name, email }` and `sportManagers: [{ sport, accountId, name, email }]` (ordered by sport, then account). A Super_Admin owns every row for this purpose. A row the caller sees only as a Sport_Manager carries neither field. Both come from correlated subqueries in the same statement.
+- `GET /api/manage/home`: a Super_Admin reply adds `pendingInvitations`, the count of PENDING invitations unexpired by database `now()`. Other roles get no such field.
+
+Screens. Each screen is a View plus a thin container in `frontend/src/features/admin/`. `usePagedList` reads a page on entry and appends the next one on "Load more"; a failed page keeps the rows and offers "Try again". `DialogRecovery` adds the recovery control inside a `ConfirmDialog` (its `actions` prop): "Try again" resends the values in the dialog after no response, a 500 or a 502; "Sign in again" after a 401; "Reload the page" after a 403 or 409 that means the account or invitation changed. The Staff list filters live in the query string (`?role=&status=`); an unknown value counts as no filter. `ConfirmDialog` marks Cancel `autofocus` before `showModal()`, so opening a dialog never focuses and blurs the Reason field.
 
 ## Live updates and offline scoring
 
