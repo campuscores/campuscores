@@ -7,6 +7,7 @@ import { actionRoutes } from './routes/actions.js';
 import { assignmentRoutes } from './routes/assignments.js';
 import { inviteRoutes } from './routes/invites.js';
 import { leaseRoutes } from './routes/leases.js';
+import { manageRoutes } from './routes/manage.js';
 import { meRoutes } from './routes/me.js';
 import { publicRoutes } from './routes/public.js';
 export { MatchRoom } from './rooms.js';
@@ -27,6 +28,7 @@ app.route('/api', meRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', inviteRoutes); // clerkAuth (+ loadAccount for staff), uncached pool
 app.route('/api', accountRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', assignmentRoutes); // clerkAuth + loadAccount, uncached pool
+app.route('/api', manageRoutes); // clerkAuth + loadAccount + requireRole('manager'), uncached pool
 app.route('/api', leaseRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', actionRoutes); // clerkAuth; the chain SELECT loads the account, uncached pool
 app.notFound(() => {

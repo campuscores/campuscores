@@ -1,6 +1,6 @@
 /**
  * One list for both layouts (Req 21.11): a table with column headers from 768px, stacked cards with labelled lines
- * ("Time: 14:30 IST") at 767px and below. admin.css switches the layout; each `Cell` carries its visible line label.
+ * (a "Time:" line with the event-zone time text) at 767px and below. admin.css switches the layout; each `Cell` carries its visible line label.
  */
 export function StaffTable({ label, headers, children }) {
   return (

@@ -112,6 +112,112 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assignment routes', () => {
   });
 });
 
+// A self-contained tournament tree for the task 8.1 scope and state checks, so the match status and
+// the tournament status are controllable and the seed rows never change. Owner is a fresh manager; a
+// second manager is left out of scope. Returns ids plus an out-of-scope manager user and cleanup.
+async function tree({ matchStatus = 'LIVE', tournamentStatus = 'ONGOING' } = {}) {
+  const ownerUser = `test_assign_owner_${crypto.randomUUID()}`;
+  const outUser = `test_assign_out_${crypto.randomUUID()}`;
+  const scorerUser = `test_assign_scorer_${crypto.randomUUID()}`;
+  const built = await db(async (client) => {
+    const mk = async (text, params) => (await client.query(text, params)).rows[0];
+    const { id: ownerId } = await mk(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'TOURNAMENT_MANAGER') RETURNING id`, [ownerUser]);
+    const { id: outId } = await mk(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'TOURNAMENT_MANAGER') RETURNING id`, [outUser]);
+    const { id: scorerId } = await mk(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'MATCH_OPERATOR') RETURNING id`, [scorerUser]);
+    const slug = `test-assign-${crypto.randomUUID().slice(0, 8)}`;
+    const { id: tId } = await mk(
+      `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, owner_account_id)
+       VALUES ($1, 'Assign Tree (fake)', '2026-01-10', '2026-01-10', $2, $3) RETURNING id`,
+      [slug, tournamentStatus, ownerId],
+    );
+    const { id: tsId } = await mk(`INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, 'badminton') RETURNING id`, [tId]);
+    const future = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString();
+    const { id: matchId } = await mk(
+      `INSERT INTO matches (tournament_sport_id, kind, scheduled_at, status) VALUES ($1, 'CUSTOM', $2, $3) RETURNING id`,
+      [tsId, future, matchStatus],
+    );
+    const { id: assignId } = await mk('INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, $3) RETURNING id', [
+      matchId,
+      scorerId,
+      ownerId,
+    ]);
+    return { ownerId, outId, scorerId, tId, tsId, matchId, assignId };
+  });
+  const cleanup = () =>
+    db(async (client) => {
+      await client.query(
+        `DELETE FROM admin_audit_log WHERE actor_account_id = ANY($1)
+           OR (entity = 'match_operator_assignments' AND entity_id = $2) OR (entity = 'scorer_leases' AND entity_id = $3)`,
+        [[built.ownerId, built.outId, built.scorerId].map(Number), built.assignId, built.matchId],
+      );
+      await client.query('DELETE FROM scorer_leases WHERE match_id = $1', [built.matchId]);
+      await client.query('DELETE FROM match_operator_assignments WHERE match_id = $1', [built.matchId]);
+      await client.query('DELETE FROM matches WHERE id = $1', [built.matchId]);
+      await client.query('DELETE FROM tournament_sports WHERE id = $1', [built.tsId]);
+      await client.query('DELETE FROM tournaments WHERE id = $1', [built.tId]);
+      await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [[built.ownerId, built.outId, built.scorerId]]);
+    });
+  // ACTIVE assignment count on the match: the no-write proof for a refused assign or revoke.
+  const active = async () => (await one(`SELECT count(*)::int AS n FROM match_operator_assignments WHERE match_id = $1 AND status = 'ACTIVE'`, [built.matchId])).n;
+  const audits = async () =>
+    (await one(`SELECT count(*)::int AS n FROM admin_audit_log WHERE actor_account_id = ANY($1)`, [[built.ownerId, built.outId].map(Number)])).n;
+  return { ...built, ownerUser, outUser, scorerUser, cleanup, active, audits };
+}
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke scope and state checks (task 8.1)', () => {
+  it('refuses assign and revoke on a closed match with 409 MATCH_CLOSED and writes nothing', async () => {
+    // APPROVED is a Final match: matchPhase is 'past' regardless of the clock.
+    const t = await tree({ matchStatus: 'APPROVED' });
+    try {
+      const before = [await t.active(), await t.audits()];
+      expect(await code(await api('POST', `/api/matches/${t.matchId}/assignments`, { user: t.ownerUser, body: { accountId: t.scorerId, reason: 'swap' } }))).toEqual([
+        409,
+        'MATCH_CLOSED',
+      ]);
+      expect(await code(await api('POST', `/api/assignments/${t.assignId}/revoke`, { user: t.ownerUser, body: { reason: 'swap' } }))).toEqual([409, 'MATCH_CLOSED']);
+      expect([await t.active(), await t.audits()]).toEqual(before);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  it('refuses assign and revoke in a locked tournament with 409 TOURNAMENT_LOCKED and writes nothing', async () => {
+    // A LIVE match (not closed) in a COMPLETED tournament: the lock check fires, not MATCH_CLOSED.
+    const t = await tree({ matchStatus: 'LIVE', tournamentStatus: 'COMPLETED' });
+    try {
+      const before = [await t.active(), await t.audits()];
+      expect(await code(await api('POST', `/api/matches/${t.matchId}/assignments`, { user: t.ownerUser, body: { accountId: t.scorerId, reason: 'swap' } }))).toEqual([
+        409,
+        'TOURNAMENT_LOCKED',
+      ]);
+      expect(await code(await api('POST', `/api/assignments/${t.assignId}/revoke`, { user: t.ownerUser, body: { reason: 'swap' } }))).toEqual([
+        409,
+        'TOURNAMENT_LOCKED',
+      ]);
+      expect([await t.active(), await t.audits()]).toEqual(before);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  it('runs the scope check after the match lock and writes nothing for an out-of-scope manager', async () => {
+    // A LIVE match in an ONGOING tournament: not closed, not locked, so the out-of-scope manager is
+    // refused only by the scope check, which runs after the match lock and before any write.
+    const t = await tree({ matchStatus: 'LIVE', tournamentStatus: 'ONGOING' });
+    try {
+      const before = [await t.active(), await t.audits()];
+      expect(await code(await api('POST', `/api/matches/${t.matchId}/assignments`, { user: t.outUser, body: { accountId: t.scorerId, reason: 'swap' } }))).toEqual([
+        403,
+        'SCOPE_FORBIDDEN',
+      ]);
+      expect(await code(await api('POST', `/api/assignments/${t.assignId}/revoke`, { user: t.outUser, body: { reason: 'swap' } }))).toEqual([403, 'SCOPE_FORBIDDEN']);
+      expect([await t.active(), await t.audits()]).toEqual(before);
+    } finally {
+      await t.cleanup();
+    }
+  });
+});
+
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('lease routes', () => {
   it('grants, keeps, refuses another device, takes over with a reset sequence and releases', async () => {
     const f = await fixture();

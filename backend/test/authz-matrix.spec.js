@@ -1,9 +1,10 @@
 // Phase-3 authorization matrix (task 8.4). Cases already in scoring.spec.js, assignments.spec.js and
 // accounts.spec.js are not repeated here.
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 import { evaluateChain, loadScoringContext } from '../src/scoring.js';
-import { api, db, one } from './helpers.js';
+import { api, db, one, stubClerk } from './helpers.js';
 
 const code = async (res) => [res.status, (await res.json()).error?.code];
 
@@ -246,6 +247,434 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('authorization matrix over HTTP', () =
       expect(await list(b.user)).toEqual([[m4, 'LIVE', true]]);
     } finally {
       await f.cleanup();
+    }
+  });
+});
+
+// --- Manager endpoint authorization matrix (task 7.5) --------------------
+// Every /api/manage/* endpoint is checked against each caller class of Requirement 5.1:
+//   anonymous, invalid token, Viewer (signed-in, no staff account), DISABLED member,
+//   Match_Scorer (MATCH_OPERATOR), Tournament_Manager out of scope, Sport_Manager in scope,
+//   Tournament_Owner and Super_Admin. Each case asserts the Requirement 5.1 status+code and,
+//   on any refusal, that nothing was written (no new Audit_Row, child rows unchanged).
+//
+// The 5.1 check order is: (a) token 401 UNAUTHENTICATED; (b) account/status 403 NOT_STAFF or
+// ACCOUNT_DISABLED; (c) role 403 ROLE_FORBIDDEN; (d) body/id 400; (e) unknown entity 404;
+// (f) scope 403 SCOPE_FORBIDDEN; (g) state 409. So a role refusal precedes body parsing, and a
+// scope refusal only happens once the target exists. The fixtures below give every target endpoint
+// a real in-scope target, so the out-of-scope manager reaches step (f) and gets SCOPE_FORBIDDEN
+// (not 404). Collection endpoints (home, tournament list/create, match list) have no target, so a
+// valid-role caller always passes authz regardless of scope; the scope filter only limits rows.
+
+const AUTHZ_CODES = new Set(['UNAUTHENTICATED', 'NOT_STAFF', 'ACCOUNT_DISABLED', 'ROLE_FORBIDDEN', 'SCOPE_FORBIDDEN']);
+
+// The badminton Official_Preset, used to seed the fixture sport's stored format so a changed-format
+// PUT is a real change (not the idempotent no-op path).
+const DEFAULT_BADMINTON = DEFAULT_FORMATS.badminton;
+
+// Build a throwaway tournament tree owned by one manager, with a second manager out of scope and a
+// Sport_Manager in scope for one sport. Reuses the seed Super_Admin and Match_Scorer. Cleans up its
+// accounts, tournament subtree and every audit row it caused, in a finally.
+function manageFixtures() {
+  const accounts = [];
+  const tournaments = [];
+
+  async function account(role) {
+    const user = `test_authz_${crypto.randomUUID()}`;
+    const email = `test-authz-${crypto.randomUUID()}@example.test`;
+    const { id } = await one(
+      'INSERT INTO admin_accounts (clerk_user_id, role, status, email, name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [user, role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz fixture (fake)'],
+    );
+    accounts.push(id);
+    return { id: String(id), user, email };
+  }
+
+  return { accounts, tournaments, account };
+}
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix', () => {
+  it('applies the Requirement 5.1 status and code to every /api/manage/* endpoint and writes nothing on refusal', async () => {
+    const f = manageFixtures();
+    // The seed owner (account 2) owns the seed tournament; a fresh tree keeps the seed untouched and
+    // lets the owner/out-of-scope split be exact.
+    const owner = await f.account('TOURNAMENT_MANAGER'); // Tournament_Owner of the fixture tournament
+    const sportMgr = await f.account('TOURNAMENT_MANAGER'); // Sport_Manager of the fixture sport only
+    const outMgr = await f.account('TOURNAMENT_MANAGER'); // a manager with no scope on the fixture
+    const disabled = await f.account('DISABLED_MEMBER'); // DISABLED manager
+    const viewer = { user: `test_authz_viewer_${crypto.randomUUID()}` }; // signed in, no staff account
+
+    // A DRAFT tournament (so owner-level mutations reach the state step, not TOURNAMENT_LOCKED),
+    // one sport with a Sport_Manager, one team and one SCHEDULED match far in the future.
+    const future = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const tree = await db(async (client) => {
+      const slug = `test-authz-${crypto.randomUUID().slice(0, 8)}`;
+      const { id: tId } = (await client.query(
+        `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, owner_account_id)
+         VALUES ($1, 'Authz Fixture (fake)', $2, $2, 'DRAFT', $3) RETURNING id`,
+        [slug, future, owner.id],
+      )).rows[0];
+      f.tournaments.push(tId);
+      const { id: tsId } = (await client.query(
+        `INSERT INTO tournament_sports (tournament_id, sport, config, config_version) VALUES ($1, 'badminton', $2, 1) RETURNING id`,
+        [tId, { format: DEFAULT_BADMINTON }],
+      )).rows[0];
+      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id) VALUES ($1, $2)', [tsId, sportMgr.id]);
+      const { id: teamId } = (await client.query(
+        `INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz Team (fake)') RETURNING id`,
+        [tsId],
+      )).rows[0];
+      const { id: team2Id } = (await client.query(
+        `INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz Team 2 (fake)') RETURNING id`,
+        [tsId],
+      )).rows[0];
+      const { id: matchId } = (await client.query(
+        `INSERT INTO matches (tournament_sport_id, kind, side_a_team_id, side_b_team_id, scheduled_at, status)
+         VALUES ($1, 'CUSTOM', $2, $3, $4, 'SCHEDULED') RETURNING id`,
+        [tsId, teamId, team2Id, `${future}T10:00:00+05:30`],
+      )).rows[0];
+      return { slug, tId: String(tId), tsId: String(tsId), teamId: String(teamId), matchId: String(matchId) };
+    });
+
+    const base = `/api/manage/tournaments/${tree.slug}`;
+    // body builders use fresh values so an "allowed" owner/admin call does not clash with the fixture.
+    const minimalMatch = { tournament: tree.slug, sport: 'badminton', date: future, time: '11:30', sideA: tree.teamId, sideB: null, stage: 'FINAL' };
+
+    // Each endpoint: method, path, optional body, and its scope level.
+    //   'none'       collection endpoint, no target → every valid-role caller passes authz
+    //   'tournament' owner-level target → Sport_Manager is out of scope (SCOPE_FORBIDDEN)
+    //   'sport'      sport-level target → Sport_Manager is in scope (allowed)
+    const ENDPOINTS = [
+      { name: 'GET home', method: 'GET', path: '/api/manage/home', level: 'none' },
+      { name: 'GET tournaments', method: 'GET', path: '/api/manage/tournaments', level: 'none' },
+      { name: 'POST tournaments', method: 'POST', path: '/api/manage/tournaments', body: { name: 'Authz New (fake)', startsOn: future }, level: 'none' },
+      { name: 'GET tournament', method: 'GET', path: base, level: 'tournament' },
+      { name: 'PATCH tournament', method: 'PATCH', path: base, body: { venue: 'Authz Venue (fake)' }, level: 'tournament' },
+      { name: 'POST status', method: 'POST', path: `${base}/status`, body: { status: 'ONGOING' }, level: 'tournament', mutates: true },
+      { name: 'DELETE tournament', method: 'DELETE', path: base, level: 'tournament', mutates: true },
+      { name: 'POST sport', method: 'POST', path: `${base}/sports`, body: { sport: 'football' }, level: 'tournament' },
+      { name: 'DELETE sport', method: 'DELETE', path: `${base}/sports/badminton`, level: 'tournament', mutates: true },
+      { name: 'PUT format', method: 'PUT', path: `${base}/sports/badminton/format`, body: { format: { ...DEFAULT_BADMINTON, bestOf: 1 } }, level: 'sport' },
+      { name: 'POST manager', method: 'POST', path: `${base}/sports/badminton/managers`, body: { email: 'test-authz-nobody@example.test' }, level: 'tournament' },
+      { name: 'DELETE manager', method: 'DELETE', path: `${base}/sports/badminton/managers/${sportMgr.id}`, level: 'tournament', mutates: true },
+      { name: 'GET teams', method: 'GET', path: `${base}/sports/badminton/teams`, level: 'sport' },
+      { name: 'POST team', method: 'POST', path: `${base}/sports/badminton/teams`, body: { name: `Authz T ${crypto.randomUUID().slice(0, 6)} (fake)` }, level: 'sport' },
+      { name: 'PATCH team', method: 'PATCH', path: `/api/manage/teams/${tree.teamId}`, body: { branch: 'Authz Branch (fake)' }, level: 'sport' },
+      { name: 'DELETE team', method: 'DELETE', path: `/api/manage/teams/${tree.teamId}`, level: 'sport', mutates: true },
+      { name: 'GET matches', method: 'GET', path: '/api/manage/matches', level: 'none' },
+      { name: 'POST match', method: 'POST', path: '/api/manage/matches', body: minimalMatch, level: 'sport' },
+      { name: 'GET match', method: 'GET', path: `/api/manage/matches/${tree.matchId}`, level: 'sport' },
+      { name: 'PATCH match', method: 'PATCH', path: `/api/manage/matches/${tree.matchId}`, body: { venue: 'Authz MV (fake)' }, level: 'sport' },
+      { name: 'DELETE match', method: 'DELETE', path: `/api/manage/matches/${tree.matchId}`, level: 'sport', mutates: true },
+    ];
+
+    // The expected [status, code] per caller for an endpoint of a given scope level. `null` code
+    // means "allowed": the call passes authorization, so neither status nor code is an authz refusal.
+    const refusalForLevel = {
+      none: null, // valid role always allowed
+      tournament: [403, 'SCOPE_FORBIDDEN'],
+      sport: null, // Sport_Manager is in scope for sport-level targets
+    };
+    const CALLERS = [
+      { name: 'anonymous', ctx: {}, expect: () => [401, 'UNAUTHENTICATED'] },
+      { name: 'invalid token', ctx: { token: 'not-a-jwt' }, expect: () => [401, 'UNAUTHENTICATED'] },
+      { name: 'viewer', ctx: { user: viewer.user }, expect: () => [403, 'NOT_STAFF'] },
+      { name: 'disabled', ctx: { user: disabled.user }, expect: () => [403, 'ACCOUNT_DISABLED'] },
+      { name: 'match scorer', ctx: { user: 'test_match_operator' }, expect: () => [403, 'ROLE_FORBIDDEN'] },
+      { name: 'out-of-scope manager', ctx: { user: outMgr.user }, expect: (lvl) => (lvl === 'none' ? null : [403, 'SCOPE_FORBIDDEN']) },
+      { name: 'sport manager', ctx: { user: sportMgr.user }, expect: (lvl) => refusalForLevel[lvl] },
+      { name: 'owner', ctx: { user: owner.user }, expect: () => null },
+      { name: 'super admin', ctx: { user: 'test_super_admin' }, expect: () => null },
+    ];
+
+    try {
+      for (const ep of ENDPOINTS) {
+        for (const caller of CALLERS) {
+          const expected = caller.expect(ep.level);
+          // A destructive endpoint (DELETE, or the status change) would remove the shared fixture
+          // target if an allowed caller ran it, breaking the later endpoints. The authz decision for
+          // allowed callers is already proven by the non-destructive endpoint of the same scope level
+          // (for example PATCH tournament for tournament level, GET teams for sport level), so for a
+          // destructive endpoint only the refusal callers run here. Refusals never write.
+          if (!expected && ep.mutates) continue;
+          // Snapshot the fixture's audit rows and child-row counts before a refusal, to prove no write.
+          const before = expected ? await fixtureState(f, tree) : null;
+          const res = await api(ep.method, ep.path, { ...caller.ctx, body: ep.body });
+          const payload = await res.json().catch(() => ({}));
+          const got = [res.status, payload.error?.code];
+          const label = `${ep.name} / ${caller.name}`;
+
+          if (expected) {
+            expect(got, label).toEqual(expected);
+            // Nothing changed on refusal: no new Audit_Row for the fixture, child rows unchanged.
+            expect(await fixtureState(f, tree), `${label} wrote nothing`).toEqual(before);
+          } else {
+            // Allowed: the call passed authorization. Status is not an authz refusal and the code,
+            // if any, is a non-authz error (a minimal body may still hit 400/409, which is fine here).
+            expect([401, 403].includes(res.status), `${label} status ${res.status}`).toBe(false);
+            expect(got[1] == null || !AUTHZ_CODES.has(got[1]), `${label} code ${got[1]}`).toBe(true);
+            // POST /tournaments creates a brand-new tournament the caller owns; track it so cleanup
+            // removes it and its Audit_Row even when the caller is the seed Super_Admin (whose account
+            // id is not in the fixture account list).
+            if (ep.name === 'POST tournaments' && res.status === 201 && payload.tournament?.id) {
+              f.tournaments.push(Number(payload.tournament.id));
+            }
+          }
+        }
+      }
+    } finally {
+      await cleanupManageFixtures(f);
+    }
+  });
+});
+
+// A snapshot that proves a refusal wrote nothing: the count of audit rows caused by the fixture's
+// accounts, and the child-row counts under the fixture tournament. A refusal (401/403) happens
+// before any write, so this stays identical across a refused call.
+async function fixtureState(f, tree) {
+  return db(async (client) => {
+    const { rows: [r] } = await client.query(
+      `SELECT
+         (SELECT count(*)::int FROM admin_audit_log WHERE actor_account_id = ANY($1)) AS audits,
+         (SELECT count(*)::int FROM tournaments WHERE id = $2) AS tournament,
+         (SELECT count(*)::int FROM tournament_sports WHERE tournament_id = $2) AS sports,
+         (SELECT count(*)::int FROM tournament_sport_managers sm
+            JOIN tournament_sports ts ON ts.id = sm.tournament_sport_id WHERE ts.tournament_id = $2) AS sportManagers,
+         (SELECT count(*)::int FROM teams tm
+            JOIN tournament_sports ts ON ts.id = tm.tournament_sport_id WHERE ts.tournament_id = $2) AS teams,
+         (SELECT count(*)::int FROM matches mt
+            JOIN tournament_sports ts ON ts.id = mt.tournament_sport_id WHERE ts.tournament_id = $2) AS matches,
+         (SELECT status FROM tournaments WHERE id = $2) AS status`,
+      [f.accounts.map(Number), Number(tree.tId)],
+    );
+    return r;
+  });
+}
+
+// Remove the fixture tree, its accounts and every audit row the fixture caused.
+async function cleanupManageFixtures(f) {
+  await db(async (client) => {
+    const tIds = f.tournaments.map(Number);
+    const accountIds = f.accounts.map(Number);
+    // Child entity ids for the audit cleanup (audit rows key by entity + entity_id as text).
+    const { rows: sports } = await client.query('SELECT id::text FROM tournament_sports WHERE tournament_id = ANY($1)', [tIds]);
+    const { rows: teams } = await client.query(
+      'SELECT tm.id::text FROM teams tm JOIN tournament_sports ts ON ts.id = tm.tournament_sport_id WHERE ts.tournament_id = ANY($1)',
+      [tIds],
+    );
+    const { rows: matches } = await client.query(
+      'SELECT mt.id::text FROM matches mt JOIN tournament_sports ts ON ts.id = mt.tournament_sport_id WHERE ts.tournament_id = ANY($1)',
+      [tIds],
+    );
+    const sportIds = sports.map((r) => r.id);
+    const matchIds = matches.map((r) => r.id);
+    const sportIdNums = sportIds.map(Number);
+    const matchIdNums = matchIds.map(Number);
+    // Audit rows: every row written by a fixture account, plus any row keyed to a fixture entity.
+    await client.query(
+      `DELETE FROM admin_audit_log WHERE actor_account_id = ANY($1)
+         OR (entity = 'tournaments' AND entity_id = ANY($2))
+         OR (entity = 'tournament_sports' AND entity_id = ANY($3))
+         OR (entity = 'teams' AND entity_id = ANY($4))
+         OR (entity = 'matches' AND entity_id = ANY($5))`,
+      [accountIds, tIds.map(String), sportIds, teams.map((r) => r.id), matchIds],
+    );
+    await client.query('DELETE FROM scorer_leases WHERE match_id = ANY($1)', [matchIdNums]);
+    await client.query('DELETE FROM match_operator_assignments WHERE match_id = ANY($1)', [matchIdNums]);
+    await client.query('DELETE FROM matches WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM tournament_sport_managers WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM teams WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM tournament_sports WHERE tournament_id = ANY($1)', [tIds]);
+    await client.query('DELETE FROM tournaments WHERE id = ANY($1)', [tIds]);
+    await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [accountIds]);
+  });
+}
+
+// --- Assign, revoke and DELETE /api/me authorization matrix (task 8.4) ----
+// Covers the endpoints changed in task 8.1 and 8.3 against the nine Requirement 5.1 caller classes:
+//   anonymous, invalid token, Viewer (signed-in, no staff account), DISABLED member,
+//   Match_Scorer (MATCH_OPERATOR), Tournament_Manager out of scope, Sport_Manager in scope,
+//   Tournament_Owner and Super_Admin. The 5.1 check order for assign/revoke is: (a) token 401;
+//   (b) account/status 403 NOT_STAFF or ACCOUNT_DISABLED; (c) role 403 ROLE_FORBIDDEN; (d) body 400;
+//   (e) unknown entity 404; (f) scope 403 SCOPE_FORBIDDEN (after the match lock, before any write);
+//   (g) state 409. The fixture gives assign/revoke a real in-scope target (a LIVE match with an
+//   ACTIVE assignment in a DRAFT, i.e. not locked, tournament) so the out-of-scope manager reaches
+//   step (f) and gets SCOPE_FORBIDDEN, not 404. A LIVE match is not closed and a DRAFT tournament is
+//   not locked, so an in-scope caller passes authz and state both.
+//
+// revoke requires the reason before its transaction, so every revoke call carries a reason; a
+// missing reason would short-circuit to 409 REASON_REQUIRED before the scope check.
+
+// Build a throwaway tournament tree: a DRAFT tournament owned by one manager, one sport with a
+// Sport_Manager, two teams, one LIVE match far in the future and one ACTIVE assignment on it. Cleans
+// up its accounts, tree and every audit row it caused, in a finally.
+function assignFixtures() {
+  const accounts = [];
+  const tournaments = [];
+
+  async function account(role) {
+    const user = `test_authz8_${crypto.randomUUID()}`;
+    const email = `test-authz8-${crypto.randomUUID()}@example.test`;
+    const { id } = await one(
+      'INSERT INTO admin_accounts (clerk_user_id, role, status, email, name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [user, role, role === 'DISABLED_MEMBER' ? 'DISABLED' : 'ACTIVE', email, 'Authz8 fixture (fake)'],
+    );
+    accounts.push(id);
+    return { id: String(id), user, email };
+  }
+
+  return { accounts, tournaments, account };
+}
+
+async function cleanupAssignFixtures(f) {
+  await db(async (client) => {
+    const tIds = f.tournaments.map(Number);
+    const accountIds = f.accounts.map(Number);
+    const { rows: sports } = await client.query('SELECT id FROM tournament_sports WHERE tournament_id = ANY($1)', [tIds]);
+    const sportIdNums = sports.map((r) => Number(r.id));
+    const { rows: matches } = await client.query('SELECT id::text FROM matches WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    const { rows: assigns } = await client.query('SELECT id::text FROM match_operator_assignments WHERE match_id = ANY($1)', [matches.map((r) => Number(r.id))]);
+    await client.query(
+      `DELETE FROM admin_audit_log WHERE actor_account_id = ANY($1)
+         OR (entity = 'match_operator_assignments' AND entity_id = ANY($2))
+         OR (entity = 'scorer_leases' AND entity_id = ANY($3))`,
+      [accountIds, assigns.map((r) => r.id), matches.map((r) => r.id)],
+    );
+    await client.query('DELETE FROM scorer_leases WHERE match_id = ANY($1)', [matches.map((r) => Number(r.id))]);
+    await client.query('DELETE FROM match_operator_assignments WHERE match_id = ANY($1)', [matches.map((r) => Number(r.id))]);
+    await client.query('DELETE FROM matches WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM tournament_sport_managers WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM teams WHERE tournament_sport_id = ANY($1)', [sportIdNums]);
+    await client.query('DELETE FROM tournament_sports WHERE tournament_id = ANY($1)', [tIds]);
+    await client.query('DELETE FROM tournaments WHERE id = ANY($1)', [tIds]);
+    await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [accountIds]);
+  });
+}
+
+// A snapshot proving a refusal wrote nothing: the fixture accounts' audit-row count and the match's
+// ACTIVE-assignment count. A 401/403 refusal happens before any write, so this stays identical.
+async function assignState(f, matchId) {
+  return db(async (client) => {
+    const { rows: [r] } = await client.query(
+      `SELECT
+         (SELECT count(*)::int FROM admin_audit_log WHERE actor_account_id = ANY($1)) AS audits,
+         (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $2 AND status = 'ACTIVE') AS active`,
+      [f.accounts.map(Number), Number(matchId)],
+    );
+    return r;
+  });
+}
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matrix', () => {
+  it('applies the Requirement 5.1 status and code to assign and revoke and writes nothing on refusal', async () => {
+    const f = assignFixtures();
+    const owner = await f.account('TOURNAMENT_MANAGER'); // Tournament_Owner of the fixture tournament
+    const sportMgr = await f.account('TOURNAMENT_MANAGER'); // Sport_Manager of the fixture sport
+    const outMgr = await f.account('TOURNAMENT_MANAGER'); // a manager with no scope on the fixture
+    const disabled = await f.account('DISABLED_MEMBER'); // DISABLED manager
+    const scorer = await f.account('MATCH_OPERATOR'); // the assignment target
+    const viewer = { user: `test_authz8_viewer_${crypto.randomUUID()}` }; // signed in, no staff account
+
+    const future = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString();
+    const tree = await db(async (client) => {
+      const slug = `test-authz8-${crypto.randomUUID().slice(0, 8)}`;
+      const { id: tId } = (await client.query(
+        `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, owner_account_id)
+         VALUES ($1, 'Authz8 Fixture (fake)', $2, $2, 'DRAFT', $3) RETURNING id`,
+        [slug, future.slice(0, 10), owner.id],
+      )).rows[0];
+      f.tournaments.push(tId);
+      const { id: tsId } = (await client.query(
+        `INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, 'badminton') RETURNING id`,
+        [tId],
+      )).rows[0];
+      await client.query('INSERT INTO tournament_sport_managers (tournament_sport_id, account_id) VALUES ($1, $2)', [tsId, sportMgr.id]);
+      const { id: teamId } = (await client.query(`INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz8 Team (fake)') RETURNING id`, [tsId])).rows[0];
+      const { id: team2Id } = (await client.query(`INSERT INTO teams (tournament_sport_id, label) VALUES ($1, 'Authz8 Team 2 (fake)') RETURNING id`, [tsId])).rows[0];
+      // A LIVE match (not closed) scheduled far ahead, with one ACTIVE assignment to the scorer.
+      const { id: matchId } = (await client.query(
+        `INSERT INTO matches (tournament_sport_id, kind, side_a_team_id, side_b_team_id, scheduled_at, status)
+         VALUES ($1, 'CUSTOM', $2, $3, $4, 'LIVE') RETURNING id`,
+        [tsId, teamId, team2Id, future],
+      )).rows[0];
+      const { id: assignId } = (await client.query(
+        'INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, $3) RETURNING id',
+        [matchId, scorer.id, owner.id],
+      )).rows[0];
+      return { matchId: String(matchId), assignId: String(assignId) };
+    });
+
+    // assign reassigns the scorer with a reason (there is already an ACTIVE assignment); revoke
+    // revokes the fixture assignment. Both are sport-scoped, so the Sport_Manager is in scope.
+    const ENDPOINTS = [
+      { name: 'assign', method: 'POST', path: `/api/matches/${tree.matchId}/assignments`, body: { accountId: scorer.id, reason: 'swap (fake)' } },
+      { name: 'revoke', method: 'POST', path: `/api/assignments/${tree.assignId}/revoke`, body: { reason: 'swap (fake)' } },
+    ];
+
+    const CALLERS = [
+      { name: 'anonymous', ctx: {}, expected: [401, 'UNAUTHENTICATED'] },
+      { name: 'invalid token', ctx: { token: 'not-a-jwt' }, expected: [401, 'UNAUTHENTICATED'] },
+      { name: 'viewer', ctx: { user: viewer.user }, expected: [403, 'NOT_STAFF'] },
+      { name: 'disabled', ctx: { user: disabled.user }, expected: [403, 'ACCOUNT_DISABLED'] },
+      { name: 'match scorer', ctx: { user: scorer.user }, expected: [403, 'ROLE_FORBIDDEN'] },
+      { name: 'out-of-scope manager', ctx: { user: outMgr.user }, expected: [403, 'SCOPE_FORBIDDEN'] },
+      { name: 'sport manager', ctx: { user: sportMgr.user }, expected: null }, // in scope, allowed
+      { name: 'owner', ctx: { user: owner.user }, expected: null }, // allowed
+      { name: 'super admin', ctx: { user: 'test_super_admin' }, expected: null }, // allowed
+    ];
+
+    try {
+      for (const ep of ENDPOINTS) {
+        for (const caller of CALLERS) {
+          const label = `${ep.name} / ${caller.name}`;
+          if (!caller.expected) {
+            // An allowed caller would mutate the shared fixture (reassign or revoke), breaking later
+            // cases. The allowed decision for assign/revoke is the same scope+state path proven by the
+            // in-scope callers elsewhere; here we only run the refusal callers, which never write.
+            continue;
+          }
+          const before = await assignState(f, tree.matchId);
+          const res = await api(ep.method, ep.path, { ...caller.ctx, body: ep.body });
+          const got = [res.status, (await res.json().catch(() => ({}))).error?.code];
+          expect(got, label).toEqual(caller.expected);
+          expect(await assignState(f, tree.matchId), `${label} wrote nothing`).toEqual(before);
+        }
+      }
+      // One allowed in-scope revoke proves the scope+state path passes authz for a real caller. It
+      // runs last so it does not disturb the refusal snapshots above.
+      const ok = await api('POST', `/api/assignments/${tree.assignId}/revoke`, { user: sportMgr.user, body: { reason: 'in scope (fake)' } });
+      expect(ok.status, 'in-scope sport manager revoke').toBe(200);
+    } finally {
+      await cleanupAssignFixtures(f);
+    }
+  });
+});
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('DELETE /api/me owner refusal', () => {
+  // Deleting the own account of a Tournament_Owner is refused with 409 OWNER_TRANSFER_REQUIRED before
+  // Clerk is called; the account stays ACTIVE (Requirement 3.14). An owner account that owns a fresh
+  // DRAFT tournament keeps the seed owner untouched.
+  it('returns 409 OWNER_TRANSFER_REQUIRED, leaves the account ACTIVE and never calls Clerk', async () => {
+    const f = assignFixtures();
+    const owner = await f.account('TOURNAMENT_MANAGER');
+    await db(async (client) => {
+      const slug = `test-authz8-owner-${crypto.randomUUID().slice(0, 8)}`;
+      const { id: tId } = (await client.query(
+        `INSERT INTO tournaments (slug, name, starts_on, ends_on, status, owner_account_id)
+         VALUES ($1, 'Authz8 Owner (fake)', '2026-01-10', '2026-01-10', 'DRAFT', $2) RETURNING id`,
+        [slug, owner.id],
+      )).rows[0];
+      f.tournaments.push(tId);
+    });
+    const calls = stubClerk(() => [200, { object: 'user', id: owner.user, deleted: true }]);
+    try {
+      const res = await api('DELETE', '/api/me', { user: owner.user });
+      expect(await code(res)).toEqual([409, 'OWNER_TRANSFER_REQUIRED']);
+      expect(calls, 'Clerk not called').toEqual([]);
+      expect(await one('SELECT status FROM admin_accounts WHERE id = $1', [owner.id])).toEqual({ status: 'ACTIVE' });
+    } finally {
+      vi.restoreAllMocks();
+      await cleanupAssignFixtures(f);
     }
   });
 });

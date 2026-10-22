@@ -1,8 +1,10 @@
 import { toPublic } from '../http.js';
+import { EVENT_TIME_ZONE, matchPhase } from '../../../shared/time.mjs';
 import { Hono } from 'hono';
 import { clerkAuth, loadAccount, requireRole } from '../auth.js';
 import { withClient, withTx } from '../db.js';
 import { AppError, jsonBody } from '../http.js';
+import { requireScope } from '../scope.js';
 import { isWithinWindow } from '../scoring.js';
 import { idParam, parseId } from './public.js';
 
@@ -35,6 +37,28 @@ const revoke = (tx, assignmentId, actorId, reason) =>
 const ASSIGNMENT_COLUMNS = `id, match_id AS "matchId", account_id AS "accountId", permission, status,
   to_json(valid_from) #>> '{}' AS "validFrom", to_json(valid_until) #>> '{}' AS "validUntil"`;
 
+// Scope and state gate for assign and revoke, run after the match row is locked and before any
+// write (Requirements 5.8, 9.11, 13.9, 15.11). Locks the owning tournament FOR SHARE (lock order:
+// match first, then tournament), checks Manager_Scope, then refuses a closed match or a locked
+// tournament. `match` carries status and scheduled_at; `now` is database time read in the caller's
+// query. Super_Admin passes requireScope. Throws before the caller mutates anything.
+async function guardMatch(tx, account, match, now) {
+  const { rows: [t] } = await tx.query(
+    `SELECT status FROM tournaments WHERE id =
+       (SELECT tournament_id FROM tournament_sports WHERE id = $1) FOR SHARE`,
+    [match.tournamentSportId],
+  );
+  await requireScope(tx, account, { tournamentSportId: match.tournamentSportId });
+  // Closed = Final (APPROVED/PENDING_APPROVAL) or Not_Scored (SCHEDULED past Match_Day_End), by
+  // database time. matchPhase maps both to 'past'; a Live match is not closed here.
+  if (matchPhase({ status: match.status, scheduledAt: match.scheduledAt }, now) === 'past') {
+    throw new AppError(409, 'MATCH_CLOSED', 'The match is closed to assignment changes');
+  }
+  if (t && (t.status === 'COMPLETED' || t.status === 'ARCHIVED')) {
+    throw new AppError(409, 'TOURNAMENT_LOCKED', 'The tournament is locked');
+  }
+}
+
 export const assignmentRoutes = new Hono();
 
 assignmentRoutes.post('/matches/:id/assignments', clerkAuth, loadAccount, requireRole('manager'), async (c) => {
@@ -53,8 +77,16 @@ assignmentRoutes.post('/matches/:id/assignments', clerkAuth, loadAccount, requir
     const assignment = await uncached(c, (client) =>
       withTx(client, async (tx) => {
         // The match lock serializes assigns, revokes and score commands for this match.
-        const { rows: [match] } = await tx.query('SELECT id FROM matches WHERE id = $1 FOR UPDATE', [matchId]);
+        const { rows: [match] } = await tx.query(
+          `SELECT id, tournament_sport_id AS "tournamentSportId", status,
+                  (extract(epoch from scheduled_at) * 1000)::float8 AS "scheduledAt",
+                  (extract(epoch from now()) * 1000)::float8 AS now
+           FROM matches WHERE id = $1 FOR UPDATE`,
+          [matchId],
+        );
         if (!match) throw new AppError(404, 'NOT_FOUND', 'Match not found');
+        // Tournament FOR SHARE, scope, then closed/locked state, all before any write.
+        await guardMatch(tx, c.get('account'), match, match.now);
         // FOR SHARE waits for a concurrent disable of the target.
         const { rows: [target] } = await tx.query('SELECT role, status FROM admin_accounts WHERE id = $1 FOR SHARE', [accountId]);
         if (!target) throw new AppError(404, 'NOT_FOUND', 'Account not found');
@@ -102,11 +134,16 @@ assignmentRoutes.post('/assignments/:id/revoke', clerkAuth, loadAccount, require
   const assignment = await uncached(c, (client) =>
     withTx(client, async (tx) => {
       // Match row first, the same lock order as assign and scoring.
-      await tx.query(
-        `SELECT 1 FROM match_operator_assignments a JOIN matches m ON m.id = a.match_id
+      const { rows: [match] } = await tx.query(
+        `SELECT m.id, m.tournament_sport_id AS "tournamentSportId", m.status,
+                (extract(epoch from m.scheduled_at) * 1000)::float8 AS "scheduledAt",
+                (extract(epoch from now()) * 1000)::float8 AS now
+         FROM match_operator_assignments a JOIN matches m ON m.id = a.match_id
          WHERE a.id = $1 FOR UPDATE OF m`,
         [assignmentId],
       );
+      // Tournament FOR SHARE, scope, then closed/locked state, all before any write.
+      if (match) await guardMatch(tx, c.get('account'), match, match.now);
       const { rows: [old] } = await revoke(tx, assignmentId, actorId, reason);
       if (!old) throw new AppError(404, 'NOT_FOUND', 'Active assignment not found');
       await tx.query('DELETE FROM scorer_leases WHERE match_id = $1', [old.match_id]);
@@ -127,7 +164,7 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
       `SELECT m.id, ts.tournament_id AS "tournamentId", ts.sport, m.kind, m.stage, m.status,
               m.correction_route AS "correctionRoute", to_json(m.scheduled_at) #>> '{}' AS "scheduledAt",
               m.venue, m.last_seq AS seq, m.config_snapshot->'format' AS format,
-              (m.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date AS "isToday",
+              (m.scheduled_at AT TIME ZONE $2::text)::date = (now() AT TIME ZONE $2::text)::date AS "isToday",
               json_build_array(json_build_object('name', ta.label), json_build_object('name', tb.label)) AS sides,
               a.id AS "assignmentId", to_json(a.valid_from) #>> '{}' AS "validFrom",
               to_json(a.valid_until) #>> '{}' AS "validUntil", a.valid_from, a.valid_until, now() AS now
@@ -138,7 +175,7 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
        LEFT JOIN teams tb ON tb.id = m.side_b_team_id
        WHERE a.account_id = $1 AND a.status = 'ACTIVE'
        ORDER BY m.scheduled_at NULLS LAST, m.id`,
-      [c.get('account').id],
+      [c.get('account').id, EVENT_TIME_ZONE.name],
     ),
   );
   // Database now() only; client time is never read.

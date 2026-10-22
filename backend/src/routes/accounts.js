@@ -8,6 +8,10 @@ import { parseId } from './public.js';
 // Shared by POST /api/accounts/:id/disable and DELETE /api/me. IDs are bigint strings, as pg returns them.
 export function disableAccount(client, { accountId, actorId, reason, requestId }) {
   return withTx(client, async (tx) => {
+    // A Tournament_Owner must transfer ownership first (Requirement 3.14). Read on the uncached pool inside the
+    // transaction so a concurrent transfer is seen; throwing here rolls back before any disable write or Clerk call.
+    const owned = await tx.query('SELECT 1 FROM tournaments WHERE owner_account_id = $1 LIMIT 1', [accountId]);
+    if (owned.rows.length) throw new AppError(409, 'OWNER_TRANSFER_REQUIRED', 'Transfer tournament ownership first');
     // Locks the target and every active Super Admin in id order, so concurrent disables cannot remove the last one.
     const { rows } = await tx.query(
       `SELECT id, role, status FROM admin_accounts

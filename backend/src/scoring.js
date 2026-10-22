@@ -1,8 +1,20 @@
 // Pure scoring rules. `now` and the window bounds come from the database; client times are never read.
 
+import { matchDayEnd } from '../../shared/time.mjs';
+
 // Null bound is open; start inclusive, end exclusive.
 export const isWithinWindow = (now, from, until) =>
   (from == null || now >= from) && (until == null || now < until);
+
+// START eligibility (Requirements 15.2–15.4). Pure; `now` and `scheduledAt` are ms (or any value
+// that compares as ms; the caller passes database `now()` and the match's scheduled_at as numbers).
+// Returns the first failed [status, code] in precedence order, or null when START is allowed:
+// tournament must be ONGOING, then now at or after the scheduled time, then before Match_Day_End.
+export const startDecision = ({ now, scheduledAt, tournamentStatus }) =>
+  tournamentStatus !== 'ONGOING' ? [409, 'TOURNAMENT_NOT_ONGOING']
+    : scheduledAt == null || now < scheduledAt ? [403, 'START_TOO_EARLY']
+    : now >= matchDayEnd(scheduledAt) ? [409, 'MATCH_DAY_OVER']
+    : null;
 
 export function leaseDecision(lease, req, holderHasActiveAssignment) {
   if (!lease || !holderHasActiveAssignment) return 'GRANT';
@@ -20,8 +32,11 @@ export const acceptsScores = (match, account) =>
         ['TOURNAMENT_MANAGER', 'SUPER_ADMIN'].includes(account.role))));
 
 // Returns [status, code] for the first failed check, or null when scoring is allowed.
-// ctx comes from one SELECT inside the write transaction (match FOR UPDATE, lease FOR UPDATE).
-export function evaluateChain(ctx, { starting = false, finalReplay = false, requireToday = false } = {}) {
+// ctx comes from one SELECT inside the write transaction (match FOR UPDATE, tournament FOR SHARE, lease FOR UPDATE).
+// For START (`starting`) the startDecision rule runs here after the match-state check and before the lease
+// check (Requirement 15.2–15.5); later commands of a Live match have no date check. startDecision stays a
+// separate pure export so Property 5 can probe it directly.
+export function evaluateChain(ctx, { starting = false, finalReplay = false } = {}) {
   if (!ctx.userId) return [401, 'UNAUTHENTICATED'];
   if (!ctx.account) return [403, 'NOT_STAFF'];
   if (ctx.account.status !== 'ACTIVE') return [403, 'ACCOUNT_DISABLED'];
@@ -29,7 +44,16 @@ export function evaluateChain(ctx, { starting = false, finalReplay = false, requ
   if (!isWithinWindow(ctx.now, ctx.assignment.validFrom, ctx.assignment.validUntil)) return [403, 'OUTSIDE_WINDOW'];
   if (ctx.assignment.permission !== 'SCORE') return [403, 'PERMISSION_DENIED'];
   if (!acceptsScores(ctx.match, ctx.account) && !(starting && ctx.match.status === 'SCHEDULED') && !finalReplay) return [409, 'SCORING_LOCKED'];
-  if (requireToday && !ctx.match.isToday) return [403, 'NOT_TODAY'];
+  if (starting) {
+    // START date/tournament rule before the lease check (Requirement 15.2–15.5). now and scheduled_at
+    // arrive from pg as Date; startDecision compares them as ms.
+    const start = startDecision({
+      now: Number(ctx.now),
+      scheduledAt: ctx.match.scheduledAt == null ? null : Number(ctx.match.scheduledAt),
+      tournamentStatus: ctx.match.tournamentStatus,
+    });
+    if (start) return start;
+  }
   if (!ctx.lease || ctx.lease.deviceId !== ctx.deviceId || ctx.lease.accountId !== ctx.account.id) {
     return [409, 'LEASE_REQUIRED'];
   }
@@ -40,6 +64,9 @@ export function evaluateChain(ctx, { starting = false, finalReplay = false, requ
 // `actionId` and `reversesActionId` (optional) load the existing action slot and the reversal target.
 // The match lock is its own statement first: a READ COMMITTED statement that waits for a row lock still
 // reads the other tables from its start snapshot, so a revoke or score that committed meanwhile would be missed.
+// Lock order (Requirement 15.11): match first (above), then the tournament row FOR SHARE in the main query,
+// so START reads tournament_status under a share lock and a concurrent change to Completed cannot pass a match
+// that is becoming Live. ts.config_version is the Tournament_Sport version the START snapshot adopts.
 // Locking CTEs: Postgres refuses FOR UPDATE on the nullable side of an outer join, and the lease may be absent.
 export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, actionId = null, reversesActionId = null) {
   const locked = await tx.query('SELECT 1 FROM matches WHERE id = $1 FOR UPDATE', [matchId]);
@@ -48,8 +75,8 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
     `WITH m AS (SELECT * FROM matches WHERE id = $1 FOR UPDATE),
           l AS (SELECT * FROM scorer_leases WHERE match_id = $1 FOR UPDATE)
      SELECT m.id, m.tournament_sport_id, m.status, m.correction_route, m.config_snapshot, m.config_version, m.last_seq,
-            ts.sport, t.name AS tournament_name, t.status AS tournament_status, m.kind,
-            (m.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date AS is_today,
+            ts.sport, ts.config_version AS ts_config_version, t.name AS tournament_name, t.status AS tournament_status, m.kind,
+            m.scheduled_at,
             sa.label AS side_a, sb.label AS side_b,
             a.id AS account_id, a.status AS account_status, a.role,
             moa.valid_from, moa.valid_until, moa.permission,
@@ -69,7 +96,8 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
      LEFT JOIN l ON true
      LEFT JOIN score_actions e ON e.match_id = m.id AND e.action_id = $3
      LEFT JOIN match_snapshots s ON s.match_id = m.id
-     LEFT JOIN score_actions tg ON tg.match_id = m.id AND tg.action_id = $4`,
+     LEFT JOIN score_actions tg ON tg.match_id = m.id AND tg.action_id = $4
+     FOR SHARE OF t`,
     [matchId, clerkUserId, actionId, reversesActionId],
   );
   const r = rows[0];
@@ -86,10 +114,11 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
       config_version: r.config_version,
       last_seq: r.last_seq,
       sport: r.sport,
+      tsConfigVersion: r.ts_config_version,
       tournamentName: r.tournament_name,
       tournamentStatus: r.tournament_status,
       kind: r.kind,
-      isToday: r.is_today,
+      scheduledAt: r.scheduled_at,
       sides: [r.side_a, r.side_b],
     },
     account: r.account_id && { id: r.account_id, status: r.account_status, role: r.role },

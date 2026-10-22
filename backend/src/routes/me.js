@@ -16,7 +16,7 @@ meRoutes.get('/me', clerkAuth, loadAccount, (c) => {
 meRoutes.delete('/me', clerkAuth, loadAccount, async (c) => {
   const account = c.get('account');
   if (account?.status === 'ACTIVE') {
-    // Throws 409 LAST_SUPER_ADMIN and rolls back before Clerk is touched.
+    // Throws 409 OWNER_TRANSFER_REQUIRED (Requirement 3.14) or LAST_SUPER_ADMIN and rolls back before Clerk is touched.
     await withClient(c.env.HYPERDRIVE_UNCACHED, c.executionCtx, (client) =>
       disableAccount(client, {
         accountId: account.id,

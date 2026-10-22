@@ -10,7 +10,7 @@
 ## 1. Rule governance
 
 - Use the governing sport body's current rules as the baseline, then apply only explicitly configured competition rules for the relevant tournament and enabled sport.
-- Coaches/admins own tournament defaults. An assigned operator may select an official scoring preset or a validated custom format before starting an eligible match. The accepted start action freezes the match format; later actions cannot change it. Current-day scoring uses Asia/Kolkata and database time, plus the assignment window.
+- Coaches/admins own tournament defaults. An assigned operator may select an official scoring preset or a validated custom format before starting an eligible match. The accepted start action freezes the match format; later actions cannot change it. START is accepted only while the tournament is Ongoing and database time is at or after the scheduled time and before the end of the match's scheduled India_Time (Asia/Kolkata) day, plus the assignment window. A match not started by the end of that day becomes Not_Scored and can never start; later actions of a Live match have no day check. The event zone is defined once in `shared/time.mjs`. See [architecture.md](architecture.md#staff-roles-and-manager-console--slice-1-22-october-2026) (START rule, change 10, 22 October 2026).
 - Store the governing source URL, edition/version/date checked, and any local overrides with each tournament/sport configuration and match snapshot.
 - Do not silently change a live match's ruleset. A rule configuration change must be recorded and must not reinterpret already accepted actions without a deliberate migration/correction.
 - A Tournament Manager's or Super Admin's decision on a tie, abandonment, forfeit, or unusual circumstance is an official result input; record actor, time, and explanation.
@@ -112,7 +112,7 @@ Record each confirmed condition here and record its decision date in `memory.md`
 1. **Resolved 20 October 2026:** operator confirmation publishes the final result and locks editing; no separate approval. The bracket shape remains two semifinals and one final. Automatic advancement is separate implementation scope.
 2. Badminton singles/doubles and match format; basketball 5v5/3x3, periods/clock/overtime; football team size/duration/substitutions/tie resolution.
 3. Volleyball set/point/rotation/lineup settings; table tennis singles/doubles, game format and optional team-tie structure; lawn tennis singles/doubles, advantage/no-ad, set and tiebreak formats.
-4. Custom match visibility and whether its result contributes to standings, player match statistics, or neither. Custom matches never advance the bracket.
+4. **Partly resolved 22 October 2026:** a custom match (stored kind `CUSTOM`, display name "Match", a Regular_Match) is public with its tournament, through the Slice 1 public read change ([architecture.md](architecture.md#staff-roles-and-manager-console--slice-1-22-october-2026)). It still never advances the bracket. Whether its result contributes to standings or player match statistics stays Open.
 5. Team/roster limits, player eligibility, match squads, and substitute movement rules.
 6. Sport standings columns, win/draw/loss points, tie-breaks, and whether knockout-only tournaments need a table.
 7. Team-specific format exceptions, if any, and which point/scoring values managers can configure per tournament sport.

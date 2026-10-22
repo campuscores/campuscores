@@ -81,23 +81,49 @@ inviteRoutes.post('/invites/accept', clerkAuth, async (c) => {
     .map((e) => e.emailAddress.toLowerCase());
   const notFound = new AppError(404, 'INVITE_NOT_FOUND', 'No pending invitation for a verified email');
   if (!emails.length) throw notFound;
+  // Name from the same getUser call; empty parts are dropped so a blank name stays NULL (never overwrites later).
+  const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || null;
+  // The caller's primary verified email first, else the first verified one, for the existing-account backfill.
+  const primaryEmail = user.emailAddresses.find(
+    (e) => e.id === user.primaryEmailAddressId && e.verification?.status === 'verified',
+  )?.emailAddress.toLowerCase() || emails[0];
 
   const account = await uncached(c, (client) =>
     withTx(client, async (tx) => {
+      // Backfill email/name on an existing account whose email is empty (e.g. the bootstrapped Super Admin),
+      // before the invitation lookup. Skip when another ACTIVE account already holds that email so the
+      // one_active_account_email index is never violated (keeps the existing ACCOUNT_EXISTS path below intact).
+      await tx.query(
+        `UPDATE admin_accounts a SET email = $2, name = COALESCE(NULLIF(a.name, ''), $3)
+         WHERE a.clerk_user_id = $1 AND (a.email IS NULL OR a.email = '')
+           AND NOT EXISTS (
+             SELECT 1 FROM admin_accounts b
+             WHERE b.email = $2 AND b.status = 'ACTIVE' AND b.id <> a.id
+           )`,
+        [clerkUserId, primaryEmail, name],
+      );
       const { rows: [invite] } = await tx.query(
-        `SELECT id, role, invited_by FROM staff_invitations
+        `SELECT id, email, role, invited_by FROM staff_invitations
          WHERE email = ANY($1) AND status = 'PENDING' AND expires_at > now()
          ORDER BY created_at, id LIMIT 1 FOR UPDATE`,
         [emails],
       );
       if (!invite) throw notFound;
       // A disabled or existing account is never reactivated or changed by an invitation.
-      const { rows: [created] } = await tx.query(
-        `INSERT INTO admin_accounts (clerk_user_id, role, invited_by) VALUES ($1, $2, $3)
-         ON CONFLICT (clerk_user_id) DO NOTHING RETURNING id, role, status`,
-        [clerkUserId, invite.role, invite.invited_by],
-      );
-      if (!created) throw new AppError(409, 'ACCOUNT_EXISTS', 'This user already has a staff account');
+      const accountExists = new AppError(409, 'ACCOUNT_EXISTS', 'This user already has a staff account');
+      let created;
+      try {
+        // ON CONFLICT guards the clerk_user_id; a one_active_account_email clash raises 23505, mapped below.
+        ({ rows: [created] } = await tx.query(
+          `INSERT INTO admin_accounts (clerk_user_id, role, invited_by, email, name) VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (clerk_user_id) DO NOTHING RETURNING id, role, status`,
+          [clerkUserId, invite.role, invite.invited_by, invite.email, name],
+        ));
+      } catch (err) {
+        if (err.code === '23505') throw accountExists;
+        throw err;
+      }
+      if (!created) throw accountExists;
       await tx.query(
         `UPDATE staff_invitations SET status = 'ACCEPTED', accepted_account_id = $2, updated_at = now() WHERE id = $1`,
         [invite.id, created.id],
