@@ -139,12 +139,6 @@ export async function tabTo(page, target, key = 'Tab') {
   await expect(target).toBeFocused();
 }
 
-/** Type a YYYY-MM-DD date into the focused date input, day first: the spec must use the 'en-GB' locale. */
-export async function typeDate(page, iso) {
-  const [year, month, day] = iso.split('-');
-  await page.keyboard.type(`${day}${month}${year}`);
-}
-
 /** No error code, request ID or backend message in the visible text of `main` (Req 19.4, 20.3). */
 export async function expectNoCode(page, raw = []) {
   const text = await page.getByRole('main').innerText();

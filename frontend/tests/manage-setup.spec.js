@@ -2,10 +2,9 @@
 // Tournament overview and details, and Teams. Live-mode build with a stub Clerk and a mocked API whose replies copy
 // backend/src/routes/manage.js; each test checks the request bodies against the fields manage.js reads.
 import { test, expect } from '@playwright/test';
-import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabTo, typeDate } from './helpers.js';
+import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabTo } from './helpers.js';
 import { LATER, TODAY, tournamentApi, tournamentRow } from './manage-fakes.js';
 
-test.use({ locale: 'en-GB' }); // typeDate types the day first
 
 const main = page => page.getByRole('main');
 const heading = page => page.locator('main h1');
@@ -36,7 +35,7 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => { expect(page.errors).toEqual([]); });
 
-test('Guided setup by keyboard only: step 1 creates the Draft, step 2 adds a sport, step 3 adds a team with a jersey and captain', async ({ page, isMobile }) => {
+test('Guided setup by keyboard only: step 1 creates the Draft, step 2 adds a sport, step 3 adds a team with a jersey and captain', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.manager });
   const api = await tournamentApi(page);
   await page.goto(`${APP}/manage/tournaments/new`);
@@ -47,9 +46,10 @@ test('Guided setup by keyboard only: step 1 creates the Draft, step 2 adds a spo
   await tabTo(page, field(page, 'Tournament name'));
   await page.keyboard.type('Spring Cup');
   await tabTo(page, field(page, 'Start date'));
-  // Mobile Chromium renders a date input as a picker button with no typed segments; a phone user picks the date there.
-  if (isMobile) await field(page, 'Start date').fill(TODAY);
-  else await typeDate(page, TODAY);
+  // The browser's native date control takes the value: Chromium orders typed day/month/year segments by the OS or
+  // browser UI language (Windows regional format, Linux LANG), not by the page locale, so typed digits are not portable.
+  // Mobile Chromium shows a picker button with no typed segments at all.
+  await field(page, 'Start date').fill(TODAY);
   await expect(field(page, 'Start date')).toHaveValue(TODAY);
   await tabTo(page, field(page, 'Venue (optional)'));
   await page.keyboard.type('Main Ground');
