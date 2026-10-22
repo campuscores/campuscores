@@ -14,17 +14,18 @@ import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 
 // Each fixture builds one tournament (status from the option), one sport, two teams and one SCHEDULED
 // match with an ACTIVE operator assignment and lease, exactly as operator-scoring.spec.js does, so
-// `send('START', { format })` can drive the START path. It also creates a separate ACTIVE SUPER_ADMIN
-// account (`manager`) to drive the manager endpoints; a Super_Admin passes scope unconditionally, so it
-// need not own the tournament. `scheduledAt` defaults to `now()` so START is at or after the scheduled
+// `send('START', { format })` can drive the START path. It also creates a TOURNAMENT_MANAGER account
+// (`manager`) that owns the tournament, so it passes owner scope on the manager endpoints. It is not a
+// Super_Admin: a second committed ACTIVE Super_Admin would break the last-Super-Admin cases that other
+// files run in parallel. `scheduledAt` defaults to `now()` so START is at or after the scheduled
 // time and inside the match day.
 const created = [];
 async function fixture({ status = 'ONGOING', scheduledAt = 'now()', sport = 'badminton' } = {}) {
   const suffix = crypto.randomUUID();
   const { id: accountId } = await one("INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'MATCH_OPERATOR') RETURNING id", [`test_lock_op_${suffix}`]);
-  const { id: managerId } = await one("INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'SUPER_ADMIN') RETURNING id", [`test_lock_admin_${suffix}`]);
+  const { id: managerId } = await one("INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'TOURNAMENT_MANAGER') RETURNING id", [`test_lock_admin_${suffix}`]);
   const slug = `test-lock-${suffix}`;
-  const { id: tournamentId } = await one("INSERT INTO tournaments (slug, name, status, owner_account_id) VALUES ($1, 'Lock order test', $2, $3) RETURNING id", [slug, status, accountId]);
+  const { id: tournamentId } = await one("INSERT INTO tournaments (slug, name, status, owner_account_id) VALUES ($1, 'Lock order test', $2, $3) RETURNING id", [slug, status, managerId]);
   const { id: ts } = await one('INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, $2) RETURNING id', [tournamentId, sport]);
   const { id: alpha } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'A', 2026, 'Alpha') RETURNING id", [ts]);
   const { id: bravo } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'B', 2026, 'Bravo') RETURNING id", [ts]);

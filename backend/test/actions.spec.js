@@ -86,17 +86,24 @@ const runSweep = async (bindings = env) => {
 };
 
 // Committed throwaway scorers: one account and one CUSTOM match each, removed with every row they caused.
+// A SUPER_ADMIN scorer reuses the seed test_super_admin: a second committed ACTIVE Super_Admin would
+// break the last-Super-Admin cases that other files run in parallel.
 function fixtures() {
   const accounts = [];
+  const actors = [];
   const matches = [];
   return {
     async scorer(opts = {}) {
       const { role = 'MATCH_OPERATOR', accountStatus = 'ACTIVE', status = 'LIVE', route = null } = opts;
       const { from = null, until = null, assignment = 'ACTIVE', lease = true } = opts;
-      const user = `test_actions_${crypto.randomUUID()}`;
+      const seedAdmin = role === 'SUPER_ADMIN';
+      const user = seedAdmin ? 'test_super_admin' : `test_actions_${crypto.randomUUID()}`;
       const deviceId = crypto.randomUUID();
-      const { id: accountId } = await one('INSERT INTO admin_accounts (clerk_user_id, role, status) VALUES ($1, $2, $3) RETURNING id', [user, role, accountStatus]);
-      accounts.push(accountId);
+      const { id: accountId } = seedAdmin
+        ? await one(`SELECT id FROM admin_accounts WHERE clerk_user_id = $1 AND role = 'SUPER_ADMIN' AND status = 'ACTIVE'`, [user])
+        : await one('INSERT INTO admin_accounts (clerk_user_id, role, status) VALUES ($1, $2, $3) RETURNING id', [user, role, accountStatus]);
+      if (!seedAdmin) accounts.push(accountId);
+      actors.push(accountId);
       const { id: matchId } = await one(
         `INSERT INTO matches (tournament_sport_id, kind, status, correction_route) VALUES (2, 'CUSTOM', $1, $2) RETURNING id`,
         [status, route],
@@ -140,7 +147,7 @@ function fixtures() {
         await client.query(
           `DELETE FROM admin_audit_log WHERE (entity = 'score_actions' AND actor_account_id = ANY($1))
              OR (entity = 'match_operator_assignments' AND entity_id = ANY($2))`,
-          [accounts, rows.map((r) => r.id)],
+          [actors, rows.map((r) => r.id)],
         );
         for (const table of ['outbox_events', 'match_snapshots', 'scorer_leases', 'score_actions', 'match_operator_assignments']) {
           await client.query(`DELETE FROM ${table} WHERE match_id = ANY($1)`, [matches]);
