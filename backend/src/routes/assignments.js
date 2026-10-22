@@ -5,7 +5,9 @@ import { clerkAuth, loadAccount, requireRole } from '../auth.js';
 import { withClient, withTx } from '../db.js';
 import { AppError, jsonBody } from '../http.js';
 import { requireScope } from '../scope.js';
-import { isWithinWindow } from '../scoring.js';
+import { isWithinWindow, startDecision } from '../scoring.js';
+import { DEFAULT_FORMATS } from '../../../shared/scoring.mjs';
+import { email } from '../validate.js';
 import { idParam, parseId } from './public.js';
 
 const uncached = (c, fn) => withClient(c.env.HYPERDRIVE_UNCACHED, c.executionCtx, fn);
@@ -59,20 +61,47 @@ async function guardMatch(tx, account, match, now) {
   }
 }
 
+const notScorer = () => new AppError(400, 'NOT_A_SCORER', 'email: This email belongs to an account that is not a Match Scorer.');
+
+// Resolve a normalised email to the assignee account ID (Requirement 13.1, 13.3). The caller's own
+// ACTIVE email is a self-assign. Otherwise only an ACTIVE MATCH_OPERATOR is accepted; a pending
+// unexpired invitation, any other account (other role or DISABLED) and no account each refuse.
+async function resolveEmail(tx, wanted, actorId) {
+  const { rows: [account] } = await tx.query(
+    `SELECT id, role FROM admin_accounts WHERE email = $1 AND status = 'ACTIVE'`,
+    [wanted],
+  );
+  if (account && (String(account.id) === String(actorId) || account.role === 'MATCH_OPERATOR')) return String(account.id);
+  if (account) throw notScorer();
+  const { rows: [other] } = await tx.query(
+    `SELECT EXISTS (SELECT 1 FROM staff_invitations WHERE email = $1 AND status = 'PENDING' AND expires_at > now()) AS invited,
+            EXISTS (SELECT 1 FROM admin_accounts WHERE email = $1) AS known`,
+    [wanted],
+  );
+  if (other.invited) throw new AppError(400, 'INVITE_PENDING', 'email: An invitation to this email is waiting to be accepted.');
+  if (other.known) throw notScorer();
+  throw new AppError(400, 'SCORER_NOT_FOUND', 'email: No scorer account uses this email.');
+}
+
 export const assignmentRoutes = new Hono();
 
 assignmentRoutes.post('/matches/:id/assignments', clerkAuth, loadAccount, requireRole('manager'), async (c) => {
   const matchId = idParam(c);
   const body = await jsonBody(c);
-  const accountId = parseId(typeof body.accountId === 'number' ? String(body.accountId) : body.accountId);
-  if (!accountId) throw bad('accountId required');
+  const actorId = c.get('account').id;
+  // Target, in order: `{ self: true }` (the caller), `{ email }` (Requirement 13.1, 13.3), or the
+  // legacy `{ accountId }`. Email is trimmed and lower-cased like invitations.
+  const byEmail = body.self !== true && body.email !== undefined ? email(body.email) : null;
+  let accountId = body.self === true ? String(actorId) : null;
+  if (!accountId && !byEmail) {
+    accountId = parseId(typeof body.accountId === 'number' ? String(body.accountId) : body.accountId);
+    if (!accountId) throw bad('accountId required');
+  }
   const validFrom = bound(body.validFrom, 'validFrom');
   const validUntil = bound(body.validUntil, 'validUntil');
   if (validFrom && validUntil && validUntil <= validFrom) throw bad('validUntil must be after validFrom');
   const reason = text(body.reason) || null;
-  const actorId = c.get('account').id;
   const requestId = c.get('requestId');
-  const self = accountId === actorId;
   try {
     const assignment = await uncached(c, (client) =>
       withTx(client, async (tx) => {
@@ -87,11 +116,15 @@ assignmentRoutes.post('/matches/:id/assignments', clerkAuth, loadAccount, requir
         if (!match) throw new AppError(404, 'NOT_FOUND', 'Match not found');
         // Tournament FOR SHARE, scope, then closed/locked state, all before any write.
         await guardMatch(tx, c.get('account'), match, match.now);
+        // Email resolves after the scope check, so an out-of-scope caller learns nothing about accounts.
+        if (byEmail) accountId = await resolveEmail(tx, byEmail, actorId);
+        const self = accountId === String(actorId);
         // FOR SHARE waits for a concurrent disable of the target.
         const { rows: [target] } = await tx.query('SELECT role, status FROM admin_accounts WHERE id = $1 FOR SHARE', [accountId]);
         if (!target) throw new AppError(404, 'NOT_FOUND', 'Account not found');
         if (!self && (target.role !== 'MATCH_OPERATOR' || target.status !== 'ACTIVE')) {
-          throw bad('Target must be an active Match Operator or yourself');
+          // A concurrent role change or disable after resolveEmail lands here too.
+          throw byEmail ? notScorer() : bad('Target must be an active Match Operator or yourself');
         }
         const { rows: [current] } = await tx.query(
           `SELECT id FROM match_operator_assignments WHERE match_id = $1 AND status = 'ACTIVE'`,
@@ -167,10 +200,14 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
               (m.scheduled_at AT TIME ZONE $2::text)::date = (now() AT TIME ZONE $2::text)::date AS "isToday",
               json_build_array(json_build_object('name', ta.label), json_build_object('name', tb.label)) AS sides,
               a.id AS "assignmentId", to_json(a.valid_from) #>> '{}' AS "validFrom",
-              to_json(a.valid_until) #>> '{}' AS "validUntil", a.valid_from, a.valid_until, now() AS now
+              to_json(a.valid_until) #>> '{}' AS "validUntil", a.valid_from, a.valid_until, now() AS now,
+              (extract(epoch from now()) * 1000)::float8 AS now_ms,
+              (extract(epoch from m.scheduled_at) * 1000)::float8 AS scheduled_ms,
+              t.status AS tournament_status, ts.config->'format' AS ts_format
        FROM match_operator_assignments a
        JOIN matches m ON m.id = a.match_id
        JOIN tournament_sports ts ON ts.id = m.tournament_sport_id
+       JOIN tournaments t ON t.id = ts.tournament_id
        LEFT JOIN teams ta ON ta.id = m.side_a_team_id
        LEFT JOIN teams tb ON tb.id = m.side_b_team_id
        WHERE a.account_id = $1 AND a.status = 'ACTIVE'
@@ -178,11 +215,21 @@ assignmentRoutes.get('/operator/matches', clerkAuth, loadAccount, requireRole('s
       [c.get('account').id, EVENT_TIME_ZONE.name],
     ),
   );
-  // Database now() only; client time is never read.
-  const matches = rows.map(({ valid_from, valid_until, now, ...match }) => ({
-    ...match,
-    validNow: isWithinWindow(now, valid_from, valid_until),
-  }));
+  // Database now() only; client time is never read. canStart/startReason use the START rule of
+  // POST /actions (startDecision), so the list and the action agree; START needs a SCHEDULED match.
+  // notScored is Match_Phase 'past' for a SCHEDULED match. defaultFormat is the Tournament_Sport's
+  // Default_Format, the same source as the manager Sport setup.
+  const matches = rows.map(({ valid_from, valid_until, now, now_ms, scheduled_ms, tournament_status, ts_format, ...match }) => {
+    const start = startDecision({ now: now_ms, scheduledAt: scheduled_ms, tournamentStatus: tournament_status });
+    return {
+      ...match,
+      validNow: isWithinWindow(now, valid_from, valid_until),
+      canStart: match.status === 'SCHEDULED' && !start,
+      startReason: match.status === 'SCHEDULED' && start ? start[1] : null,
+      notScored: match.status === 'SCHEDULED' && matchPhase({ status: match.status, scheduledAt: scheduled_ms }, now_ms) === 'past',
+      defaultFormat: ts_format ?? DEFAULT_FORMATS[match.sport] ?? null,
+    };
+  });
   return c.json({ matches });
 });
 

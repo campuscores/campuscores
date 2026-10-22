@@ -3,7 +3,9 @@ import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import { apiFetch } from '../../services/api.js';
+import AssignScorerPage from '../manage/AssignScorerPage.jsx';
 import CreateTournamentPage from '../manage/CreateTournamentPage.jsx';
+import InviteScorerPage from '../manage/InviteScorerPage.jsx';
 import ManagerHomePage from '../manage/ManagerHomePage.jsx';
 import MatchEditorPage from '../manage/MatchEditorPage.jsx';
 import MatchesPage from '../manage/MatchesPage.jsx';
@@ -38,12 +40,12 @@ function ScorePage({ getToken, role }) {
 /**
  * Staff_Area screens (design "Information architecture"): `title` (h1 and document title of the gate states), `roles`
  * that may open it, `nav` (the StaffNav item it marks, per role when it differs) and `Page`. A screen without `Page`
- * is not built yet (scorer assignment and admin pages arrive in later tasks) and shows `InterimPage`, never preview data.
+ * is not built yet (the admin pages arrive in a later task) and shows `InterimPage`, never preview data.
  * Every state of a staff screen renders inside StaffShell, which owns the only SiteHeader and the document title.
  */
 const SCREENS = {
   'my-matches': { title: 'My Matches', roles: ALL, nav: 'my-matches', Page: MyMatchesPage, signedOut: 'Sign in to see and score the matches assigned to you.' },
-  score: { title: 'Score console', roles: ALL, nav: 'my-matches', Page: ScorePage, signedOut: 'Sign in to see and score the matches assigned to you.' },
+  score: { title: 'Score console', roles: ALL, nav: { MATCH_OPERATOR: 'my-matches', TOURNAMENT_MANAGER: 'matches', SUPER_ADMIN: 'matches' }, Page: ScorePage, signedOut: 'Sign in to see and score the matches assigned to you.' },
   'manager-home': { title: 'Manager home', roles: MANAGERS, nav: 'home', Page: ManagerHomePage },
   'tournament-new': { title: 'Create tournament', roles: MANAGERS, nav: TOURNAMENT_NAV, Page: CreateTournamentPage },
   'tournament-setup': { title: 'Create tournament', roles: MANAGERS, nav: TOURNAMENT_NAV, Page: SetupStepPage },
@@ -53,8 +55,8 @@ const SCREENS = {
   teams: { title: 'Teams', roles: MANAGERS, nav: TOURNAMENT_NAV, Page: TeamsPage },
   matches: { title: 'Matches', roles: MANAGERS, nav: 'matches', Page: MatchesPage },
   'match-editor': { title: 'Match editor', roles: MANAGERS, nav: 'matches', Page: MatchEditorPage },
-  'assign-scorer': { title: 'Assign scorer', roles: MANAGERS, nav: 'matches' },
-  'invite-scorer': { title: 'Invite scorer', roles: MANAGERS, nav: { TOURNAMENT_MANAGER: 'invite', SUPER_ADMIN: 'staff' } },
+  'assign-scorer': { title: 'Assign scorer', roles: MANAGERS, nav: 'matches', Page: AssignScorerPage },
+  'invite-scorer': { title: 'Invite scorer', roles: MANAGERS, nav: { TOURNAMENT_MANAGER: 'invite', SUPER_ADMIN: 'staff' }, Page: InviteScorerPage },
   'admin-home': { title: 'Admin home', roles: ADMIN, nav: 'home' },
   'all-tournaments': { title: 'All tournaments', roles: ADMIN, nav: 'tournaments' },
   'staff-list': { title: 'Staff list', roles: ADMIN, nav: 'staff' },

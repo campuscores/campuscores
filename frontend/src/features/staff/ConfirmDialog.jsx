@@ -66,7 +66,9 @@ export default function ConfirmDialog({ open, title, effects = [], confirmLabel,
   return (
     <dialog ref={dialog} className="staff-dialog" aria-labelledby={titleId}
       onCancel={event => { event.preventDefault(); cancel(); }}
-      onClose={() => { if (open) onCancel(); }}>
+      // `close` is a queued event: the close of an earlier opening can arrive after the dialog opened again, so only a
+      // dialog that is closed now cancels (a stale event closed a reopened dialog on loaded CI runners).
+      onClose={() => { if (open && !dialog.current.open) onCancel(); }}>
       {open && (
         <ConfirmForm titleId={titleId} title={title} effects={effects} confirmLabel={confirmLabel} danger={danger} reason={reason}
           saving={saving} error={error} onConfirm={onConfirm} cancel={cancel} cancelRef={cancelButton}>{children}</ConfirmForm>

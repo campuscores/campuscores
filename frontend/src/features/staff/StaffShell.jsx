@@ -15,6 +15,11 @@ export default function StaffShell({ role, title, current, back, status, alert, 
   const { pathname } = useLocation();
   useEffect(() => { document.title = `${title} | Thaparlympics`; }, [title]);
   useEffect(() => { heading.current.focus(); }, [pathname]);
+  // A save or error that reloads the screen can remove the focused control, and focus then falls to the page body.
+  // Focus the h1 instead, so keyboard users continue from the top of the screen, next to the announcement (Req 21.1).
+  useEffect(() => {
+    if ((status || alert) && (!document.activeElement || document.activeElement === document.body)) heading.current.focus();
+  }, [status, alert]);
   const items = STAFF_NAV[role] ?? [];
   return (
     <>

@@ -1,6 +1,8 @@
 import { env, exports as workerExports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { api, db, one } from './helpers.js';
+import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
+import { matchDayEnd } from '../../shared/time.mjs';
 
 describe('assignment and lease routes without a token', () => {
   it('return 401 UNAUTHENTICATED', async () => {
@@ -84,6 +86,77 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assignment routes', () => {
       expect(await auditOf(self.id, 'SELF_ASSIGNED')).toEqual({ actor_account_id: '2', reason: 'manager correction' });
       expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 0 });
     } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('assigns by email or self, and refuses each other email outcome with a 400 that writes nothing', async () => {
+    const f = await fixture();
+    const tag = crypto.randomUUID();
+    const mail = (name) => `${name}-${tag}@example.test`;
+    const extra = await db(async (client) => {
+      const mk = async (role, status, name) =>
+        (await client.query('INSERT INTO admin_accounts (clerk_user_id, role, status, email) VALUES ($1, $2, $3, $4) RETURNING id', [`test_assign_${name}_${tag}`, role, status, mail(name)])).rows[0].id;
+      await client.query('UPDATE admin_accounts SET email = $2 WHERE id = $1', [f.accountId, mail('scorer')]);
+      const ids = [await mk('TOURNAMENT_MANAGER', 'ACTIVE', 'manager'), await mk('MATCH_OPERATOR', 'DISABLED', 'disabled')];
+      await client.query(
+        `INSERT INTO staff_invitations (email, role, invited_by, clerk_invitation_id, expires_at) VALUES ($1, 'MATCH_OPERATOR', 2, $2, now() + interval '1 day')`,
+        [mail('invited'), `test_inv_${tag}`],
+      );
+      return ids;
+    });
+    const rows = async () => (await one('SELECT count(*)::int AS n FROM match_operator_assignments WHERE match_id = $1', [f.matchId])).n;
+    // No-write proof for a refusal: assignment rows, assignment audit rows for this match, and the lease.
+    const state = () =>
+      one(
+        `SELECT (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $1) AS rows,
+                (SELECT count(*)::int FROM admin_audit_log WHERE entity = 'match_operator_assignments' AND after->>'matchId' = $1::bigint::text) AS audits,
+                (SELECT device_id::text FROM scorer_leases WHERE match_id = $1) AS lease`,
+        [f.matchId],
+      );
+    try {
+      const refused = async (body) => {
+        const res = await assign(f.matchId, body);
+        const { error } = await res.json();
+        return [res.status, error.code, error.message.split(':')[0]];
+      };
+      const device = crypto.randomUUID();
+      await one('INSERT INTO scorer_leases (match_id, account_id, device_id) VALUES ($1, 2, $2) RETURNING match_id', [f.matchId, device]);
+      const before = await state();
+      expect(before).toEqual({ rows: 0, audits: 0, lease: device });
+      for (const [body, expected] of [
+        [{ email: '  ' }, [400, 'BAD_REQUEST', 'email']],
+        [{ email: mail('invited').toUpperCase() }, [400, 'INVITE_PENDING', 'email']],
+        [{ email: mail('nobody') }, [400, 'SCORER_NOT_FOUND', 'email']],
+        [{ email: mail('manager') }, [400, 'NOT_A_SCORER', 'email']],
+        [{ email: mail('disabled') }, [400, 'NOT_A_SCORER', 'email']],
+      ]) {
+        expect(await refused(body), body.email).toEqual(expected);
+        expect(await state(), `${body.email} wrote nothing`).toEqual(before);
+      }
+
+      // An ACTIVE scorer by trimmed, case-insensitive email: no window, lease removed, one audit row.
+      const res = await assign(f.matchId, { email: `  ${mail('scorer').toUpperCase()} ` });
+      expect(res.status).toBe(201);
+      const { assignment } = await res.json();
+      expect(assignment).toMatchObject({ matchId: f.matchId, accountId: f.accountId, status: 'ACTIVE', validFrom: null, validUntil: null });
+      expect(await auditOf(assignment.id, 'ASSIGNMENT_CREATED')).toEqual({ actor_account_id: '2', reason: null });
+      expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 0 });
+
+      // The caller's own email, then `{ self: true }`, each reassign with a reason as SELF_ASSIGNED.
+      expect(await code(await assign(f.matchId, { email: 'test-manager@example.test' }))).toEqual([409, 'REASON_REQUIRED']);
+      const byMail = (await (await assign(f.matchId, { email: 'Test-Manager@example.test', reason: 'manager scores' })).json()).assignment;
+      expect(byMail).toMatchObject({ accountId: '2', status: 'ACTIVE' });
+      expect(await auditOf(byMail.id, 'SELF_ASSIGNED')).toEqual({ actor_account_id: '2', reason: 'manager scores' });
+      const bySelf = (await (await assign(f.matchId, { self: true, reason: 'again' })).json()).assignment;
+      expect(bySelf).toMatchObject({ accountId: '2', status: 'ACTIVE' });
+      expect(await auditOf(bySelf.id, 'SELF_ASSIGNED')).toEqual({ actor_account_id: '2', reason: 'again' });
+      expect(await rows()).toBe(3);
+    } finally {
+      await db(async (client) => {
+        await client.query('DELETE FROM staff_invitations WHERE email = $1', [mail('invited')]);
+        await client.query('DELETE FROM admin_accounts WHERE id = ANY($1)', [extra]);
+      });
       await f.cleanup();
     }
   });
@@ -212,6 +285,108 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke scope and state che
       ]);
       expect(await code(await api('POST', `/api/assignments/${t.assignId}/revoke`, { user: t.outUser, body: { reason: 'swap' } }))).toEqual([403, 'SCOPE_FORBIDDEN']);
       expect([await t.active(), await t.audits()]).toEqual(before);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  it('refuses email and self assigns on a Final or Not_Scored match with 409 MATCH_CLOSED and writes nothing (task 16.3)', async () => {
+    // Final = APPROVED or PENDING_APPROVAL; Not_Scored = SCHEDULED with its Match_Day_End passed by
+    // database time. The closed check runs before the email lookup, so an unknown email is also 409.
+    for (const status of ['APPROVED', 'PENDING_APPROVAL', 'SCHEDULED']) {
+      const t = await tree({ matchStatus: status });
+      const mail = `test-assign-closed-${crypto.randomUUID()}@example.test`;
+      const device = crypto.randomUUID();
+      const set = (sql, params) => db((client) => client.query(sql, params));
+      const state = () =>
+        one(
+          `SELECT (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $1) AS rows,
+                  (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $1 AND status = 'ACTIVE') AS active,
+                  (SELECT count(*)::int FROM admin_audit_log WHERE actor_account_id = $2) AS audits,
+                  (SELECT device_id::text FROM scorer_leases WHERE match_id = $1) AS lease`,
+          [t.matchId, t.ownerId],
+        );
+      try {
+        await set('UPDATE admin_accounts SET email = $2 WHERE id = $1', [t.scorerId, mail]);
+        await set('INSERT INTO scorer_leases (match_id, account_id, device_id) VALUES ($1, $2, $3)', [t.matchId, t.scorerId, device]);
+        // 1 ms before today's IST day: the match day ended at the first instant of today.
+        const { ms } = await one('SELECT (extract(epoch from now()) * 1000)::float8 AS ms');
+        const dayStart = matchDayEnd(ms) - 24 * 60 * 60 * 1000;
+        if (status === 'SCHEDULED') await set('UPDATE matches SET scheduled_at = $2 WHERE id = $1', [t.matchId, new Date(dayStart - 1).toISOString()]);
+        const before = await state();
+        expect(before).toEqual({ rows: 1, active: 1, audits: 0, lease: device });
+        for (const body of [
+          { email: mail, reason: 'swap' },
+          { email: mail.toUpperCase() },
+          { email: `test-assign-nobody-${crypto.randomUUID()}@example.test`, reason: 'swap' },
+          { self: true, reason: 'swap' },
+          { self: true },
+        ]) {
+          const label = `${status} ${JSON.stringify(body)}`;
+          expect(await code(await api('POST', `/api/matches/${t.matchId}/assignments`, { user: t.ownerUser, body })), label).toEqual([409, 'MATCH_CLOSED']);
+          expect(await state(), `${label} wrote nothing`).toEqual(before);
+        }
+        if (status === 'SCHEDULED') {
+          // Boundary: at the first instant of today the match is Upcoming, so self assign succeeds.
+          await set('UPDATE matches SET scheduled_at = $2 WHERE id = $1', [t.matchId, new Date(dayStart).toISOString()]);
+          const res = await api('POST', `/api/matches/${t.matchId}/assignments`, { user: t.ownerUser, body: { self: true, reason: 'manager scores' } });
+          expect(res.status).toBe(201);
+          const { assignment } = await res.json();
+          expect(assignment).toMatchObject({ accountId: t.ownerId, status: 'ACTIVE' });
+          expect(await auditOf(assignment.id, 'SELF_ASSIGNED')).toEqual({ actor_account_id: t.ownerId, reason: 'manager scores' });
+        }
+      } finally {
+        await t.cleanup();
+      }
+    }
+  });
+});
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('operator match list START fields (task 16.2)', () => {
+  it('derives canStart, startReason, notScored and defaultFormat from database time and the Tournament_Sport', async () => {
+    const t = await tree({ matchStatus: 'SCHEDULED' });
+    const set = (sql, params) => db((client) => client.query(sql, params));
+    const row = async () => {
+      const { matches } = await (await api('GET', '/api/operator/matches', { user: t.scorerUser })).json();
+      const m = matches.find((x) => x.id === t.matchId);
+      return { canStart: m.canStart, startReason: m.startReason, notScored: m.notScored, isToday: m.isToday };
+    };
+    try {
+      // Boundaries from database time: today's IST day starts at matchDayEnd(now) - 1 day.
+      const { ms } = await one('SELECT (extract(epoch from now()) * 1000)::float8 AS ms');
+      const dayStart = matchDayEnd(ms) - 24 * 60 * 60 * 1000;
+      const at = (when) => set('UPDATE matches SET scheduled_at = $2 WHERE id = $1', [t.matchId, new Date(when).toISOString()]);
+
+      // 40 days ahead (tree default): too early, not Not_Scored.
+      expect(await row()).toEqual({ canStart: false, startReason: 'START_TOO_EARLY', notScored: false, isToday: false });
+      // Scheduled at the first instant of today's IST day: START allowed.
+      await at(dayStart);
+      expect(await row()).toEqual({ canStart: true, startReason: null, notScored: false, isToday: true });
+      // Scheduled 1 ms before today's IST day: its Match_Day_End has passed.
+      await at(dayStart - 1);
+      expect(await row()).toEqual({ canStart: false, startReason: 'MATCH_DAY_OVER', notScored: true, isToday: false });
+      // The tournament rule comes first, as in the START action.
+      await at(dayStart);
+      await set(`UPDATE tournaments SET status = 'DRAFT' WHERE id = $1`, [t.tId]);
+      expect(await row()).toEqual({ canStart: false, startReason: 'TOURNAMENT_NOT_ONGOING', notScored: false, isToday: true });
+      // A Live match cannot START and is not Not_Scored.
+      await set(`UPDATE tournaments SET status = 'ONGOING' WHERE id = $1`, [t.tId]);
+      await set(`UPDATE matches SET status = 'LIVE' WHERE id = $1`, [t.matchId]);
+      expect(await row()).toEqual({ canStart: false, startReason: null, notScored: false, isToday: true });
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  it('returns the Tournament_Sport Default_Format, else the Official_Preset', async () => {
+    const t = await tree({ matchStatus: 'SCHEDULED' });
+    const format = async () =>
+      (await (await api('GET', '/api/operator/matches', { user: t.scorerUser })).json()).matches.find((x) => x.id === t.matchId).defaultFormat;
+    try {
+      expect(await format()).toEqual(DEFAULT_FORMATS.badminton);
+      const custom = { ...DEFAULT_FORMATS.badminton, bestOf: 1 };
+      await db((client) => client.query('UPDATE tournament_sports SET config = $2 WHERE id = $1', [t.tsId, { format: custom }]));
+      expect(await format()).toEqual(custom);
     } finally {
       await t.cleanup();
     }

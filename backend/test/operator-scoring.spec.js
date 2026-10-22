@@ -98,13 +98,16 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('real sport scoring transactions', () 
   // START boundary cases (Requirements 15.2, 15.3, 15.4, 15.8, 23.4). `now` is the database clock; the
   // match's scheduled_at is placed relative to it. The rule allows START when the tournament is ONGOING
   // and scheduled_at <= now < Match_Day_End (the first IST midnight strictly after scheduled_at).
-  // Boundaries that compare now to scheduled_at (too-early, at-time) are exact to the second: scheduled_at
-  // is now()+1s or now(). The Match_Day_End boundary is a fixed IST midnight that `now` cannot be moved to,
+  // Cases that compare now to scheduled_at use scheduled_at now()+1min (too early) or now() (at the time).
+  // The Match_Day_End boundary is a fixed IST midnight that `now` cannot be moved to,
   // so "before Match_Day_End" schedules within the current IST day (so now sits before that day's end) and
   // "Match_Day_End reached" schedules on a prior IST day (so now is at or past that match day's end).
   // A refused START must write no score action, snapshot, outbox or audit row: rows() counts stay unchanged.
-  it('refuses START one second before the scheduled time and allows it at the scheduled time', async () => {
-    const early = await fixture('badminton', { scheduledAt: "now() + interval '1 second'" });
+  // The too-early match is one minute ahead, not one second: under a loaded parallel run more than a second can pass
+  // between the fixture insert and START, which made the case flaky. The exact one-unit boundary of startDecision is
+  // checked in test/node/time.property.spec.js; this case checks the refusal path writes nothing.
+  it('refuses START before the scheduled time and allows it at the scheduled time', async () => {
+    const early = await fixture('badminton', { scheduledAt: "now() + interval '1 minute'" });
     const unchanged = await early.rows();
     const tooEarly = await early.send('START', { format: DEFAULT_FORMATS.badminton });
     expect(tooEarly.status).toBe(403); expect(tooEarly.data.error.code).toBe('START_TOO_EARLY');

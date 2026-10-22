@@ -3,12 +3,15 @@ import { stubClerk } from './helpers.js';
 // Runs against the live-mode build (port 4176), which has VITE_API_BASE and a fake Clerk key. The stub Clerk object
 // exists only in this test's init script; the app code and its sign-in check are the production ones.
 import { test, expect } from '@playwright/test';
+import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 const APP = 'http://127.0.0.1:4176';
 const API = 'http://api.test/api';
 const TOKEN = 'operator-token';
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST' };
-const live = { id: 7, tournamentId: 1, sport: 'football', kind: 'BRACKET', stage: 'SF1', status: 'LIVE', correctionRoute: null, scheduledAt: '2026-10-12T09:30:00.000Z', venue: 'Court 1', seq: 3, sides: [{ name: 'Alpha' }, { name: 'Bravo' }], validNow: true };
-const scheduled = { ...live, id: 8, stage: 'SF2', status: 'SCHEDULED', seq: 0, sides: [{ name: 'Charlie' }, { name: 'Delta' }] };
+// Rows in the GET /api/operator/matches shape (backend/src/routes/assignments.js), including the START fields.
+const live = { id: 7, tournamentId: 1, sport: 'football', kind: 'BRACKET', stage: 'SF1', status: 'LIVE', correctionRoute: null, scheduledAt: '2026-10-12T09:30:00.000Z', venue: 'Court 1', seq: 3, sides: [{ name: 'Alpha' }, { name: 'Bravo' }],
+  isToday: false, validNow: true, canStart: false, startReason: null, notScored: false, defaultFormat: DEFAULT_FORMATS.football };
+const scheduled = { ...live, id: 8, stage: 'SF2', status: 'SCHEDULED', seq: 0, sides: [{ name: 'Charlie' }, { name: 'Delta' }], isToday: true, canStart: true };
 
 /** Signed-in stub for window.Clerk: @clerk/react skips the script download when window.Clerk exists. */
 
@@ -79,6 +82,18 @@ test('My Matches lists the assigned matches from the API with the Clerk token', 
   await expect(page.locator('#op-live .operator-score-link')).toHaveText('Continue scoring');
   await expect(page.locator('#op-scheduled .operator-score-link')).toHaveText('Start scoring');
   expect(server.auth).toEqual([`Bearer ${TOKEN}`]);
+});
+
+test('a Regular_Match (CUSTOM, no stage) reads "Match" on its My Matches cards and in the console, never "custom"', async ({ page }) => {
+  const server = await mockApi(page);
+  const regular = { kind: 'CUSTOM', stage: null };
+  await page.route(`${API}/operator/matches`, route => reply(route, 200, { matches: [{ ...live, ...regular }, { ...scheduled, ...regular }] })); // newest route wins
+  await page.goto(`${APP}/operator/matches`);
+  for (const section of ['#op-live', '#op-scheduled']) await expect(page.locator(`${section} .match-meta > span`).nth(1), section).toHaveText('Match');
+  await expect(page.getByRole('main')).not.toContainText(/custom/i);
+  await openConsole(page, server);
+  await expect(page.locator('.console-meta')).toHaveText('Football · Match · Court 1');
+  await expect(page.getByRole('main')).not.toContainText(/custom/i);
 });
 
 test('offline actions are stored, survive a reload in order and sync one at a time with the same actionId', async ({ page, context }) => {

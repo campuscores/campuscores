@@ -31,19 +31,21 @@ function statusLine(queue, online) {
   return last ? `Synced up to seq ${last.seq}` : 'Online';
 }
 /**
- * Match_Scorer frame: My Matches marked current and Back to My Matches (Req 4.9, 4.10).
- * Task 16.4: Tournament_Managers and Super_Admins also reach this console from Matches; then the nav role and the
- * Back target (Matches) must follow the caller's role from `GET /api/me` instead of these fixed values.
+ * Staff frame for the caller's `role` from `GET /api/me` (Req 4.9, 4.10, 13.7): a Match_Scorer gets My Matches marked
+ * current and Back to My Matches; a Tournament_Manager or Super_Admin, who opens the console from Matches, gets
+ * Matches marked current and Back to Matches.
  */
-const BACK = { to: '/operator/matches', label: 'My Matches' };
-const shell = (title, content) => <StaffShell role="MATCH_OPERATOR" title={title} current="my-matches" back={BACK}>{content}</StaffShell>;
+const frame = (role = 'MATCH_OPERATOR') => (role === 'MATCH_OPERATOR'
+  ? { role, current: 'my-matches', back: { to: '/operator/matches', label: 'My Matches' } }
+  : { role, current: 'matches', back: { to: '/manage/matches', label: 'Matches' } });
 const describe = (item, match) => item.type === 'POINT' ? `Point to ${sideName(match, item.payload.side)}` : 'Undo';
 const itemStatus = item => item.status === 'synced' ? `synced, seq ${item.seq}` : item.status;
 /**
  * Scoring console for one assigned match: scorer lease, Offline_Queue and Test_Engine controls (Req 19.2–19.10).
  * `getToken` comes from Clerk in AuthArea; this component loads no Clerk code itself.
  */
-export default function ScoreConsole({ matchId, getToken }) {
+export default function ScoreConsole({ matchId, getToken, role }) {
+  const shell = (title, content) => <StaffShell {...frame(role)} title={title}>{content}</StaffShell>;
   const [match, setMatch] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [accepted, setAccepted] = useState(null); // { seq, sides: [{ name, points }] }
@@ -210,7 +212,7 @@ export default function ScoreConsole({ matchId, getToken }) {
       catch (err) { projectionError = err.message; }
     }
     const undo = activeActions(history).findLast(a => !['START', 'FINALIZE'].includes(a.type));
-    return shell(title, <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || !match.isToday || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={statusLine(queue, online)} error={actionError || projectionError || storeError}>
+    return shell(title, <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={statusLine(queue, online)} error={actionError || projectionError || storeError}>
       {notices}
       {!scoringLoaded && <p role="status">Loading accepted scoring actions…</p>}
     </ScoringPage>);

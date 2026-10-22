@@ -5,9 +5,12 @@ import { EVENT_TIME_ZONE } from '../../../../shared/time.mjs';
 export const sportLabel = id => sports.find(sport => sport.id === id)?.label ?? id;
 export const sideName = (match, index) => match.sides?.[index]?.name ?? 'To be decided';
 
-/** Dashboard section for a match: the user-confirmed map in doc/memory.md ("My Matches sections"). */
-export function sectionOf({ status, correctionRoute }) {
-  if (status === 'SCHEDULED') return 'scheduled';
+/**
+ * Dashboard section for a match: the user-confirmed map in doc/memory.md ("My Matches sections"). A Not_Scored match
+ * (the API `notScored`, by database time) is past, so it moves to Completed (Req 15.4).
+ */
+export function sectionOf({ status, correctionRoute, notScored }) {
+  if (status === 'SCHEDULED') return notScored ? 'completed' : 'scheduled';
   if (status === 'LIVE' || (status === 'REJECTED' && correctionRoute === 'OPERATOR')) return 'live';
   return 'completed'; // PENDING_APPROVAL, APPROVED, REJECTED/MANAGER; read-only for operators
 }
@@ -27,4 +30,4 @@ export function dayOf(iso) {
 }
 
 export const stageLabel = ({ kind, stage }) =>
-  ({ SF1: 'Semifinal 1', SF2: 'Semifinal 2', FINAL: 'Final' })[stage] ?? (kind === 'CUSTOM' ? 'Custom match' : '');
+  ({ SF1: 'Semifinal 1', SF2: 'Semifinal 2', FINAL: 'Final' })[stage] ?? (kind === 'CUSTOM' ? 'Match' : ''); // a Regular_Match is "Match" (Req 12.11)

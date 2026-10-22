@@ -1,5 +1,5 @@
-// Stateful fakes of the manager endpoints in backend/src/routes/manage.js, shared by manage-setup.spec.js,
-// manage-matches.spec.js and staff-layout.spec.js. Each `*Fake` returns `{ state, reply(request) }`: `reply` gives a
+// Stateful fakes of the manager endpoints in backend/src/routes/manage.js (and assignments.js, invites.js), shared by
+// manage-setup.spec.js, manage-matches.spec.js, manage-assign.spec.js and staff-layout.spec.js. Each `*Fake` returns `{ state, reply(request) }`: `reply` gives a
 // [status, body] pair for the paths it knows and undefined for any other path, so specs can combine fakes.
 import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 import { istDate, istToUtc } from '../../shared/time.mjs';
@@ -158,6 +158,77 @@ export function matchesFake() {
     return undefined;
   }
   return { state, reply };
+}
+
+/** The signed-in manager and one ACTIVE Match_Scorer, as backend assignments.js `resolveEmail` finds them by email. */
+export const ME = { name: 'Mira (fake)', email: 'mira@example.com' };
+export const SCORER = { name: 'Asha (fake)', email: 'asha@example.com' };
+/** 400 replies of POST /api/matches/:id/assignments for other emails: the "email: <fix>" messages of assignments.js and validate.js. */
+export const EMAIL_REPLIES = {
+  'bad@example.com': [400, apiError('BAD_REQUEST', 'email: Enter an email address like name@example.com.')],
+  'pending@example.com': [400, apiError('INVITE_PENDING', 'email: An invitation to this email is waiting to be accepted.')],
+  'nobody@example.com': [400, apiError('SCORER_NOT_FOUND', 'email: No scorer account uses this email.')],
+  'coach@example.com': [400, apiError('NOT_A_SCORER', 'email: This email belongs to an account that is not a Match Scorer.')],
+};
+const ASSIGN_URLS = /^http:\/\/api\.test\/api\/(manage\/|matches\/\d+\/(assignments|lease)$|assignments\/\d+\/revoke$|invites$|operator\/matches)/;
+// to_json(timestamptz) #>> '{}' text, as backend invites.js returns `expiresAt`.
+const pgTime = ms => new Date(ms).toISOString().replace('Z', '+00:00');
+/** A GET /api/operator/matches row (backend assignments.js) for a staff match row the caller holds. */
+const operatorRow = row => ({
+  id: row.id, tournamentId: '7', sport: row.sport, kind: row.kind, stage: row.stage, status: row.status, correctionRoute: null,
+  scheduledAt: row.scheduledAt, venue: row.venue, seq: 0, format: null, isToday: row.date === TODAY, sides: row.sides.map(side => ({ name: side.name })),
+  assignmentId: row.assignmentId, validFrom: null, validUntil: null, validNow: true, canStart: true, startReason: null, notScored: false,
+  defaultFormat: DEFAULT_FORMATS[row.sport],
+});
+
+/**
+ * `matchesFake` plus the assign, revoke and invite writes of backend assignments.js and invites.js, and the operator
+ * reads that open the Score_Console for a match the caller (ME) holds. A match with a scorer needs a reason.
+ */
+export function assignFake() {
+  const fake = matchesFake();
+  const state = Object.assign(fake.state, { nextAssignment: 92, invitations: [] });
+  const find = id => state.matches.find(row => row.id === id);
+  function reply(request) {
+    const { method, path, body } = request;
+    let m;
+    if (method === 'POST' && (m = /^\/matches\/(\d+)\/assignments$/.exec(path))) {
+      const row = find(m[1]);
+      if (!row) return [404, apiError('NOT_FOUND', 'Match not found')];
+      if (row.phase === 'past') return [409, apiError('MATCH_CLOSED', 'The match is closed to assignment changes')];
+      if (body.self !== true && EMAIL_REPLIES[body.email]) return EMAIL_REPLIES[body.email];
+      const scorer = body.self === true || body.email === ME.email ? ME : body.email === SCORER.email ? SCORER : null;
+      if (!scorer) return EMAIL_REPLIES['nobody@example.com'];
+      if (row.scorer && !body.reason) return [409, apiError('REASON_REQUIRED', 'A reason is required to reassign')];
+      const id = String(state.nextAssignment++);
+      Object.assign(row, { scorer, assignmentId: id, canScore: scorer === ME });
+      return [201, { assignment: { id, matchId: row.id, accountId: scorer === ME ? '1' : '5', permission: 'SCORE', status: 'ACTIVE', validFrom: null, validUntil: null } }];
+    }
+    if (method === 'POST' && (m = /^\/assignments\/(\d+)\/revoke$/.exec(path))) {
+      if (!body?.reason?.trim()) return [409, apiError('REASON_REQUIRED', 'A reason is required')];
+      const row = state.matches.find(entry => entry.assignmentId === m[1]);
+      if (!row) return [404, apiError('NOT_FOUND', 'Active assignment not found')];
+      Object.assign(row, { scorer: null, assignmentId: null, canScore: false });
+      return [200, { assignment: { id: m[1], status: 'REVOKED' } }];
+    }
+    if (method === 'POST' && path === '/invites') {
+      const invitation = { id: String(60 + state.invitations.length), email: body.email, role: body.role, status: 'PENDING', expiresAt: pgTime(Date.now() + 7 * DAY) };
+      state.invitations.push(invitation);
+      return [201, { invitation }];
+    }
+    if (path === '/operator/matches') return [200, { matches: state.matches.filter(row => row.scorer === ME).map(operatorRow) }];
+    if (/^\/operator\/matches\/\d+\/scoring$/.test(path)) return [200, { seq: 0, snapshot: null, actions: [] }];
+    if ((m = /^\/matches\/(\d+)\/lease$/.exec(path))) return [200, { lease: { matchId: m[1], deviceId: body.deviceId, lastClientSeq: 0 } }];
+    return fake.reply(request);
+  }
+  return { state, reply };
+}
+
+/** `assignFake` on the page. `before(request, state)` may return a reply first. */
+export async function assignApi(page, { before } = {}) {
+  const fake = assignFake();
+  const requests = await mockManage(page, async request => (await before?.(request, fake.state)) || fake.reply(request) || NOT_FOUND, ASSIGN_URLS);
+  return { state: fake.state, requests, sent: (method, path) => requests.filter(r => r.method === method && r.path === path) };
 }
 
 /** `matchesFake` on the page. `before(request, state)` may return a reply first. */

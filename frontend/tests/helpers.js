@@ -108,10 +108,11 @@ export async function mockStaff(page, { me = REPLIES.manager, accept = REPLIES.i
  * Route `/api/manage/**` to `reply(request, requests)`. `request` is `{ method, path, query, body }`, with `path` after
  * `/api` and `body` the parsed JSON body or null. `reply` returns `[status, body]`, `'abort'` (no response) or a promise
  * of either. Returns the log of requests (no preflight). Call after mockStaff: Playwright tries the newest route first.
+ * `pattern` widens the routed URLs, for example to the assignment and invitation writes outside `/api/manage`.
  */
-export async function mockManage(page, reply) {
+export async function mockManage(page, reply, pattern = /^http:\/\/api\.test\/api\/manage\//) {
   const requests = [];
-  await page.route(/^http:\/\/api\.test\/api\/manage\//, async route => {
+  await page.route(pattern, async route => {
     const request = route.request();
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     const url = new URL(request.url());

@@ -1,4 +1,6 @@
 // Display text for Staff_Area screens. Visible text never shows a stored value, code or ID (Req 19.4, 20.3).
+import { timeText } from '../../../../shared/time.mjs';
+import { dayOf } from '../operator/operatorMatches.js';
 export { sportLabel } from '../operator/operatorMatches.js';
 
 const ROLES = { SUPER_ADMIN: 'Super Admin', TOURNAMENT_MANAGER: 'Tournament Manager', MATCH_OPERATOR: 'Match Scorer' };
@@ -35,6 +37,19 @@ export const startScreen = role => STAFF_NAV[role]?.[0].to ?? '/';
 export const staffPhase = ({ phase, status }) =>
   phase === 'live' ? 'live' : phase === 'upcoming' ? 'scheduled' : status === 'SCHEDULED' ? 'not-scored' : 'final';
 export const PHASE_LABELS = { live: 'Live', scheduled: 'Scheduled', final: 'Final', 'not-scored': 'Not scored' };
+
+/**
+ * Why "Start match" is off, from a `GET /api/operator/matches` row (design "Match_Scorer screens", Req 15.3).
+ * `startReason` and `isToday` come from database time; the device clock is never read. Null when START is allowed.
+ */
+export function startReasonText({ startReason, scheduledAt, isToday }) {
+  if (startReason === 'TOURNAMENT_NOT_ONGOING') return 'This tournament is not running.';
+  if (startReason === 'MATCH_DAY_OVER') return 'This match was not started on its day. It is marked Not scored.';
+  if (startReason !== 'START_TOO_EARLY') return null;
+  const day = dayOf(scheduledAt);
+  if (!day) return 'This match has no start time yet.';
+  return `You can start this match from ${timeText(Date.parse(scheduledAt))} ${isToday ? 'today' : `on ${day.label}`}.`;
+}
 
 const STAGES = { SF1: ['SF1', 'Semi-final 1'], SF2: ['SF2', 'Semi-final 2'] };
 /** "SF1 (Semi-final 1)" when `full`, else "SF1"; FINAL is "Final"; a Regular_Match is "Match" (Req 19.4, 12.11). */

@@ -13,7 +13,7 @@ const NO_ACCESS = 'You do not have access to this page';
 const FRAME_PRIMARY = new Set(['admin-home', 'all-tournaments', 'staff-list', 'pending-invitations']);
 // Screens connected to the API in Stage 2; their preview entries are deleted (Req 1.11).
 const CONNECTED = ['manager-home', 'setup-details', 'setup-sports', 'setup-teams', 'setup-matches', 'setup-scorers',
-  'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor'];
+  'tournament-overview', 'tournament-details', 'sport-setup', 'teams', 'matches', 'match-editor', 'assign-scorer', 'invite-scorer'];
 
 /**
  * Primary_Action count each state must show (Req 19.6 and design "Shared screen rules"). Viewer pages and the sign-in

@@ -7,7 +7,7 @@ const desktop = { testIgnore: /mobile\.spec\.js/ };
 const otherDesktop = { testIgnore: /(mobile|staff-layout)\.spec\.js/ };
 // layout-preview.spec.js also runs on phones: its 390px checks then use touch and mobile viewport emulation.
 // sign-in-choice, staff-shell and the manager screen specs also run on phones, the main staff device.
-const phone = { testMatch: /(mobile|layout-preview|sign-in-choice|staff-shell|manage-setup|manage-matches)\.spec\.js/ };
+const phone = { testMatch: /(mobile|layout-preview|sign-in-choice|staff-shell|manage-setup|manage-matches|manage-assign)\.spec\.js/ };
 
 export default defineConfig({
   testDir: './tests',

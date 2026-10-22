@@ -15,8 +15,6 @@ import TournamentsView from '../tournaments/TournamentsView.jsx';
 import TournamentView from '../tournaments/TournamentView.jsx';
 import TournamentSportView from '../tournaments/TournamentSportView.jsx';
 import SignInChoiceView from '../auth/SignInChoiceView.jsx';
-import AssignScorerView from '../manage/AssignScorerView.jsx';
-import InviteScorerView from '../manage/InviteScorerView.jsx';
 import AdminHomeView from '../admin/AdminHomeView.jsx';
 import AllTournamentsView from '../admin/AllTournamentsView.jsx';
 import StaffListView from '../admin/StaffListView.jsx';
@@ -70,7 +68,6 @@ function MatchDialogPreview({ sport, scoring, match }) {
 const VIEWS = {
   home: HomePreview, tournaments: TournamentsView, tournament: TournamentView, 'tournament-sport': TournamentSportView,
   'sport-page': TournamentSportView, 'match-dialog': MatchDialogPreview, 'sign-in-choice': SignInChoiceView,
-  'assign-scorer': AssignScorerView, 'invite-scorer': InviteScorerView,
   'admin-home': AdminHomeView, 'all-tournaments': AllTournamentsView, 'staff-list': StaffListView, 'invite-staff': InviteStaffView,
   'staff-member': StaffMemberView, 'pending-invitations': PendingInvitationsView,
 };
@@ -78,7 +75,7 @@ const VIEWS = {
 // Handlers a container would wire to the API. In the preview they do nothing, so no request is sent (Req 1.7).
 const noop = () => {};
 const NO_OPS = Object.fromEntries(['onRetry', 'onSubmit', 'onAdd', 'onAddTeam', 'onAddMatch', 'onAddManager', 'onEdit', 'onSave',
-  'onCancelEdit', 'onSaveFormat', 'onFinish', 'onAssign', 'onSelf', 'onFilter', 'onFilterChange', 'onChoose', 'onLoadMore']
+  'onCancelEdit', 'onSaveFormat', 'onFinish', 'onFilter', 'onFilterChange', 'onChoose', 'onLoadMore']
   .map(name => [name, noop]));
 
 /** One View with fake data in one state. Only the open confirmation dialog is local, so its layout can be reviewed. */
@@ -91,7 +88,7 @@ function ScreenPreview({ screen, state, role }) {
   useEffect(() => { if (!screen.role) document.title = `${screen.title} | Thaparlympics`; }, [screen]);
   const viewState = state === 'empty' ? emptyState : state;
   return (
-    <View {...NO_OPS} confirm={confirm} onRequest={setConfirm} onRequestDelete={setConfirm} onRequestRemove={setConfirm}
+    <View {...NO_OPS} confirm={confirm} onRequest={setConfirm} onRequestDelete={setConfirm}
       onConfirm={close} onCancel={close} role={role} {...{ [screen.role ? 'state' : 'status']: viewState }}
       {...props} {...(state === 'ready' ? data : state === 'empty' ? empty : null)} />
   );

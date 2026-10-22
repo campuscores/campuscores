@@ -25,8 +25,11 @@ const SCREENS = [
   ['manager', '/manage', 'Home', null, 'Manager home'],
   ['manager', '/manage/matches', 'Matches', { label: 'Manager home', to: '/manage' }, 'Matches'],
   ['manager', '/manage/matches/new', 'Matches'],
-  ['manager', '/manage/matches/12/scorer', 'Matches'],
-  ['manager', '/manage/invite', 'Invite scorer', { label: 'Home', to: '/manage' }, 'Invite scorer'],
+  ['manager', '/manage/matches/12/scorer', 'Matches', { label: 'Matches', to: '/manage/matches' }, 'Assign scorer'],
+  ['manager', '/manage/invite', 'Invite scorer', { label: 'Manager home', to: '/manage' }, 'Invite scorer'],
+  // A manager or Super Admin opens the Score console from Matches, so it marks Matches and goes back there.
+  ['manager', '/operator/matches/7/score', 'Matches', { label: 'Matches', to: '/manage/matches' }],
+  ['admin', '/operator/matches/7/score', 'Matches', { label: 'Matches', to: '/manage/matches' }],
   ['manager', '/manage/tournaments/new', 'Home', { label: 'Manager home', to: '/manage' }],
   ['manager', '/manage/tournaments/spring-cup', 'Home', { label: 'Manager home', to: '/manage' }],
   ['manager', '/manage/tournaments/spring-cup/details', 'Home'],
@@ -39,7 +42,7 @@ const SCREENS = [
   ['admin', '/manage/tournaments/spring-cup/details', 'Tournaments'],
   ['admin', '/manage/tournaments/spring-cup/sports/badminton/teams', 'Tournaments'],
   ['admin', '/manage/matches', 'Matches', undefined, 'Matches'],
-  ['admin', '/manage/invite', 'Staff'],
+  ['admin', '/manage/invite', 'Staff', { label: 'Admin home', to: '/admin' }, 'Invite scorer'],
   ['admin', '/admin/staff', 'Staff', { label: 'Home', to: '/admin' }, 'Staff list'],
   ['admin', '/admin/staff/invite', 'Staff'],
   ['admin', '/admin/staff/5', 'Staff'],
@@ -83,17 +86,19 @@ for (const [role, path, current, back, title] of SCREENS) {
   });
 }
 
-// Manager screens with a page (task 14.6): each path opens its page, which reads /api/manage, not the interim page.
-// Create tournament reads nothing; its form shows instead.
+// Manager screens with a page (tasks 14.6, 16.4): each path opens its page, which reads /api/manage, not the interim
+// page. Create tournament and Invite scorer read nothing; their forms show instead.
+const FORM_ONLY = { '/manage/tournaments/new': 'Save and continue', '/manage/invite': 'Send invitation' };
 for (const path of ['/manage', '/manage/tournaments/new', '/manage/tournaments/spring-cup/setup', '/manage/tournaments/spring-cup/setup/teams',
   '/manage/tournaments/spring-cup', '/manage/tournaments/spring-cup/details', '/manage/tournaments/spring-cup/sports/badminton',
-  '/manage/tournaments/spring-cup/sports/badminton/teams', '/manage/matches', '/manage/matches/new', '/manage/matches/12']) {
+  '/manage/tournaments/spring-cup/sports/badminton/teams', '/manage/matches', '/manage/matches/new', '/manage/matches/12',
+  '/manage/matches/12/scorer', '/manage/invite']) {
   test(`manager ${path} opens its page, not the interim page`, async ({ page }) => {
     const reads = [];
     page.on('request', request => { if (request.method() === 'GET' && request.url().startsWith('http://api.test/api/manage/')) reads.push(request.url()); });
     await mockStaff(page, { me: REPLIES.manager });
     await page.goto(`${APP}${path}`);
-    if (path.endsWith('/new') && path.includes('tournaments')) await expect(page.getByRole('button', { name: 'Save and continue' })).toBeVisible();
+    if (FORM_ONLY[path]) await expect(page.getByRole('button', { name: FORM_ONLY[path] })).toBeVisible();
     else await expect.poll(() => reads.length).toBeGreaterThan(0);
     await expect(heading(page)).toHaveCount(1);
     await expect(page.getByText('This page is not ready yet')).toHaveCount(0);

@@ -89,10 +89,6 @@ export const PREVIEW_DATA = {
   },
   'sign-in-choice': {},
 
-  // Tournament Manager screens.
-  'assign-scorer': { data: { match: scheduled } },
-  'invite-scorer': {},
-
   // Super Admin screens.
   'admin-home': {
     data: { today: TODAY_TEXT, todayMatches, needsScorer, pendingInvitations: 2 },

@@ -554,14 +554,19 @@ async function cleanupAssignFixtures(f) {
   });
 }
 
-// A snapshot proving a refusal wrote nothing: the fixture accounts' audit-row count and the match's
-// ACTIVE-assignment count. A 401/403 refusal happens before any write, so this stays identical.
+// A snapshot proving a refusal wrote nothing: the fixture accounts' audit-row count, the audit rows
+// keyed to the match (any actor, including the seed Super Admin), the match's assignment rows and its
+// lease. A refusal happens before any write, so this stays identical.
 async function assignState(f, matchId) {
   return db(async (client) => {
     const { rows: [r] } = await client.query(
       `SELECT
          (SELECT count(*)::int FROM admin_audit_log WHERE actor_account_id = ANY($1)) AS audits,
-         (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $2 AND status = 'ACTIVE') AS active`,
+         (SELECT count(*)::int FROM admin_audit_log WHERE (entity = 'match_operator_assignments' AND after->>'matchId' = $2::bigint::text)
+            OR (entity = 'scorer_leases' AND entity_id = $2::bigint::text)) AS "matchAudits",
+         (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $2) AS rows,
+         (SELECT count(*)::int FROM match_operator_assignments WHERE match_id = $2 AND status = 'ACTIVE') AS active,
+         (SELECT device_id::text FROM scorer_leases WHERE match_id = $2) AS lease`,
       [f.accounts.map(Number), Number(matchId)],
     );
     return r;
@@ -569,7 +574,7 @@ async function assignState(f, matchId) {
 }
 
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matrix', () => {
-  it('applies the Requirement 5.1 status and code to assign and revoke and writes nothing on refusal', async () => {
+  it('applies the Requirement 5.1 status and code to assign and revoke and writes nothing on refusal', { timeout: 120000 }, async () => {
     const f = assignFixtures();
     const owner = await f.account('TOURNAMENT_MANAGER'); // Tournament_Owner of the fixture tournament
     const sportMgr = await f.account('TOURNAMENT_MANAGER'); // Sport_Manager of the fixture sport
@@ -604,13 +609,29 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matri
         'INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, $3) RETURNING id',
         [matchId, scorer.id, owner.id],
       )).rows[0];
+      // A held lease, so a refusal is also proven to leave the lease in place.
+      await client.query('INSERT INTO scorer_leases (match_id, account_id, device_id) VALUES ($1, $2, $3)', [matchId, scorer.id, crypto.randomUUID()]);
       return { matchId: String(matchId), assignId: String(assignId) };
     });
 
     // assign reassigns the scorer with a reason (there is already an ACTIVE assignment); revoke
     // revokes the fixture assignment. Both are sport-scoped, so the Sport_Manager is in scope.
+    // The email and `{ self: true }` bodies (task 16.3) pass the same chain. The unknown email
+    // proves the scope check runs before the account lookup: an out-of-scope caller gets
+    // SCOPE_FORBIDDEN, never SCORER_NOT_FOUND. For an in-scope caller it is a 400 that writes nothing,
+    // so `allowed` runs those callers too.
+    const assignPath = `/api/matches/${tree.matchId}/assignments`;
     const ENDPOINTS = [
-      { name: 'assign', method: 'POST', path: `/api/matches/${tree.matchId}/assignments`, body: { accountId: scorer.id, reason: 'swap (fake)' } },
+      { name: 'assign', method: 'POST', path: assignPath, body: { accountId: scorer.id, reason: 'swap (fake)' } },
+      { name: 'assign by email', method: 'POST', path: assignPath, body: { email: scorer.email, reason: 'swap (fake)' } },
+      {
+        name: 'assign by unknown email',
+        method: 'POST',
+        path: assignPath,
+        body: { email: `test-authz8-nobody-${crypto.randomUUID()}@example.test`, reason: 'swap (fake)' },
+        allowed: [400, 'SCORER_NOT_FOUND'],
+      },
+      { name: 'assign self', method: 'POST', path: assignPath, body: { self: true, reason: 'swap (fake)' } },
       { name: 'revoke', method: 'POST', path: `/api/assignments/${tree.assignId}/revoke`, body: { reason: 'swap (fake)' } },
     ];
 
@@ -630,7 +651,8 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matri
       for (const ep of ENDPOINTS) {
         for (const caller of CALLERS) {
           const label = `${ep.name} / ${caller.name}`;
-          if (!caller.expected) {
+          const expected = caller.expected ?? ep.allowed;
+          if (!expected) {
             // An allowed caller would mutate the shared fixture (reassign or revoke), breaking later
             // cases. The allowed decision for assign/revoke is the same scope+state path proven by the
             // in-scope callers elsewhere; here we only run the refusal callers, which never write.
@@ -639,7 +661,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('assign and revoke authorization matri
           const before = await assignState(f, tree.matchId);
           const res = await api(ep.method, ep.path, { ...caller.ctx, body: ep.body });
           const got = [res.status, (await res.json().catch(() => ({}))).error?.code];
-          expect(got, label).toEqual(caller.expected);
+          expect(got, label).toEqual(expected);
           expect(await assignState(f, tree.matchId), `${label} wrote nothing`).toEqual(before);
         }
       }

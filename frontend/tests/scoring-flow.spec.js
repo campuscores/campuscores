@@ -1,14 +1,20 @@
 import { test as base, expect } from '@playwright/test';
 import { stubClerk } from './helpers.js';
 import { DEFAULT_FORMATS, scoreMatch, validateFormat } from '../../shared/scoring.mjs';
+import { timeText } from '../../shared/time.mjs';
 const APP = 'http://127.0.0.1:4176';
 const API = 'http://api.test/api';
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST' };
 const test = base.extend({ page: async ({ page }, runPage) => { const errors = []; page.on('pageerror', e => errors.push(e.message)); await runPage(page); expect(errors).toEqual([]); } });
 const point = (page, n = 1, name = 'Alpha') => page.getByRole('button', { name: `Add ${n} to ${name}`, exact: true });
-async function mockScoring(page, sport, { scheduled = false, custom = {}, isToday = true, validNow = true, dropFinal = false } = {}) {
+const START_STATUS = { START_TOO_EARLY: 403, TOURNAMENT_NOT_ONGOING: 409, MATCH_DAY_OVER: 409 };
+// Row shape of GET /api/operator/matches (backend/src/routes/assignments.js): canStart/startReason only for SCHEDULED.
+// `refuseStart` is the code POST /actions gives a START although the list said canStart (database time moved on).
+async function mockScoring(page, sport, { scheduled = false, custom = {}, isToday = true, startReason = null, refuseStart = null, scheduledAt = new Date().toISOString(),
+  defaultFormat = DEFAULT_FORMATS[sport], validNow = true, dropFinal = false } = {}) {
   const format = validateFormat(sport, { ...DEFAULT_FORMATS[sport], ...custom });
-  const match = { id: '7', sport, kind: 'BRACKET', status: scheduled ? 'SCHEDULED' : 'LIVE', sides: [{ name: 'Alpha' }, { name: 'Bravo' }], venue: 'Court 1', stage: 'SF1', scheduledAt: new Date().toISOString(), isToday, validNow, ...(scheduled ? {} : { format }) };
+  const match = { id: '7', sport, kind: 'BRACKET', status: scheduled ? 'SCHEDULED' : 'LIVE', sides: [{ name: 'Alpha' }, { name: 'Bravo' }], venue: 'Court 1', stage: 'SF1', scheduledAt, isToday, validNow,
+    canStart: scheduled && !startReason, startReason: scheduled ? startReason : null, notScored: false, defaultFormat, ...(scheduled ? {} : { format }) };
   const server = { match, actions: [], requests: [], clientSeq: 0, responses: new Map(), seq: 0, snapshot: scheduled ? null : scoreMatch({ matchId: '7', sport, sides: match.sides, format }), dropped: false };
   const reply = (route, body, status = 200) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
   await page.addInitScript(stubClerk, 'operator-token');
@@ -26,7 +32,8 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
     const body = req.postDataJSON(); server.requests.push(body);
     if (server.responses.has(body.actionId)) return reply(route, server.responses.get(body.actionId));
     if (match.status === 'APPROVED') return reply(route, { error: { code: 'SCORING_LOCKED', message: 'locked' } }, 409);
-    if (!match.isToday) return reply(route, { error: { code: 'NOT_TODAY', message: 'not today' } }, 403);
+    const refusal = body.type === 'START' && (match.canStart ? refuseStart : match.startReason); // START rule only (backend scoring.js startDecision)
+    if (refusal) return reply(route, { error: { code: refusal, message: refusal, requestId: 'req-test' } }, START_STATUS[refusal]);
     expect(body.clientSeq).toBe(server.clientSeq + 1);
     if (body.type === 'START') match.format = validateFormat(sport, body.payload.format);
     const next = scoreMatch({ matchId: '7', sport, sides: match.sides, format: match.format, actions: [...server.actions, body] });
@@ -115,8 +122,68 @@ test('offline points stay pending, survive reload and send once in order', async
   await context.setOffline(false); await page.reload(); await accepted(page, 1); expect(server.actions).toHaveLength(1);
 });
 test('future-date and expired assignments cannot start a match', async ({ page }) => {
-  const server = await mockScoring(page, 'badminton', { scheduled: true, isToday: false, validNow: false }); await open(page);
+  const server = await mockScoring(page, 'badminton', { scheduled: true, isToday: false, startReason: 'START_TOO_EARLY', validNow: false }); await open(page);
+  await expect(page.getByText(/^You can start this match from \d{2}:\d{2} IST on \d{1,2} [A-Z][a-z]{2}\.$/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start match' })).toBeDisabled(); expect(server.actions).toHaveLength(0);
+});
+const AT = '2026-10-21T09:30:00.000Z';
+for (const [why, options, sentence] of [
+  ['the tournament is not running', { startReason: 'TOURNAMENT_NOT_ONGOING' }, 'This tournament is not running.'],
+  ['its day is over', { startReason: 'MATCH_DAY_OVER' }, 'This match was not started on its day. It is marked Not scored.'],
+  ['it is too early today', { startReason: 'START_TOO_EARLY', scheduledAt: AT }, `You can start this match from ${timeText(Date.parse(AT))} today.`],
+  ['it has no start time', { startReason: 'START_TOO_EARLY', scheduledAt: null }, 'This match has no start time yet.'],
+]) {
+  test(`Start match is off with its reason when ${why}`, async ({ page }) => {
+    const server = await mockScoring(page, 'badminton', { scheduled: true, ...options }); await open(page);
+    await expect(page.getByText(sentence, { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start match' })).toBeDisabled();
+    await expect(page.getByRole('main')).not.toContainText(/START_TOO_EARLY|MATCH_DAY_OVER|TOURNAMENT_NOT_ONGOING/);
+    expect(server.requests).toHaveLength(0);
+  });
+}
+test('the tournament default format comes first; re-choosing it after the preset and a change restores it, and START sends it', async ({ page }) => {
+  const defaultFormat = { ...DEFAULT_FORMATS.badminton, bestOf: 5, target: 15 };
+  const server = await mockScoring(page, 'badminton', { scheduled: true, defaultFormat }); await open(page);
+  const choice = page.getByRole('combobox', { name: 'Scoring format', exact: true });
+  const bestOf = page.getByLabel('Best of (odd number of sets)', { exact: true });
+  const target = page.getByLabel('Points to win a set', { exact: true });
+  await expect(choice).toHaveValue('default');
+  await expect(choice.locator('option')).toHaveText(['Tournament default format', 'Official scoring preset', 'Changed for this match']);
+  await expect(bestOf).toHaveValue('5');
+  await expect(target).toHaveValue('15');
+  await choice.selectOption({ label: 'Official scoring preset' });
+  await expect(bestOf).toHaveValue(String(DEFAULT_FORMATS.badminton.bestOf));
+  await expect(target).toHaveValue(String(DEFAULT_FORMATS.badminton.target));
+  await bestOf.fill('7');
+  await expect(choice).toHaveValue('custom');
+  await expect(page.getByRole('main')).not.toContainText(/custom/i); // Req 12.11: the word never shows
+  await choice.selectOption({ label: 'Tournament default format' });
+  await expect(bestOf).toHaveValue('5');
+  await expect(target).toHaveValue('15');
+  await page.getByRole('button', { name: 'Start match', exact: true }).click(); await accepted(page, 1);
+  expect(server.requests.map(r => [r.type, r.payload.format])).toEqual([['START', validateFormat('badminton', defaultFormat)]]);
+});
+test('a START the server refuses after the list allowed it pauses sync, keeps the queued START across a reload and shows the refusal', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton', { scheduled: true, refuseStart: 'MATCH_DAY_OVER' }); await open(page);
+  await page.getByRole('button', { name: 'Start match', exact: true }).click();
+  const refused = async () => {
+    await expect(page.locator('.console-status')).toHaveText('Requires attention: MATCH_DAY_OVER');
+    await expect(page.locator('.console-notice')).toContainText('Sync stopped with MATCH_DAY_OVER. Your queued actions are kept. Ask a Tournament Manager to fix the cause, then retry.');
+    await expect(page.getByText('1 action is saved on this device and awaiting acceptance.')).toBeVisible();
+    await expect(point(page)).toBeDisabled();
+  };
+  await refused();
+  await page.waitForTimeout(1200); // a paused queue sends nothing more
+  expect(server.requests).toHaveLength(1);
+  await page.reload(); await expect(page.locator('h1')).toHaveText('Alpha vs Bravo');
+  await refused();
+  expect(server.requests.map(r => r.type)).toEqual(['START', 'START']);
+  expect(server.requests[1].actionId).toBe(server.requests[0].actionId); // the same stored action, resent once
+  expect(server.actions).toHaveLength(0);
+});
+test('a Live match keeps scoring after its scheduled day (no date check after START)', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton', { isToday: false }); await open(page);
+  await point(page).click(); await accepted(page, 1); expect(server.actions).toHaveLength(1);
 });
 test('scoring layout and custom settings fit phones through desktop with keyboard dialogs', async ({ page }, testInfo) => {
   await mockScoring(page, 'badminton', { custom: { bestOf: 1 } }); await open(page);

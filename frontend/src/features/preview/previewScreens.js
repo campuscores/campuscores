@@ -7,7 +7,6 @@
 // pages have no access check, so they have no 'forbidden'; single public pages add 'not-found'.
 
 const READS = ['ready', 'empty', 'loading', 'error', 'forbidden'];
-const READS_NO_EMPTY = ['ready', 'loading', 'error', 'forbidden'];
 const FORM = ['ready', 'forbidden'];
 const PUBLIC_LIST = ['ready', 'empty', 'loading', 'error'];
 const PUBLIC_PAGE = [...PUBLIC_LIST, 'not-found'];
@@ -57,19 +56,6 @@ export const GROUPS = [
         purpose: 'Choose the format, start the match and record each point.', primary: 'Start match, then the score buttons',
         entry: ['Score link on My Matches', 'Score on Matches, for a manager who holds the assignment'],
         exit: ['Back to My Matches', 'Back to Matches, for a manager'] },
-    ],
-  },
-  {
-    title: 'Tournament Manager screens', roleName: 'Tournament Manager', role: 'TOURNAMENT_MANAGER',
-    screens: [
-      { key: 'assign-scorer', title: 'Assign scorer', states: READS_NO_EMPTY,
-        purpose: 'Give one match its scorer.', primary: 'Assign scorer, or Reassign scorer when it has one',
-        entry: ['Assign scorer on Matches, Manager home or Step 5'],
-        exit: ['Invite as Match Scorer to Invite scorer', 'Back to Matches'] },
-      { key: 'invite-scorer', title: 'Invite scorer', states: FORM,
-        purpose: 'Invite a Match Scorer by email.', primary: 'Send invitation',
-        entry: ['Staff navigation: Invite scorer', 'Invite as Match Scorer on Assign scorer', 'Invite the scorer on Step 5'],
-        exit: ['Back to Manager home'] },
     ],
   },
   {
@@ -131,13 +117,13 @@ export const NAV_MAPS = [
   { roleName: 'Tournament Manager', start: 'Manager home', links: [
     ['Step 1 of 5: Tournament details', 'Manager home'], ['Step 2 of 5: Sports', 'Step 1 of 5: Tournament details'], ['Step 3 of 5: Teams', 'Step 2 of 5: Sports'], ['Step 4 of 5: Matches', 'Step 3 of 5: Teams'], ['Step 5 of 5: Scorers', 'Step 4 of 5: Matches'],
     ['Tournament overview', 'Manager home'], ['Tournament details', 'Tournament overview'], ['Sport setup', 'Tournament overview'], ['Teams', 'Sport setup'],
-    ['Matches', 'Manager home'], ['Match editor', 'Matches'], ['assign-scorer', 'Matches'], ['score-console', 'Matches'],
-    ['invite-scorer', 'Manager home'], ['Account', 'Manager home'],
+    ['Matches', 'Manager home'], ['Match editor', 'Matches'], ['Assign scorer', 'Matches'], ['score-console', 'Matches'],
+    ['Invite scorer', 'Manager home'], ['Account', 'Manager home'],
   ] },
   { roleName: 'Super Admin', start: 'admin-home', previewRole: 'SUPER_ADMIN', links: [
     ['all-tournaments', 'admin-home'], ['Tournament overview', 'all-tournaments'], ['Tournament details', 'Tournament overview'], ['Sport setup', 'Tournament overview'], ['Teams', 'Sport setup'],
     ['Step 1 of 5: Tournament details', 'admin-home'], ['Step 2 of 5: Sports', 'Step 1 of 5: Tournament details'], ['Step 3 of 5: Teams', 'Step 2 of 5: Sports'], ['Step 4 of 5: Matches', 'Step 3 of 5: Teams'], ['Step 5 of 5: Scorers', 'Step 4 of 5: Matches'],
-    ['Matches', 'admin-home'], ['Match editor', 'Matches'], ['assign-scorer', 'Matches'], ['score-console', 'Matches'], ['invite-scorer', 'admin-home'],
+    ['Matches', 'admin-home'], ['Match editor', 'Matches'], ['Assign scorer', 'Matches'], ['score-console', 'Matches'], ['Invite scorer', 'admin-home'],
     ['staff-list', 'admin-home'], ['invite-staff', 'staff-list'], ['staff-member', 'staff-list'], ['pending-invitations', 'admin-home'], ['Account', 'admin-home'],
   ] },
 ];

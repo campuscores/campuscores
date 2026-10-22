@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import SportIcon from '../../../components/SportIcon.jsx';
 import { sportLabel, sideName } from '../operatorMatches.js';
 import { DEFAULT_FORMATS, RULE_SOURCES, periodLabel, validateFormat } from '../../../../../shared/scoring.mjs';
+import { startReasonText } from '../../staff/labels.js';
 import FormatSettings from './FormatSettings.jsx';
 import './ScoringPage.css';
 
@@ -11,12 +12,15 @@ function Dialog({ label, onClose, onReturnFocus, children }) {
   return <dialog ref={ref} className="scoring-dialog" aria-label={label} onCancel={onClose} onClose={onClose}>{children}</dialog>;
 }
 function FormatForm({ match, disabled, onAction }) {
-  const defaults = DEFAULT_FORMATS[match.sport];
-  const [format, setFormat] = useState(() => ({ ...defaults }));
-  const [custom, setCustom] = useState(false);
-  const [scoreText, setScoreText] = useState(() => defaults.scoreValues?.join(', ') ?? '');
+  // The Tournament_Sport Default_Format comes first (Req 10.7); the Official_Preset stays a choice.
+  const formats = { default: match.defaultFormat ?? DEFAULT_FORMATS[match.sport], preset: DEFAULT_FORMATS[match.sport] };
+  const [choice, setChoice] = useState('default');
+  const [format, setFormat] = useState(() => ({ ...formats.default }));
+  const [scoreText, setScoreText] = useState(() => formats.default.scoreValues?.join(', ') ?? '');
   const [error, setError] = useState('');
-  const change = (key, value) => { setCustom(true); setFormat(f => ({ ...f, [key]: value })); setError(''); };
+  const change = (key, value) => { setChoice('custom'); setFormat(f => ({ ...f, [key]: value })); setError(''); };
+  const choose = next => { setChoice(next); if (next !== 'custom') { setFormat({ ...formats[next] }); setScoreText(formats[next].scoreValues?.join(', ') ?? ''); } };
+  const reason = match.canStart ? null : startReasonText(match);
   async function start(e) {
     e.preventDefault();
     try { await onAction('START', { format: validateFormat(match.sport, match.sport === 'basketball' ? { ...format, scoreValues: scoreText.split(',').map(v => Number(v.trim())) } : format) }); }
@@ -25,16 +29,17 @@ function FormatForm({ match, disabled, onAction }) {
   return <form className="format-form" onSubmit={start}>
     <h2>Choose the match format</h2>
     <p>Check the format with the coach before starting. It stays fixed once scoring begins.</p>
-    <label className="format-field">Scoring format<select value={custom ? 'custom' : 'preset'} onChange={e => { const changed = e.target.value === 'custom'; setCustom(changed); if (!changed) { setFormat({ ...defaults }); setScoreText(defaults.scoreValues?.join(', ') ?? ''); } }}><option value="preset">Official scoring preset</option><option value="custom">Custom match format</option></select></label>
+    <label className="format-field">Scoring format<select value={choice} onChange={e => choose(e.target.value)}><option value="default">Tournament default format</option><option value="preset">Official scoring preset</option><option value="custom">Changed for this match</option></select></label>
     <p className="format-source"><a href={RULE_SOURCES[match.sport][1]} target="_blank" rel="noreferrer">{RULE_SOURCES[match.sport][0]}</a>.{match.sport === 'table-tennis' && ' The preset uses best of 5; choose another odd number below.'}</p>
     <fieldset disabled={disabled}><legend>Match settings</legend>
       <FormatSettings sport={match.sport} format={format} scoreText={scoreText} onChange={change}
-        onScoreText={text => { setScoreText(text); setCustom(true); }} sideName={i => sideName(match, i)} />
+        onScoreText={text => { setScoreText(text); setChoice('custom'); }} sideName={i => sideName(match, i)} />
     </fieldset>
     {error && <p className="text-error" role="alert">{error}</p>}
-    {!match.isToday && <p>This match can be started on its scheduled date in India time.</p>}
+    {reason && <p>{reason}</p>}
     {match.validNow === false && <p>The scoring assignment is not valid yet or has expired.</p>}
-    <button className="scoring-action is-primary" type="submit" disabled={disabled || !match.isToday || match.validNow === false}>Start match</button>
+    {/* canStart is the server START rule at load time; the server still decides, and a refusal pauses the queue. */}
+    <button className="scoring-action is-primary" type="submit" disabled={disabled || !match.canStart || match.validNow === false}>Start match</button>
   </form>;
 }
 const eventText = (e, match) => e.type === 'CARD' ? `${e.card === 'red' ? 'Red' : 'Yellow'} card · ${e.player} · ${sideName(match, e.side)}`
