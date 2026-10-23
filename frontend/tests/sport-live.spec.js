@@ -40,7 +40,7 @@ test('tournament routes read the API once on entry, group by phase, merge only t
   });
   let socket; await page.routeWebSocket('ws://api.test/live/home', ws => { socket = ws; });
   await page.goto(APP + '/tournaments');
-  await expect(page).toHaveTitle('Tournaments | Thaparlympics');
+  await expect(page).toHaveTitle('Tournaments | Campuscores');
   await expect(page.locator('#live-tournaments .tournament-card')).toHaveCount(1);
   await expect(page.locator('#past-tournaments .tournament-card')).toHaveCount(1);
   await expect(page.locator('#upcoming-tournaments')).toContainText('No upcoming tournaments right now.');

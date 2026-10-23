@@ -7,6 +7,18 @@ on:
         type: choice
         options: [staging, production]
         required: true
+      start_date:
+        description: Optional India_Time day 1 (YYYY-MM-DD); day 2 is the next day and the event ends on day 1 + 2
+        type: string
+        required: false
+      update_dates:
+        description: Set the dates of an existing tournament to the computed dates
+        type: boolean
+        default: false
+      owner_clerk_id:
+        description: Optional owner Clerk user ID (an ACTIVE Super Admin in that database); empty uses the production owner
+        type: string
+        required: false
 permissions:
   contents: read
 jobs:
@@ -24,6 +36,10 @@ jobs:
           cache: npm
       - run: npm ci
       # One transaction; a second run creates nothing. It fails, writing nothing, if the owner Super Admin is missing.
+      # Inputs pass through env, never inline in the shell.
       - run: node backend/scripts/seed-thaparlympics-2026.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEED_START_DATE: ${{ inputs.start_date }}
+          SEED_UPDATE_DATES: ${{ inputs.update_dates && '1' || '' }}
+          SEED_OWNER_CLERK_ID: ${{ inputs.owner_clerk_id }}

@@ -81,7 +81,7 @@ for (const [role, path, current, back, title] of SCREENS) {
     }
     if (title) {
       await expect(heading(page)).toHaveText(title);
-      await expect(page).toHaveTitle(`${title} | Thaparlympics`);
+      await expect(page).toHaveTitle(`${title} | Campuscores`);
     }
   });
 }
@@ -128,7 +128,7 @@ test('manager: nav click, refresh, Back link and browser Back keep the right scr
   await page.reload();
   await expect(heading(page)).toHaveText('Matches');
   await expectFrame(page, 'manager', 'Matches');
-  await expect(page).toHaveTitle('Matches | Thaparlympics');
+  await expect(page).toHaveTitle('Matches | Campuscores');
   await staffNav(page).getByRole('link', { name: 'Invite scorer' }).click();
   await expect(heading(page)).toHaveText('Invite scorer');
   await expectFrame(page, 'manager', 'Invite scorer');
@@ -136,11 +136,11 @@ test('manager: nav click, refresh, Back link and browser Back keep the right scr
   await expect(page).toHaveURL(`${APP}/manage/matches`);
   await expect(heading(page)).toHaveText('Matches');
   await expectFrame(page, 'manager', 'Matches');
-  await expect(page).toHaveTitle('Matches | Thaparlympics');
+  await expect(page).toHaveTitle('Matches | Campuscores');
   await backLink(page).click();
   await expect(page).toHaveURL(`${APP}/manage`);
   await expectFrame(page, 'manager', 'Home');
-  await expect(page).toHaveTitle('Manager home | Thaparlympics');
+  await expect(page).toHaveTitle('Manager home | Campuscores');
   await page.goBack();
   await expect(page).toHaveURL(`${APP}/manage/matches`);
   await expectFrame(page, 'manager', 'Matches');
@@ -160,7 +160,7 @@ test('Super Admin: Tournaments and Staff items open their screens and refresh ke
   await expectFrame(page, 'admin', 'Staff');
   await page.goBack();
   await expect(heading(page)).toHaveText('All tournaments');
-  await expect(page).toHaveTitle('All tournaments | Thaparlympics');
+  await expect(page).toHaveTitle('All tournaments | Campuscores');
 });
 
 const NO_ACCESS = [
@@ -177,7 +177,7 @@ for (const [role, path, start] of NO_ACCESS) {
     await page.goto(`${APP}${path}`);
     await expect(heading(page)).toHaveText('You do not have access to this page');
     await expect(heading(page)).toBeFocused();
-    await expect(page).toHaveTitle('You do not have access to this page | Thaparlympics');
+    await expect(page).toHaveTitle('You do not have access to this page | Campuscores');
     const links = page.getByRole('main').getByRole('link');
     await expect(links).toHaveText(['Go to your start page']);
     await expect(links).toHaveAttribute('href', start);
@@ -196,7 +196,7 @@ for (const [path, title, prompt] of [
     const calls = await mockStaff(page, { signedOut: true });
     await page.goto(`${APP}${path}`);
     await expect(heading(page)).toHaveText(title);
-    await expect(page).toHaveTitle(`${title} | Thaparlympics`);
+    await expect(page).toHaveTitle(`${title} | Campuscores`);
     await expect(page.getByRole('main')).toContainText(prompt);
     await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
     await expect(staffNav(page)).toHaveCount(0);

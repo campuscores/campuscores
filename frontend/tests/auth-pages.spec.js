@@ -42,7 +42,7 @@ test('sign-in and account routes explain that sign-in is unavailable', async ({ 
 test('privacy policy names the processors and links to account deletion', async ({ page }) => {
   await page.goto('/privacy');
   await expect(page.locator('h1')).toHaveText('Privacy policy');
-  await expect(page).toHaveTitle('Privacy | Thaparlympics');
+  await expect(page).toHaveTitle('Privacy | Campuscores');
   const main = page.getByRole('main');
   for (const name of ['Clerk', 'Google', 'Cloudflare', 'Neon']) await expect(main).toContainText(name);
   await expect(main.getByRole('link', { name: 'account deletion page' })).toHaveAttribute('href', '/account/delete');
@@ -76,5 +76,5 @@ test('/privacy works on direct entry, refresh and back', async ({ page }) => {
   await expect(page.locator('h1')).toHaveText('Privacy policy');
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page).toHaveTitle('Thaparlympics');
+  await expect(page).toHaveTitle('Campuscores');
 });

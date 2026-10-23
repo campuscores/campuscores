@@ -26,7 +26,7 @@ describe('static assets and run_worker_first', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/html');
     const html = await res.text();
-    expect(html).toContain('<title>Thaparlympics</title>');
+    expect(html).toContain('<title>Campuscores</title>');
     expect(html).toContain('id="root"');
   });
 

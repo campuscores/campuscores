@@ -61,7 +61,7 @@ export default function SiteHeader() {
 
   return (
     <div ref={headerRef}>
-      <header className="desktop-banner" aria-label="Thaparlympics desktop header">
+      <header className="desktop-banner" aria-label="Campuscores desktop header">
         {home}
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link className="nav-link" to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
@@ -70,7 +70,7 @@ export default function SiteHeader() {
           {signInLink && <Link className="nav-link" to={account.to} aria-current={account.current}>{account.label}</Link>}
         </nav>
       </header>
-      <header className="mobile-header" aria-label="Thaparlympics mobile header">
+      <header className="mobile-header" aria-label="Campuscores mobile header">
         {home}
         <details className="mobile-menu">
           <summary aria-label="Menu" />
