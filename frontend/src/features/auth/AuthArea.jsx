@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import SiteHeader from '../../components/SiteHeader.jsx';
@@ -89,7 +89,8 @@ function RoleGate({ screen }) {
     return <StaffShell title={screen.title}><ScreenState state={me.status} what="your account" onRetry={me.reload} /></StaffShell>;
   }
   if (me.status === 'signedOut') return <SignInPrompt screen={screen} signInAgain={signInAgain} />;
-  if (me.status === 'viewer') return <RejectViewer />;
+  // No staff role yet: /start accepts a pending invitation first, then opens the start screen or NoStaffAccess.
+  if (me.status === 'viewer') return <Navigate to="/start" replace />;
   if (!screen.roles.includes(me.role)) return <NoAccess role={me.role} />;
   const { Page } = screen;
   return <Page screen={screen} role={me.role} getToken={getToken} signInAgain={signInAgain} />;
@@ -120,25 +121,22 @@ function Pending({ error, onRetry, signInAgain }) {
 }
 
 /**
- * Sign-in is for staff only (Arnav, 24 October 2026). An account without an ACTIVE staff role (GET /api/me Viewer) is
- * signed out at once and lands on /sign-in?no-access, which explains why. No account, role or data changes.
+ * Signed in without an ACTIVE staff role (GET /api/me Viewer). The account stays signed in (Arnav, 24 October 2026):
+ * an email can be invited or assigned later. "Check again" reloads /start, which accepts a new invitation first (a
+ * full load, so the per-session accept runs again); "Sign out" lets a wrong account leave. No account or data changes.
  */
-function RejectViewer() {
+function NoStaffAccess() {
   const { signOut } = useClerk();
-  const started = useRef(false);
   const [failed, setFailed] = useState(false);
-  const leave = () => signOut({ redirectUrl: '/sign-in?no-access' }).catch(() => setFailed(true));
-  const leaveOnMount = useEffectEvent(leave);
-  useEffect(() => {
-    if (started.current) return; // StrictMode runs the effect twice
-    started.current = true;
-    leaveOnMount();
-  }, []);
   return (
-    <TextPage title="This email has no staff access">
-      {failed
-        ? <><p className="text-error" role="alert">Could not sign you out.</p><div className="text-actions"><button type="button" onClick={() => { setFailed(false); leave(); }}>Sign out</button></div></>
-        : <p role="status">Signing you out…</p>}
+    <TextPage title="This account has no staff access">
+      <p>You are signed in, but this email has no Match Scorer or Tournament Manager access yet. If an organiser just invited or assigned you, check again. Signed in with the wrong account? Sign out and use the invited email.</p>
+      {failed && <p className="text-error" role="alert">Could not sign you out. Try again.</p>}
+      <div className="text-actions">
+        <button type="button" onClick={() => window.location.assign('/start')}>Check again</button>
+        <button type="button" onClick={() => { setFailed(false); signOut().catch(() => setFailed(true)); }}>Sign out</button>
+        <Link to="/">Go to Home</Link>
+      </div>
     </TextPage>
   );
 }
@@ -148,7 +146,7 @@ function SignedInRedirect() {
   const { getToken, signInAgain } = useStaffAuth();
   const me = useMe(getToken);
   if (me.status === 'signedOut') return <SignInChoiceView />;
-  if (me.status === 'viewer') return <RejectViewer />;
+  if (me.status === 'viewer') return <Navigate to="/start" replace />; // accepts a pending invitation first
   if (me.status === 'staff') return <Navigate to={startScreen(me.role)} replace />;
   return <TextPage title="Sign in"><Pending error={me.error} onRetry={me.reload} signInAgain={signInAgain} /></TextPage>;
 }
@@ -176,7 +174,7 @@ function acceptInvite(sessionId, getToken) {
 function StartRedirect({ getToken, signInAgain }) {
   const me = useMe(getToken);
   if (me.status === 'staff') return <Navigate to={startScreen(me.role)} replace />;
-  if (me.status === 'viewer') return <RejectViewer />;
+  if (me.status === 'viewer') return <NoStaffAccess />;
   return <TextPage title="Signing you in"><Pending error={me.error} onRetry={me.reload} signInAgain={signInAgain} /></TextPage>;
 }
 

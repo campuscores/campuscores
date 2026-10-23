@@ -50,26 +50,52 @@ for (const role of ['scorer', 'manager', 'admin']) {
 }
 
 const signOutCalls = page => page.evaluate(() => Number(sessionStorage.getItem('__signOutCalls') ?? 0));
-/** An account without staff access is signed out once and sees the sign-in choice with the reason. */
-async function expectRejected(page) {
-  await expect(page).toHaveURL(`${APP}/sign-in?no-access`);
-  await expect(page.getByRole('alert')).toHaveText(/That email has no staff access, so you were signed out\./);
-  await expect(page.getByRole('main').getByRole('link', { name: 'Sign in as Match Scorer' })).toBeVisible();
+/** An account without staff access stays signed in on /start and sees the reason, Check again and Sign out. */
+async function expectNoAccess(page) {
+  await expect(page).toHaveURL(`${APP}/start`);
+  await expect(page.locator('h1')).toHaveText('This account has no staff access');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('button', { name: 'Check again' })).toBeVisible();
+  await expect(main.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await expect(staffNav(page)).toHaveCount(0);
-  expect(await signOutCalls(page)).toBe(1);
+  expect(await signOutCalls(page)).toBe(0);
 }
 
-test('signed-in Viewer on /sign-in is signed out and told the email has no staff access', async ({ page }) => {
+test('signed-in Viewer on /sign-in goes to /start, which accepts an invitation first, and stays signed in', async ({ page }) => {
   const calls = await mockStaff(page, { me: REPLIES.viewer });
   await page.goto(`${APP}/sign-in`);
-  await expectRejected(page);
-  expect(calls.me).toBe(1); // signed out after the reload: no second GET /api/me
+  await expectNoAccess(page);
+  expect(calls.accept).toBe(1);
 });
 
-test('signed-in Viewer on a staff screen is signed out and sees no staff content', async ({ page }) => {
+test('signed-in Viewer on a staff screen goes to /start and sees no staff content', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.viewer });
   await page.goto(`${APP}/operator/matches`);
-  await expectRejected(page);
+  await expectNoAccess(page);
+});
+
+test('no staff access: Sign out signs out; Check again picks up an invitation sent after the first sign-in', async ({ page }) => {
+  let invited = false; // the organiser invites this email while the page shows no access
+  const calls = await mockStaff(page, {
+    me: () => (invited ? REPLIES.scorer : REPLIES.viewer),
+    accept: () => (invited ? REPLIES.scorer : REPLIES.inviteNotFound),
+  });
+  await page.goto(`${APP}/start`);
+  await expectNoAccess(page);
+  invited = true;
+  await page.getByRole('main').getByRole('button', { name: 'Check again' }).click();
+  await expect(page).toHaveURL(`${APP}/operator/matches`);
+  await expect(page.locator('main h1')).toHaveText('My Matches');
+  expect(calls.accept).toBe(2); // the reload sends the accept again
+
+  await page.goto(`${APP}/privacy`);
+  invited = false;
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(`${APP}/start`);
+  await expectNoAccess(page);
+  await page.getByRole('main').getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(`${APP}/`);
+  expect(await signOutCalls(page)).toBe(1);
 });
 
 for (const role of ['scorer', 'manager', 'admin']) {
@@ -100,10 +126,10 @@ for (const [result, accept] of [['200', null], ['404 INVITE_NOT_FOUND', REPLIES.
   }
 }
 
-test('/start for an email without an invitation or staff role signs it out with the reason', async ({ page }) => {
+test('/start for an email without an invitation or staff role keeps it signed in and offers Sign out', async ({ page }) => {
   const calls = await mockStaff(page, { me: REPLIES.viewer, accept: REPLIES.inviteNotFound });
   await page.goto(`${APP}/start`);
-  await expectRejected(page);
+  await expectNoAccess(page);
   expect(calls.accept).toBe(1);
 });
 
