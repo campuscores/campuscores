@@ -15,6 +15,11 @@ meRoutes.get('/me', clerkAuth, loadAccount, (c) => {
 // Requirements 13.7–13.9. The staff row is disabled (never deleted) so audit rows keep their actor.
 meRoutes.delete('/me', clerkAuth, loadAccount, async (c) => {
   const account = c.get('account');
+  // Match Scorer logins are shared event accounts (Arnav, 24 October 2026): only a Super Admin removes them, by
+  // disabling the staff account. Nothing changes and Clerk is not called.
+  if (account?.status === 'ACTIVE' && account.role === 'MATCH_OPERATOR') {
+    throw new AppError(403, 'SCORER_ACCOUNT_MANAGED', 'A Super Admin manages Match Scorer accounts');
+  }
   if (account?.status === 'ACTIVE') {
     // Throws 409 OWNER_TRANSFER_REQUIRED (Requirement 3.14) or LAST_SUPER_ADMIN and rolls back before Clerk is touched.
     // ALREADY_DISABLED means a concurrent delete or disable won; continue to the Clerk call like a retry.

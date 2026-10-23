@@ -129,7 +129,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('lock order under concurrency', () => 
     const f = await fixture({ status: 'DRAFT', scheduledAt: 'now()' });
     const [start, remove] = await Promise.all([
       f.start(),
-      api('DELETE', `/api/manage/tournaments/${f.slug}`, { user: f.manager }).then(async (r) => ({ status: r.status, data: await r.json() })),
+      api('DELETE', `/api/manage/tournaments/${f.slug}`, { user: 'test_super_admin' }).then(async (r) => ({ status: r.status, data: await r.json() })),
     ]);
 
     expect(deadlocked(start), `START deadlocked: ${JSON.stringify(start.data)}`).toBe(false);

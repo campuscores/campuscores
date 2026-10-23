@@ -51,8 +51,11 @@ const matchSelect = (extra = '') => `
   WHERE true`;
 const MATCH_SELECT = matchSelect();
 
-// Public reads take no auth and use the cached pool only.
+// Public reads take no auth. Match reads use the cached pool (live scores also arrive through the rooms). The
+// tournament list and detail use the uncached pool, so a staff edit (dates, name, sports, matches) shows on the next
+// read instead of after the Hyperdrive cache window (60 s max_age + 15 s stale_while_revalidate by default).
 const cached = (c, fn) => withClient(c.env.HYPERDRIVE_CACHED, c.executionCtx, fn);
+const fresh = (c, fn) => withClient(c.env.HYPERDRIVE_UNCACHED, c.executionCtx, fn);
 
 async function latestSnapshot(client, matchId) {
   const { rows } = await client.query('SELECT data FROM match_snapshots WHERE match_id = $1', [matchId]);
@@ -75,7 +78,7 @@ const withMatchPhase = (m) => ({
 export const publicRoutes = new Hono();
 
 publicRoutes.get('/tournaments', async (c) => {
-  const { rows } = await cached(c, (client) =>
+  const { rows } = await fresh(c, (client) =>
     client.query(
       `SELECT ${TOURNAMENT_COLUMNS} FROM tournaments t WHERE ${PUBLIC_TOURNAMENT}
        ORDER BY t.starts_on DESC NULLS LAST, t.id`,
@@ -88,7 +91,7 @@ publicRoutes.get('/tournaments/:key', async (c) => {
   const key = c.req.param('key');
   const byId = parseId(key);
   if (!byId && !SLUG_PATTERN.test(key)) throw new AppError(400, 'BAD_REQUEST', 'Malformed key');
-  const tournament = await cached(c, async (client) => {
+  const tournament = await fresh(c, async (client) => {
     const { rows } = await client.query(
       `SELECT ${TOURNAMENT_COLUMNS},
          COALESCE((SELECT json_agg(ts.sport ORDER BY ts.sport) FROM tournament_sports ts

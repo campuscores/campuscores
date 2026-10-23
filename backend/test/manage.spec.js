@@ -185,8 +185,11 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager mutations each write exactly 
     // --- patch match: one MATCH_UPDATED ---
     await bump('MATCH_UPDATED', 1, await call('PATCH', `/api/manage/matches/${matchId}`, { time: '11:00' }));
 
-    // --- delete match (no assignment): one MATCH_DELETED ---
-    await bump('MATCH_DELETED', 1, await call('DELETE', `/api/manage/matches/${matchId}`));
+    // --- delete match: the owner (a Tournament_Manager) is refused; the Super Admin deletes it (24 October 2026) ---
+    expect(await code(await bump('manager match delete', 0, await call('DELETE', `/api/manage/matches/${matchId}`)))).toEqual([403, 'ROLE_FORBIDDEN']);
+    expect((await api('DELETE', `/api/manage/matches/${matchId}`, { user: 'test_super_admin' })).status).toBe(200);
+    await bump('Super Admin match delete (other actor)', 0);
+    expect(await one(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'MATCH_DELETED' AND entity_id = $1`, [String(matchId)])).toEqual({ n: 1 });
 
     // --- delete team (now unused): one TEAM_DELETED ---
     await bump('TEAM_DELETED', 1, await call('DELETE', `/api/manage/teams/${teamId}`));
@@ -199,8 +202,10 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager mutations each write exactly 
     await bump('SPORT_ADDED (for status)', 1, addSport2);
     await bump('TOURNAMENT_STATUS_CHANGED', 1, await call('POST', `/api/manage/tournaments/${f.slug}/status`, { status: 'ONGOING' }));
 
-    // --- delete the created DRAFT tournament: one TOURNAMENT_DELETED ---
-    await bump('TOURNAMENT_DELETED', 1, await call('DELETE', `/api/manage/tournaments/${createdSlug}`));
+    // --- delete the created DRAFT tournament: the owner is refused; the Super Admin deletes it ---
+    expect(await code(await bump('manager tournament delete', 0, await call('DELETE', `/api/manage/tournaments/${createdSlug}`)))).toEqual([403, 'ROLE_FORBIDDEN']);
+    expect((await api('DELETE', `/api/manage/tournaments/${createdSlug}`, { user: 'test_super_admin' })).status).toBe(200);
+    await bump('Super Admin tournament delete (other actor)', 0);
     // The deleted tournament's rows are gone (its audit rows stay under this actor until afterAll).
     expect(await one('SELECT count(*)::int AS n FROM tournaments WHERE id = $1', [createdId])).toEqual({ n: 0 });
 
@@ -217,12 +222,10 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager mutations each write exactly 
       'TEAM_UPDATED',
       'MATCH_CREATED',
       'MATCH_UPDATED',
-      'MATCH_DELETED',
       'TEAM_DELETED',
       'SPORT_REMOVED',
       'SPORT_ADDED',
       'TOURNAMENT_STATUS_CHANGED',
-      'TOURNAMENT_DELETED',
     ]);
   });
 });
@@ -448,5 +451,84 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('GET /api/manage/tournaments owner and
       expect(await rowFor(user), user).toMatchObject({ isOwner: true, owner: ownerOf(next), sportManagers: [smRow] });
     }
     expect(await rowFor(f.user)).toBeUndefined(); // the previous owner has no scope left
+  });
+});
+
+// Super Admin deletes with score data (Arnav, 24 October 2026): any tournament status and any match state, children
+// first, in one transaction. A published tournament or a played match needs a reason; a manager is refused.
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('Super Admin deletes cascade to score data', () => {
+  const SA = { user: 'test_super_admin' };
+  // A LIVE match with an assignment, a lease, two score actions (the second undoes the first), a snapshot and an
+  // undelivered outbox event.
+  async function playedMatch(f) {
+    const { id: tsId } = await f.addSport('badminton');
+    const { id: matchId } = await f.addMatch(tsId, { status: 'LIVE' });
+    await db(async (client) => {
+      const { rows: [op] } = await client.query(`SELECT id FROM admin_accounts WHERE clerk_user_id = 'test_match_operator'`);
+      const device = crypto.randomUUID();
+      const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+      await client.query('INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, $3)', [matchId, op.id, f.accountId]);
+      await client.query('INSERT INTO scorer_leases (match_id, account_id, device_id) VALUES ($1, $2, $3)', [matchId, op.id, device]);
+      const action = `INSERT INTO score_actions (match_id, action_id, seq, client_seq, device_id, account_id, type, payload, payload_hash, reverses_action_id, result)
+                      VALUES ($1, $2, $3, $3, $4, $5, $6, '{}', 'h', $7, '{}')`;
+      await client.query(action, [matchId, a, 1, device, op.id, 'POINT', null]);
+      await client.query(action, [matchId, b, 2, device, op.id, 'REVERSE', a]);
+      await client.query(`INSERT INTO match_snapshots (match_id, seq, data) VALUES ($1, 2, '{}')`, [matchId]);
+      await client.query(`INSERT INTO outbox_events (match_id, seq, room_message, card) VALUES ($1, 2, '{}', '{}')`, [matchId]);
+    });
+    return String(matchId);
+  }
+  const leftovers = (matchId) => one(
+    `SELECT (SELECT count(*) FROM matches WHERE id = $1)::int AS matches,
+            (SELECT count(*) FROM score_actions WHERE match_id = $1)::int AS actions,
+            (SELECT count(*) FROM match_snapshots WHERE match_id = $1)::int AS snapshots,
+            (SELECT count(*) FROM outbox_events WHERE match_id = $1)::int AS outbox,
+            (SELECT count(*) FROM scorer_leases WHERE match_id = $1)::int AS leases,
+            (SELECT count(*) FROM match_operator_assignments WHERE match_id = $1)::int AS assignments`,
+    [matchId],
+  );
+  const ALL = { matches: 1, actions: 2, snapshots: 1, outbox: 1, leases: 1, assignments: 1 };
+  const NONE = { matches: 0, actions: 0, snapshots: 0, outbox: 0, leases: 0, assignments: 0 };
+
+  it('deletes an ONGOING tournament with a live, scored match only for a Super Admin with a reason', async () => {
+    const f = await fixture({ status: 'ONGOING' });
+    const matchId = await playedMatch(f);
+    const path = `/api/manage/tournaments/${f.slug}`;
+    expect(await code(await asOwner(f)('DELETE', path, { reason: 'x (fake)' }))).toEqual([403, 'ROLE_FORBIDDEN']);
+    expect(await code(await api('DELETE', path, SA))).toEqual([409, 'REASON_REQUIRED']);
+    expect(await leftovers(matchId)).toEqual(ALL);
+
+    const res = await api('DELETE', path, { ...SA, body: { reason: 'Test event (fake)' } });
+    expect(res.status).toBe(200);
+    expect((await res.json()).removed).toMatchObject({ sports: 1, matches: 1, assignments: 1 });
+    expect(await leftovers(matchId)).toEqual(NONE);
+    expect(await one('SELECT count(*)::int AS n FROM tournaments WHERE id = $1', [f.tournamentId])).toEqual({ n: 0 });
+    // Public reads no longer find it.
+    expect((await api('GET', `/api/tournaments/${f.slug}`)).status).toBe(404);
+  });
+
+  it('deletes a live, scored match only for a Super Admin with a reason, and keeps the tournament', async () => {
+    const f = await fixture({ status: 'ONGOING' });
+    const matchId = await playedMatch(f);
+    const path = `/api/manage/matches/${matchId}`;
+    expect(await code(await asOwner(f)('DELETE', path, { reason: 'x (fake)' }))).toEqual([403, 'ROLE_FORBIDDEN']);
+    expect(await code(await api('DELETE', path, SA))).toEqual([409, 'REASON_REQUIRED']);
+    expect(await leftovers(matchId)).toEqual(ALL);
+
+    expect((await api('DELETE', path, { ...SA, body: { reason: 'Entered twice (fake)' } })).status).toBe(200);
+    expect(await leftovers(matchId)).toEqual(NONE);
+    expect(await one('SELECT count(*)::int AS n FROM tournaments WHERE id = $1', [f.tournamentId])).toEqual({ n: 1 });
+    expect(await one(`SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'MATCH_DELETED' AND entity_id = $1`, [matchId])).toEqual({ n: 1 });
+  });
+
+  it('a Tournament_Manager sees no Delete control on a match; a Super Admin does', async () => {
+    const f = await fixture({ status: 'ONGOING' });
+    const matchId = await playedMatch(f);
+    const flag = async (ctx) => (await (await api('GET', `/api/manage/matches/${matchId}`, ctx)).json()).match.canDelete;
+    expect(await flag({ user: f.user })).toBe(false);
+    expect(await flag(SA)).toBe(true);
+    // A deleted match cannot be deleted twice.
+    expect((await api('DELETE', `/api/manage/matches/${matchId}`, { ...SA, body: { reason: 'x (fake)' } })).status).toBe(200);
+    expect(await code(await api('DELETE', `/api/manage/matches/${matchId}`, { ...SA, body: { reason: 'x (fake)' } }))).toEqual([404, 'NOT_FOUND']);
   });
 });

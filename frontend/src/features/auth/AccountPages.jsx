@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useAuth, useClerk } from '@clerk/react';
 import { apiFetch } from '../../services/api.js';
+import useMe from '../staff/useMe.js';
+
+// Match Scorer logins are shared event accounts: only a Super Admin removes them (Arnav, 24 October 2026).
+const SCORER_NOTE = 'A Super Admin manages Match Scorer accounts. Ask them to remove this account.';
 
 // Users whose invitation was already checked in this page load; StrictMode runs effects twice.
 const inviteChecked = new Set();
@@ -12,6 +16,7 @@ const callApi = async (path, method, getToken) => apiFetch(path, { method, token
 export function AccountPage() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const { signOut } = useClerk();
+  const me = useMe(getToken);
   const [invite, setInvite] = useState(null);
 
   useEffect(() => {
@@ -34,7 +39,7 @@ export function AccountPage() {
             {invite?.error && <p className="text-error" role="alert">Could not accept your staff invitation: {invite.error}. Reload the page to try again.</p>}
             <div className="text-actions">
               <Link to="/">Return home</Link>
-              <Link to="/account/delete">Delete account</Link>
+              {(me.status === 'viewer' || (me.status === 'staff' && me.role !== 'MATCH_OPERATOR')) && <Link to="/account/delete">Delete account</Link>}
               <button type="button" onClick={() => signOut()}>Sign out</button>
             </div>
           </>}
@@ -50,6 +55,7 @@ export function DeleteAccountPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [deleted, setDeleted] = useState(params.has('deleted'));
+  const me = useMe(getToken);
 
   async function remove() {
     if (!window.confirm('Delete your account? This cannot be undone.')) return;
@@ -78,6 +84,8 @@ export function DeleteAccountPage() {
       {deleted ? <p role="status">Your account was deleted.</p>
         : !isLoaded ? <p role="status">Loading your account…</p>
         : !isSignedIn ? <p>To delete your account, <Link to="/sign-in">sign in</Link> first, then return to this page.</p>
+        : me.status === 'loading' ? <p role="status">Loading your account…</p>
+        : me.role === 'MATCH_OPERATOR' ? <p>{SCORER_NOTE}</p>
         : <div className="text-actions"><button type="button" onClick={remove} disabled={busy}>{busy ? 'Deleting account…' : 'Delete my account'}</button></div>}
       {error && <p className="text-error" role="alert">{error}</p>}
     </main>

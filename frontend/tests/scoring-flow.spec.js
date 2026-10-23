@@ -121,6 +121,9 @@ test('offline points stay pending, survive reload and send once in order', async
   const server = await mockScoring(page, 'volleyball'); await open(page);
   await context.setOffline(true); await page.evaluate(() => dispatchEvent(new Event('offline')));
   await point(page).click(); await expect(page.locator('.console-status')).toHaveText('Offline · 1 queued'); expect(server.actions).toHaveLength(0);
+  // The page reloads before it sees the network return: going online would start a send that the reload then cancels
+  // (WebKit reports that cancel as a page error). The reloaded page must send the stored action once.
+  await page.evaluate(() => addEventListener('online', event => event.stopImmediatePropagation(), { capture: true }));
   await context.setOffline(false); await page.reload(); await accepted(page, 1); expect(server.actions).toHaveLength(1);
 });
 test('another device scoring: the lease notice sits above the format form, nothing is sent, and Take over resumes', async ({ page }) => {
@@ -129,15 +132,17 @@ test('another device scoring: the lease notice sits above the format form, nothi
   const notice = page.locator('.console-notice.is-top');
   await expect(notice).toHaveAttribute('role', 'alert');
   await expect(notice.getByRole('heading', { level: 2 })).toHaveText('Another device is scoring this match');
-  await expect(notice).toContainText('Your actions stay saved on this device.');
+  await expect(notice).toContainText('Take over scoring to score here. This device then loads the latest score from the server.');
   await expect(page.locator('.scoring-page > :first-child')).toHaveClass(/is-top/); // above the status, scoreboard and format form
   await expect(page.locator('main [role="alert"]', { hasText: 'Another device' })).toHaveCount(1);
   await expect(page.locator('.console-status')).toHaveText('Not sending: another device is scoring');
   expect((await notice.getByRole('button', { name: 'Take over scoring' }).boundingBox()).height).toBeGreaterThanOrEqual(44);
-  await page.getByRole('button', { name: 'Start match', exact: true }).click();
-  await expect(page.locator('.console-status')).toHaveText('Not sending: another device is scoring · 1 queued');
+  // Only the lease holder scores: Start match stays off until this device takes over (24 October 2026).
+  await expect(page.getByRole('button', { name: 'Start match', exact: true })).toBeDisabled();
   expect(server.requests).toHaveLength(0);
-  await notice.getByRole('button', { name: 'Take over scoring' }).click(); await accepted(page, 1);
+  await notice.getByRole('button', { name: 'Take over scoring' }).click();
+  await expect(notice).toHaveCount(0);
+  await page.getByRole('button', { name: 'Start match', exact: true }).click(); await accepted(page, 1);
   await expect(notice).toHaveCount(0); await expect(point(page)).toBeVisible();
   expect(server.requests.map(r => [r.type, r.clientSeq])).toEqual([['START', 1]]);
 });

@@ -344,6 +344,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
     //   'none'       collection endpoint, no target → every valid-role caller passes authz
     //   'tournament' owner-level target → Sport_Manager is out of scope (SCOPE_FORBIDDEN)
     //   'sport'      sport-level target → Sport_Manager is in scope (allowed)
+    //   'superAdmin' tournament and match deletes: every Tournament_Manager gets ROLE_FORBIDDEN (24 October 2026)
     const ENDPOINTS = [
       { name: 'GET home', method: 'GET', path: '/api/manage/home', level: 'none' },
       { name: 'GET tournaments', method: 'GET', path: '/api/manage/tournaments', level: 'none' },
@@ -351,7 +352,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
       { name: 'GET tournament', method: 'GET', path: base, level: 'tournament' },
       { name: 'PATCH tournament', method: 'PATCH', path: base, body: { venue: 'Authz Venue (fake)' }, level: 'tournament' },
       { name: 'POST status', method: 'POST', path: `${base}/status`, body: { status: 'ONGOING' }, level: 'tournament', mutates: true },
-      { name: 'DELETE tournament', method: 'DELETE', path: base, level: 'tournament', mutates: true },
+      { name: 'DELETE tournament', method: 'DELETE', path: base, level: 'superAdmin', mutates: true },
       { name: 'POST sport', method: 'POST', path: `${base}/sports`, body: { sport: 'football' }, level: 'tournament' },
       { name: 'DELETE sport', method: 'DELETE', path: `${base}/sports/badminton`, level: 'tournament', mutates: true },
       { name: 'PUT format', method: 'PUT', path: `${base}/sports/badminton/format`, body: { format: { ...DEFAULT_BADMINTON, bestOf: 1 } }, level: 'sport' },
@@ -365,7 +366,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
       { name: 'POST match', method: 'POST', path: '/api/manage/matches', body: minimalMatch, level: 'sport' },
       { name: 'GET match', method: 'GET', path: `/api/manage/matches/${tree.matchId}`, level: 'sport' },
       { name: 'PATCH match', method: 'PATCH', path: `/api/manage/matches/${tree.matchId}`, body: { venue: 'Authz MV (fake)' }, level: 'sport' },
-      { name: 'DELETE match', method: 'DELETE', path: `/api/manage/matches/${tree.matchId}`, level: 'sport', mutates: true },
+      { name: 'DELETE match', method: 'DELETE', path: `/api/manage/matches/${tree.matchId}`, level: 'superAdmin', mutates: true },
     ];
 
     // The expected [status, code] per caller for an endpoint of a given scope level. `null` code
@@ -374,6 +375,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
       none: null, // valid role always allowed
       tournament: [403, 'SCOPE_FORBIDDEN'],
       sport: null, // Sport_Manager is in scope for sport-level targets
+      superAdmin: [403, 'ROLE_FORBIDDEN'],
     };
     const CALLERS = [
       { name: 'anonymous', ctx: {}, expect: () => [401, 'UNAUTHENTICATED'] },
@@ -381,9 +383,9 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager endpoint authorization matrix
       { name: 'viewer', ctx: { user: viewer.user }, expect: () => [403, 'NOT_STAFF'] },
       { name: 'disabled', ctx: { user: disabled.user }, expect: () => [403, 'ACCOUNT_DISABLED'] },
       { name: 'match scorer', ctx: { user: 'test_match_operator' }, expect: () => [403, 'ROLE_FORBIDDEN'] },
-      { name: 'out-of-scope manager', ctx: { user: outMgr.user }, expect: (lvl) => (lvl === 'none' ? null : [403, 'SCOPE_FORBIDDEN']) },
+      { name: 'out-of-scope manager', ctx: { user: outMgr.user }, expect: (lvl) => (lvl === 'none' ? null : lvl === 'superAdmin' ? [403, 'ROLE_FORBIDDEN'] : [403, 'SCOPE_FORBIDDEN']) },
       { name: 'sport manager', ctx: { user: sportMgr.user }, expect: (lvl) => refusalForLevel[lvl] },
-      { name: 'owner', ctx: { user: owner.user }, expect: () => null },
+      { name: 'owner', ctx: { user: owner.user }, expect: (lvl) => (lvl === 'superAdmin' ? [403, 'ROLE_FORBIDDEN'] : null) },
       { name: 'super admin', ctx: { user: 'test_super_admin' }, expect: () => null },
     ];
 

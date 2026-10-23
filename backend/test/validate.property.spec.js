@@ -617,8 +617,8 @@ describe('Property 11: Default_Format save is idempotent', () => {
 //   canEdit   12.7/12.8: edit only while Upcoming (phase upcoming, status SCHEDULED), in scope, and
 //             the tournament not locked (Property 7 isLocked: Completed/Archived refuse non-status
 //             changes).
-//   canDelete 12.9/12.10: delete a SCHEDULED match only when it has no score action, so canEdit's
-//             conditions AND hasActions false.
+//   canDelete (24 October 2026): only a Super Admin, in scope and not locked, in any match state; a played
+//             match needs a reason at the API, not a hidden control.
 //   canAssign 13.1/13.9: assign only while the match is not Final/Not_Scored (phase not past), in
 //             scope, tournament not locked.
 //   canScore  13.7: the Score button shows only while the caller holds the ACTIVE Assignment; a past
@@ -630,13 +630,13 @@ const TOURNAMENT_STATUSES = ['DRAFT', 'ONGOING', 'COMPLETED', 'ARCHIVED'];
 // isLocked reference (Property 7): Completed and Archived are locked.
 const locked = (ts) => ts === 'COMPLETED' || ts === 'ARCHIVED';
 
-function reference({ phase, status, tournamentStatus, inScope, holdsAssignment, hasActions }) {
+function reference({ phase, status, tournamentStatus, inScope, holdsAssignment, superAdmin }) {
   const scope = inScope && !locked(tournamentStatus);
   const editable = phase === 'upcoming' && status === 'SCHEDULED';
   const notPast = phase !== 'past'; // Final and Not_Scored both report phase 'past'
   return {
     canEdit: scope && editable,
-    canDelete: scope && editable && !hasActions,
+    canDelete: scope && superAdmin,
     canAssign: scope && notPast,
     canScore: holdsAssignment && !locked(tournamentStatus) && notPast,
   };
@@ -650,6 +650,7 @@ const flagInput = fc.record({
   inScope: fc.boolean(),
   holdsAssignment: fc.boolean(),
   hasActions: fc.boolean(),
+  superAdmin: fc.boolean(),
 });
 
 describe('Property 13: Rendered controls never exceed allowed actions', () => {
@@ -675,9 +676,10 @@ describe('Property 13: Rendered controls never exceed allowed actions', () => {
           expect(args.status).toBe('SCHEDULED');
         }
         if (f.canDelete) {
-          // Delete is never offered beyond edit, and never once a score action exists.
-          expect(f.canEdit).toBe(true);
-          expect(args.hasActions).toBe(false);
+          // Delete is offered only to a Super Admin, in scope, in an unlocked tournament.
+          expect(args.superAdmin).toBe(true);
+          expect(args.inScope).toBe(true);
+          expect(locked(args.tournamentStatus)).toBe(false);
         }
         if (f.canAssign) {
           expect(args.inScope).toBe(true);
@@ -703,7 +705,7 @@ describe('Property 13: Rendered controls never exceed allowed actions', () => {
         fc.boolean(),
         fc.boolean(),
         (phase, status, tournamentStatus, holdsAssignment, hasActions) => {
-          const f = matchFlags({ phase, status, tournamentStatus, inScope: false, holdsAssignment, hasActions });
+          const f = matchFlags({ phase, status, tournamentStatus, inScope: false, holdsAssignment, hasActions, superAdmin: true });
           // Scope-gated controls are never rendered without scope; scoring depends on the Assignment,
           // not on scope, so it is not asserted false here.
           expect(f.canEdit).toBe(false);
@@ -725,7 +727,7 @@ describe('Property 13: Rendered controls never exceed allowed actions', () => {
         fc.boolean(),
         fc.boolean(),
         (tournamentStatus, phase, status, inScope, holdsAssignment, hasActions) => {
-          const f = matchFlags({ phase, status, tournamentStatus, inScope, holdsAssignment, hasActions });
+          const f = matchFlags({ phase, status, tournamentStatus, inScope, holdsAssignment, hasActions, superAdmin: true });
           expect(f).toEqual({ canEdit: false, canDelete: false, canAssign: false, canScore: false });
         },
       ),
@@ -746,7 +748,6 @@ describe('Property 13: Rendered controls never exceed allowed actions', () => {
           expect(f.canAssign).toBe(false);
           expect(f.canScore).toBe(false);
           expect(f.canEdit).toBe(false); // edit needs an upcoming phase
-          expect(f.canDelete).toBe(false);
         },
       ),
       { numRuns: 200 },
@@ -770,20 +771,14 @@ describe('Property 13: Rendered controls never exceed allowed actions', () => {
     );
   });
 
-  it('a score action blocks delete while edit stays open (Requirement 12.9)', () => {
-    // On an in-scope, unlocked, editable match: delete follows edit exactly when there is no score
-    // action, so adding an action removes only delete.
+  it('only a Super Admin gets delete, in any match state of an unlocked tournament (24 October 2026)', () => {
     fc.assert(
-      fc.property(fc.constantFrom('DRAFT', 'ONGOING'), (tournamentStatus) => {
-        const base = { phase: 'upcoming', status: 'SCHEDULED', tournamentStatus, inScope: true, holdsAssignment: false };
-        const withAction = matchFlags({ ...base, hasActions: true });
-        const noAction = matchFlags({ ...base, hasActions: false });
-        expect(withAction.canEdit).toBe(true);
-        expect(withAction.canDelete).toBe(false);
-        expect(noAction.canEdit).toBe(true);
-        expect(noAction.canDelete).toBe(true);
+      fc.property(fc.constantFrom('DRAFT', 'ONGOING'), fc.constantFrom(...PHASES), fc.constantFrom(...MATCH_STATUSES), fc.boolean(), (tournamentStatus, phase, status, hasActions) => {
+        const base = { phase, status, tournamentStatus, inScope: true, holdsAssignment: false, hasActions };
+        expect(matchFlags({ ...base, superAdmin: true }).canDelete).toBe(true);
+        expect(matchFlags({ ...base, superAdmin: false }).canDelete).toBe(false);
       }),
-      { numRuns: 50 },
+      { numRuns: 100 },
     );
   });
 });

@@ -49,12 +49,25 @@ export class MatchRoom extends DurableObject {
 
   async publishCard(matchId, card, seq) {
     const state = (await this.ctx.storage.get('home')) ?? { seq: 0, cards: {} };
+    if (state.deleted?.includes(String(matchId))) return false; // a late publish must not bring back a deleted match
     const next = applyCard(state, String(matchId), toPublic('card', card), seq);
     if (!next) return false;
     const message = JSON.stringify({ type: 'snapshot', room: 'home', seq: next.seq, data: liveCards(next) });
     await this.ctx.storage.put({ home: next, message });
     this.#broadcast(message);
     return true;
+  }
+
+  // Home room: drop the cards of deleted matches and remember the last 500 deleted IDs, then send the new list.
+  async removeCards(matchIds) {
+    const ids = matchIds.map(String);
+    const state = (await this.ctx.storage.get('home')) ?? { seq: 0, cards: {} };
+    const cards = Object.fromEntries(Object.entries(state.cards).filter(([id]) => !ids.includes(id)));
+    const deleted = [...new Set([...(state.deleted ?? []), ...ids])].slice(-500);
+    const next = { ...state, seq: state.seq + 1, cards, deleted };
+    const message = JSON.stringify({ type: 'snapshot', room: 'home', seq: next.seq, data: liveCards(next) });
+    await this.ctx.storage.put({ home: next, message });
+    this.#broadcast(message);
   }
 
   // Write_Signal: skip the row write when a signal from the last minute already covers the sweep window.

@@ -196,3 +196,23 @@ test('signed out, /start links to sign-in and sends no accept', async ({ page })
   await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
   expect(calls).toEqual({ me: 0, accept: 0, other: 0 });
 });
+
+// Match Scorer logins are shared event accounts: only a Super Admin removes them (24 October 2026).
+test('a Match Scorer gets no account deletion link or button', async ({ page }) => {
+  await mockStaff(page, { me: REPLIES.scorer });
+  await page.goto(`${APP}/account`);
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('link', { name: 'Delete account' })).toHaveCount(0);
+  await page.goto(`${APP}/account/delete`);
+  await expect(page.getByText('A Super Admin manages Match Scorer accounts. Ask them to remove this account.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete my account' })).toHaveCount(0);
+});
+
+test('a Tournament Manager still sees Delete account', async ({ page }) => {
+  await mockStaff(page, { me: REPLIES.manager });
+  await page.goto(`${APP}/account`);
+  await expect(page.getByRole('link', { name: 'Delete account' })).toBeVisible();
+  await page.goto(`${APP}/account/delete`);
+  await expect(page.getByRole('button', { name: 'Delete my account' })).toBeVisible();
+});

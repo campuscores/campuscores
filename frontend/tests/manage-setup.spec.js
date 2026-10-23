@@ -244,8 +244,17 @@ test('Step 1: unsaved values ask before a link, Back or reload; staying keeps th
   await expect(heading(page)).toHaveText('Matches');
 });
 
-test('Tournament overview: Delete and Publish open ConfirmDialog on Cancel, Tab stays inside, Escape returns focus, a 409 names the cause', async ({ page }) => {
+test('Tournament overview: a Tournament Manager owner gets no Delete tournament control (Super Admin only)', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.manager });
+  await tournamentApi(page, { tournament: tournamentRow(), sports: [{ sport: 'football', matchCount: 1 }] });
+  await page.goto(`${APP}/manage/tournaments/spring-cup`);
+  await expect(heading(page)).toHaveText('Spring Cup');
+  await expect(page.getByRole('heading', { name: 'Tournament settings' })).toBeVisible();
+  await expect(button(page, 'Delete tournament')).toHaveCount(0);
+});
+
+test('Tournament overview: Delete and Publish open ConfirmDialog on Cancel, Tab stays inside, Escape returns focus, a 409 names the cause', async ({ page }) => {
+  await mockStaff(page, { me: REPLIES.admin }); // only a Super Admin deletes a tournament
   const replies = [[409, apiError('NO_SPORTS', 'Cannot change status from DRAFT to ONGOING.')]];
   const api = await tournamentApi(page, {
     tournament: tournamentRow(), sports: [{ sport: 'football', matchCount: 1 }],
@@ -300,8 +309,8 @@ test('Tournament overview: Delete and Publish open ConfirmDialog on Cancel, Tab 
   await page.keyboard.press('Enter');
   await dialog(page).getByLabel('Reason (optional)').fill('Duplicate entry');
   await dialog(page).getByRole('button', { name: 'Delete tournament' }).click();
-  await expect(page).toHaveURL(`${APP}/manage`);
-  await expect(heading(page)).toHaveText('Manager home');
+  await expect(page).toHaveURL(`${APP}/admin`); // the Super Admin's start screen
+  await expect(heading(page)).toHaveText('Admin home');
   expect(api.sent('DELETE', '/manage/tournaments/spring-cup').map(r => r.body)).toEqual([{ reason: 'Duplicate entry' }]);
 });
 
