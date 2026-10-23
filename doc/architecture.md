@@ -213,12 +213,12 @@ Public routes are read-only and need no account.
 
 ## Main data records
 
-Existing tables (`db/migrations/`, five files):
+Existing tables (`db/migrations/`, six files):
 
 - `tournaments`: `slug` (lower-case words and digits with hyphens, always with a letter, so it never looks like an ID), name, `starts_on`/`ends_on`, `status` (`DRAFT` | `ONGOING` | `COMPLETED` | `ARCHIVED`, [statuses](#tournament-statuses-and-phases)), venue, description, `image_key` (a Venue_Library key or NULL) and `owner_account_id` (NOT NULL; the Tournament_Owner).
 - `tournament_sports`: one enabled sport per tournament (unique). `config` `{ format }` holds the Default_Format; `{}` means the Official_Preset. `config_version` increases by 1 on each changed save.
 - `tournament_sport_managers`: `(tournament_sport_id, account_id)` primary key, `added_by`, `created_at`, an index on `account_id`. One row makes a Tournament_Manager a Sport_Manager of that sport.
-- `teams`: Side_Records of one tournament sport. `label` is the name (unique per tournament sport ignoring case and outer spaces, index `teams_unique_name`); `branch` and `year` (2000–2099) are optional; `players` jsonb holds optional Player_Entries `[{ name, jersey?, captain? }]`, at most 30. See [Why `teams.players`](#why-teamsplayers).
+- `teams`: Side_Records of one tournament sport. `label` is the name (unique per tournament sport ignoring case and outer spaces, index `teams_unique_name`); `branch` and `year` are optional; `year` is the college year, 1 to 4 (1st to 4th year), check `teams_year` from `20261023090000_team_college_year.sql`; `players` jsonb holds optional Player_Entries `[{ name, jersey?, captain? }]`, at most 30. See [Why `teams.players`](#why-teamsplayers).
 - `matches`: two optional sides, `scheduled_at`, venue, `status` (`SCHEDULED` | `LIVE` | `APPROVED`, plus legacy `PENDING_APPROVAL` and `REJECTED`), the frozen `config_snapshot` and `config_version`, and `kind` (`BRACKET` with a stage SF1, SF2 or FINAL, unique per tournament sport; `CUSTOM` with no stage for a Regular_Match).
 - `score_actions`: ordered, auditable sport-specific scoring events, including linked reversal actions for undo/correction.
 - `match_snapshots`: the derived current public snapshot of a match.
@@ -232,7 +232,7 @@ Existing tables (`db/migrations/`, five files):
   - `created_at`, `revoked_at`, `revoked_by`, `revoke_reason`
   - partial unique index on `match_id` where `status = 'ACTIVE'` (one active operator per match)
   - reassignment revokes the old row and inserts a new one in one audited transaction
-- `scorer_leases`: the one active scoring device/session for a match. The assignment says **who** may score; the lease says **which device** is scoring now, preventing the same operator scoring from two tabs.
+- `scorer_leases`: the one active scoring device/session for a match. The assignment says **who** may score; the lease says **which device** is scoring now, preventing the same operator scoring from two tabs. `POST /api/matches/:id/lease { deviceId, takeover? }` gives GRANT or TAKEOVER (both reset `last_client_seq` to 0), KEEP for the holding device, or 409 `LEASE_HELD`. `DELETE /api/matches/:id/lease { deviceId? }` deletes only the caller's own lease, and with `deviceId` only when that device holds it (204, repeatable). The score console releases on leave (unmount; `pagehide` with `keepalive` and the cached token) only while this device holds the lease, and never clears its offline queue. The console puts `lease.lastClientSeq + 1` on the wire for each send, so a queue kept across a release, reload or takeover continues under the new lease; actions already accepted are marked synced from `GET /api/operator/matches/:id/scoring` before any send.
 - `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, invitations, assignments, revocations, reassignments, self-assignments, tournament, sport, team and match changes, score reversals, match start and final confirmation ([audit actions](#audit-rows)).
 - `outbox_events`: committed changes waiting to be broadcast.
 
@@ -448,7 +448,7 @@ Field rules (`validate.js`; the screens repeat them for on-blur checks):
 | Form | Rules |
 | --- | --- |
 | Tournament | Name trimmed 1–120; start date `YYYY-MM-DD`; end date ≥ start (defaults to start); venue ≤ 200; description ≤ 1000; `imageKey` one of `field`, `stadium`, `court`, `tennis`, `track`, or empty for Automatic |
-| Team | Name trimmed 1–120, unique per Tournament_Sport ignoring case and outer spaces; branch ≤ 120; year 2000–2099; ≤ 30 players; player name 1–120; jersey 0–99 and captain only for football, basketball and volleyball; at most 1 captain |
+| Team | Name trimmed 1–120, unique per Tournament_Sport ignoring case and outer spaces; branch ≤ 120; year 1–4 (college year) or empty, error `year: Choose 1st, 2nd, 3rd or 4th year.`; ≤ 30 players; player name 1–120; jersey 0–99 and captain only for football, basketball and volleyball; at most 1 captain |
 | Match | India_Time `date` and `time` (`YYYY-MM-DD`, `HH:MM`); date not before today and within the tournament dates; sides of the same Tournament_Sport and different; both sides required except for FINAL; venue ≤ 200; stage unique per Tournament_Sport |
 | Email | Trimmed, lower-cased, ≤ 254, the invitation pattern |
 | Reason | Required (non-empty after trim) for disable, reassign and revoke; optional elsewhere; ≤ 500 |
