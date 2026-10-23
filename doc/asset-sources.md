@@ -1,8 +1,18 @@
 # Asset sources
 
-Retrieved and inspected on 8 October 2026. These photographs illustrate the demonstration tournament cards; they do not identify the campus or event venues. Event names and dates are display content for the current frontend.
+## Venue_Library
 
-All five selected photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`. These five photos are the Venue_Library: [venues.js](../frontend/src/features/tournaments/venues.js) maps the keys `field`, `stadium`, `court`, `tennis` and `track` to the files below, with alt text and crop.
+Retrieved and inspected on 8 October 2026. These photographs illustrate tournament cards; they do not identify the campus or event venues.
+
+All five selected photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`.
+
+These five photos are the Venue_Library. [`venues.js`](../frontend/src/features/tournaments/venues.js) (`VENUES`) is the only frontend mapping: it maps the keys `field`, `stadium`, `court`, `tennis` and `track` to the files below, with alt text and crop (`position`). Its users:
+
+- `toEventProp` in `venues.js` gives public tournament cards their photo from the API `imageKey`.
+- [`TournamentDetailsView.jsx`](../frontend/src/features/manage/TournamentDetailsView.jsx) shows the five photos and "Automatic" as the Tournament details photo choice.
+- [`sampleTournaments.js`](../frontend/src/features/tournaments/sampleTournaments.js) (display fixtures) spreads `VENUES.<key>` into each fixture.
+
+The backend keeps the same five keys, in the same order, as `VENUE_KEYS` in [`routes/public.js`](../backend/src/routes/public.js) and [`routes/manage.js`](../backend/src/routes/manage.js). The `tournaments.image_key` CHECK in `db/migrations/20261022090000_manager_scope.sql` allows only these keys. A tournament with no stored key shows `VENUE_KEYS[(id − 1) mod 5]`. To add or replace a photo, change `venues.js`, both `VENUE_KEYS` lists, the CHECK (in a new migration) and the table below together.
 
 | Local asset | Original photo and creator | Delivery URL |
 |---|---|---|

@@ -1,12 +1,16 @@
 # Architecture
 
-## Current implementation — 9 October 2026
+## Current implementation — 23 October 2026
 
-The first application feature is a React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and committed lockfile. React Router registers the homepage, six sport pages and the public tournament pages ([Slice 4](#staff-roles-and-manager-console--slice-4-22-october-2026)). The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
+The application has three parts:
 
-Update, 20 October 2026: the `backend/` Worker (Hono API, `MatchRoom` live rooms, Clerk sign-in, assignments, leases, the scoring write path with the Test_Engine, outbox sweep), the `db/` migrations, the operator console and the sign-in and privacy pages are implemented and deployed to staging and production ([tasks.md](tasks.md#backend-live-platform--published-20-october-2026)). This integration adds real scoring with frozen presets/custom formats and operator final confirmation; see the current task in tasks.md for verification/publication. Not implemented: tournament, team, roster and match management; bracket advancement; standings. Manager result review is superseded. Sections below that describe these parts are the target design.
+- A React + Vite JavaScript frontend in `frontend/`, managed through a root npm workspace and a committed lockfile. React Router registers the homepage, six sport pages, the public tournament pages and the lazy staff area. The stack was confirmed on 11 October 2026; see [memory.md](memory.md#backend-and-hosting-decisions--11-october-2026).
+- The `backend/` Worker: Hono API, `MatchRoom` live rooms, Clerk sign-in, assignments, leases, real scoring with frozen presets or custom formats and operator final confirmation, the outbox sweep, and the manager and Super Admin API. The `db/` migrations hold the schema. Published state: [tasks.md](tasks.md#current-task-claims).
+- `shared/`: the pure scoring calculations (`scoring.mjs`) and the Event_Time_Zone (`time.mjs`), used by the Worker and the frontend.
 
-Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` and `features/tournaments/` (sections/cards/display fixtures), `features/sports/` (shared sport page, sections, cards, dialog, calendar, fixture registry and one fixture folder per sport), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
+Implemented management: tournament, sport, Default_Format, Sport_Manager, team and match setup, scorer assignment and Super Admin staff management ([Staff roles and manager console](#staff-roles-and-manager-console)). Not implemented: validated rosters, bracket advancement and standings. Manager result review is superseded. Sections below that describe these parts are the target design.
+
+Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` (live cards), `features/tournaments/` (public tournament pages, cards, Venue_Library, display fixtures), `features/sports/` (shared sport page, sections, cards, dialog, calendar, fixture registry and one fixture folder per sport), `features/auth/` (lazy Clerk area and role gate), `features/staff/` (shared staff components), `features/manage/` and `features/admin/` (staff screens), `features/operator/` (My Matches and Score console), `features/legal/` (privacy), `services/` (HTTP and live clients), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
 
 The homepage owns its selected-sport state and passes filtered display data to presentational match cards. It has no persistence or network score feed. The shared native rail uses IntersectionObserver on stable card slots for partial-card emphasis; the canvas effect has lifecycle cleanup, a capped refresh rate, reduced-motion handling and offscreen/tab-hidden suspension. Build output is static files in `frontend/dist/`. Nested-route deployments require an index.html fallback.
 
@@ -22,7 +26,7 @@ The implemented homepage additionally has global sport links in its header and i
 
 Each tournament can enable any subset of football, volleyball, basketball, table tennis, lawn tennis, and badminton. Each sport has its own configurable match format and scoring rules.
 
-Super Admins and Tournament Managers run tournaments across all enabled sports. Match Operators score only the specific matches they are assigned to. Spectators read public data without an account.
+Super Admins run every tournament. Tournament Managers run only the tournaments and tournament sports in their Manager_Scope ([Manager scope](#manager-scope)). Match Operators (display name "Match Scorer") score only the specific matches they are assigned to. Spectators read public data without an account.
 
 ## Technology
 
@@ -81,14 +85,20 @@ backend/
     index.js                     # Hono app, static assets, live-socket routing, scheduled handler
     http.js                      # request ID, error body, public field allow-lists
     auth.js                      # Clerk token check, account load, role checks
-    scoring.js                   # scoring authorization chain and match-state rule
+    scope.js                     # Manager_Scope decision, requireScope, list filters
+    validate.js                  # field validation and the tournament status machine
+    scoring.js                   # scoring authorization chain, match-state rule and START rule
     rooms.js                     # MatchRoom Durable Object (match rooms and the home room)
     outbox.js                    # outbox sweep
     db.js                        # Hyperdrive pools and transactions
-    routes/                      # public, me, invites, assignments, leases, actions
+    routes/                      # public, me, invites, accounts, admin, manage, assignments, leases, actions
     engines/                     # legacy Test_Engine registry; real calculations in shared/scoring.mjs
   scripts/                       # Super Admin bootstrap, smoke check
   test/
+
+shared/
+  scoring.mjs                    # pure sport calculations for the Worker and the frontend
+  time.mjs                       # Event_Time_Zone: the only definition of the event zone
 
 db/
   migrations/                    # <timestamp>_name.sql, applied in order by dbmate in CI
@@ -110,17 +120,17 @@ Core principle:
 - **Role** answers "what can this type of user do?" (`admin_accounts.role`).
 - **Match assignment** answers "which specific match can this person operate?" (`match_operator_assignments`).
 
-Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OPERATOR`. A Spectator needs no account. A signed-in account with no `admin_accounts` row is a Viewer: it has exactly the Spectator column's rights. Each account has exactly one role; Super Admin includes every Tournament Manager capability. Tournament Managers are global across all tournaments. There are no sport-scoped admin roles.
+Roles are stored explicitly as `SUPER_ADMIN`, `TOURNAMENT_MANAGER`, or `MATCH_OPERATOR` (display names Super Admin, Tournament Manager, Match Scorer). A Spectator needs no account. A signed-in account with no `admin_accounts` row, or with a `DISABLED` row, is a Viewer: it has exactly the Spectator column's rights. Each account has exactly one role; Super Admin includes every Tournament Manager capability. A Tournament Manager acts only inside their Manager_Scope ([Manager scope](#manager-scope)). Sport_Manager is a scope, not a role; there are no other roles.
 
 | Capability | Super Admin | Tournament Manager | Match Operator | Spectator |
 | --- | --- | --- | --- | --- |
 | View public tournaments, matches, scores | Yes | Yes | Yes | Yes |
-| Create/edit tournaments, enable and configure sports | Yes | Yes | No | No |
-| Create/edit teams and players | Yes | Yes | No | No |
-| Create/edit matches and bracket assignments | Yes | Yes | No | No |
+| Create a tournament (the creator becomes its owner) | Yes | Yes | No | No |
+| Edit, change status, delete a tournament; add or remove its sports and Sport_Managers | Yes | Owner only | No | No |
+| Set a sport's Default_Format; create/edit teams and matches of that sport | Yes | In scope | No | No |
 | Invite Match Operators | Yes | Yes | No | No |
-| Invite Tournament Managers and Super Admins; list staff, cancel invitations, disable, re-enable, change role, transfer tournament ownership ([Slice 5](#staff-roles-and-manager-console--slice-5-23-october-2026)) | Yes | No | No | No |
-| Assign, revoke, reassign scorers | Yes | Yes | No | No |
+| Invite Tournament Managers and Super Admins; list staff, cancel invitations, disable, re-enable, change role, transfer tournament ownership ([Super Admin API](#super-admin-api)) | Yes | No | No | No |
+| Assign, revoke, reassign scorers | Yes | In scope | No | No |
 | View assigned match (private scoring view) | Yes, after self-assignment | Yes, after self-assignment | Assigned matches only | No |
 | Start scoring, enter live scores, undo live actions, finish match, submit result | With active assignment | With active assignment | With active assignment | No |
 | Confirm final score and permanently lock it | With active assignment | With active assignment | With active assignment | No |
@@ -165,27 +175,27 @@ const acceptsScores = match.status === 'LIVE' ||
         ['TOURNAMENT_MANAGER', 'SUPER_ADMIN'].includes(account.role))))
 ```
 
-The existing backend gate retains legacy `REJECTED` row compatibility. New scoring starts eligible `SCHEDULED` matches with `START`, requires the scheduled date to be today in Asia/Kolkata, and accepts later commands while `LIVE`. An exact accepted `FINALIZE` retry may replay a locked result after current authorization checks. New writes to final matches are refused. The new workflow never creates rejected or pending-review states and has no reopening endpoint.
+The existing backend gate retains legacy `REJECTED` row compatibility. New scoring starts eligible `SCHEDULED` matches with `START` under the [START rule](#start-rule), and accepts later commands while `LIVE` with no date check. An exact accepted `FINALIZE` retry may replay a locked result after current authorization checks. New writes to final matches are refused. The new workflow never creates rejected or pending-review states and has no reopening endpoint.
 
-Non-scoring privileged requests (tournament, team, match, assignment and account management) check token → active account → required role.
+Non-scoring privileged requests (tournament, team, match, assignment and account management) check token → active account → required role → Manager_Scope, in the [staff request order](#staff-request-order).
 
 ### Staff invitation
 
-1. A Tournament Manager selects a match and chooses **Assign Scorer**, or a Super Admin invites a manager or Super Admin.
+1. A Tournament Manager opens **Invite scorer**, or chooses "Invite as Match Scorer" when Assign scorer finds no account for an email. A Super Admin opens **Invite staff** for any role.
 2. The backend checks the inviter's role: managers can invite `MATCH_OPERATOR` only.
 3. The backend calls the Clerk Invitations API with the secret key (server-side only), then stores a pending invitation row and an audit row in one transaction. Clerk sends the email.
 4. The invited person signs up or signs in through Clerk with the same verified email, by email or Google.
-5. The backend matches the verified email to the pending invitation and creates the `admin_accounts` row with the invited role, with an audit row.
-6. For an operator, the manager creates the assignment row (audited). The backend verifies the active assignment on each request, and the operator sees only assigned matches.
+5. `/start` calls `POST /api/invites/accept`. The backend matches the verified email to the pending invitation and creates the `admin_accounts` row with the invited role, the invitation email and the Clerk name, with an audit row.
+6. For a Match Scorer, the manager assigns the match by email (audited). The backend verifies the active assignment on each request, and the scorer sees only assigned matches.
 
-Example: Football SF1 → Rahul → `SCORE` → 09:30–12:30.
+Example: Football SF1 → `rahul@example.test` → `SCORE`. Managers set no time window ([Assignments](#assignments-and-the-operator-list)).
 
 Only a Super Admin creates Tournament Managers and Super Admins. Sign-up without an invitation gives only the Viewer role. Ending a match never deletes the user account; only the assignment expires or is revoked.
 
 ## Main backend request flow
 
 1. A Hono route receives the request.
-2. Middleware verifies the Clerk session JWT, loads the `admin_accounts` row, and checks the required role. Scoring commands also run the full assignment chain above. Request data is validated.
+2. Middleware verifies the Clerk session JWT, loads the `admin_accounts` row, and checks the required role. Request data is validated. Manager requests then check the Manager_Scope inside the transaction ([staff request order](#staff-request-order)); scoring commands run the full assignment chain above.
 3. The service applies tournament/match workflow and calls the appropriate sport module for scoring rules.
 4. The database transaction saves the score action, updated match state, audit entry, and live-update outbox record.
 5. After commit, the Worker publishes the public snapshot to the match room and the `home` room. A cron sweep resends any undelivered outbox event.
@@ -195,26 +205,27 @@ Public routes are read-only and need no account.
 ## Tournament, bracket, and result rules
 
 - A tournament stores its enabled sports and each sport's validated format/scoring configuration.
-- Each tournament sport has exactly two semifinal matches and one final. A Tournament Manager or Super Admin assigns teams to the semifinal sides.
-- A semifinal winner advances to the final only after that semifinal result is approved.
-- Regular_Matches (stored kind `CUSTOM`, shown as "Match") are separate from the bracket, public with their tournament, and never advance bracket slots (change 4).
+- Each tournament sport has at most one match per stage SF1, SF2 and FINAL (Bracket_Matches, stored kind `BRACKET`; 409 `STAGE_TAKEN` on a second one). A manager in scope sets the sides of each one; the sides of a FINAL are optional.
+- Target rule, not implemented: a semifinal winner advances to the final only after that semifinal result is final. Until bracket advancement exists, the manager sets the FINAL sides by hand.
+- A match with no stage is a Regular_Match (stored kind `CUSTOM`, shown as "Match"; the UI never says "custom"). It is public with its tournament and never advances the bracket.
 - Current result flow: eligible `SCHEDULED → LIVE → APPROVED`. The assigned operator chooses and freezes the format at start, enters scores, corrects live mistakes, then confirms the computed final result. Confirmation immediately publishes and locks it. There is no separate review or post-final edit endpoint. See [rules.md](rules.md#6-score-corrections-and-final-results).
 - Legacy `PENDING_APPROVAL` and `REJECTED` rows remain readable. They are not targets of this new workflow.
 
 ## Main data records
 
-- `tournaments`: name, dates, status, and event details.
-- `tournament_sports`: enabled sport, format/rules configuration, configuration version, and standings options.
-- `teams`: teams scoped to a tournament sport.
-- `roster_players`: player entries scoped to a sport team; display name, branch/year, captain marker, optional jersey number and active state.
-- `match_roster`: selected `roster_players` for a match, with active/substitute state.
-- `matches`: participants, schedule, sport configuration snapshot, status, result, and kind (`BRACKET` or `CUSTOM` for a Regular_Match).
-- `bracket_slots`: the two semifinal assignments and final slots linked to approved semifinal winners.
+Existing tables (`db/migrations/`, five files):
+
+- `tournaments`: `slug` (lower-case words and digits with hyphens, always with a letter, so it never looks like an ID), name, `starts_on`/`ends_on`, `status` (`DRAFT` | `ONGOING` | `COMPLETED` | `ARCHIVED`, [statuses](#tournament-statuses-and-phases)), venue, description, `image_key` (a Venue_Library key or NULL) and `owner_account_id` (NOT NULL; the Tournament_Owner).
+- `tournament_sports`: one enabled sport per tournament (unique). `config` `{ format }` holds the Default_Format; `{}` means the Official_Preset. `config_version` increases by 1 on each changed save.
+- `tournament_sport_managers`: `(tournament_sport_id, account_id)` primary key, `added_by`, `created_at`, an index on `account_id`. One row makes a Tournament_Manager a Sport_Manager of that sport.
+- `teams`: Side_Records of one tournament sport. `label` is the name (unique per tournament sport ignoring case and outer spaces, index `teams_unique_name`); `branch` and `year` (2000–2099) are optional; `players` jsonb holds optional Player_Entries `[{ name, jersey?, captain? }]`, at most 30. See [Why `teams.players`](#why-teamsplayers).
+- `matches`: two optional sides, `scheduled_at`, venue, `status` (`SCHEDULED` | `LIVE` | `APPROVED`, plus legacy `PENDING_APPROVAL` and `REJECTED`), the frozen `config_snapshot` and `config_version`, and `kind` (`BRACKET` with a stage SF1, SF2 or FINAL, unique per tournament sport; `CUSTOM` with no stage for a Regular_Match).
 - `score_actions`: ordered, auditable sport-specific scoring events, including linked reversal actions for undo/correction.
-- `match_snapshots` and `sport_standings`: derived current match and standings views.
-- `admin_accounts`: Clerk user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, timestamps. No `is_admin` flag.
+- `match_snapshots`: the derived current public snapshot of a match.
+- `admin_accounts`: Clerk user ID, `role` (`SUPER_ADMIN` | `TOURNAMENT_MANAGER` | `MATCH_OPERATOR`), `status` (`ACTIVE` | `DISABLED`), `invited_by`, `email` (lower case; unique among ACTIVE rows, index `one_active_account_email`), `name`, timestamps. No `is_admin` flag. `email` and `name` are stored at invitation acceptance.
+- `staff_invitations`: invited email, role, status (`PENDING` | `ACCEPTED` | `REVOKED`), expiry (7 days), inviter and the Clerk invitation ID; one PENDING row per email.
 - `match_operator_assignments`:
-  - `id`, `match_id`, `user_id`, `assigned_by`
+  - `id`, `match_id`, `account_id`, `assigned_by`
   - `permission`: `'SCORE'` only (default)
   - `valid_from`, `valid_until`: both nullable; check `valid_until > valid_from` when both are set
   - `status`: `ACTIVE` | `REVOKED` only; "expired" is derived from time and never stored
@@ -222,11 +233,21 @@ Public routes are read-only and need no account.
   - partial unique index on `match_id` where `status = 'ACTIVE'` (one active operator per match)
   - reassignment revokes the old row and inserts a new one in one audited transaction
 - `scorer_leases`: the one active scoring device/session for a match. The assignment says **who** may score; the lease says **which device** is scoring now, preventing the same operator scoring from two tabs.
-- `match_result_reviews`: existing legacy review schema, unused by the current operator-finalization workflow. Preserve its constraints for compatibility; do not build review endpoints from this obsolete proposal.
-- `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, assignments, revocations, reassignments, self-assignments, score reversals, match start and final confirmation.
+- `admin_audit_log`: actor, action, entity, time, request ID, before/after summary, and reason. Covers account changes, invitations, assignments, revocations, reassignments, self-assignments, tournament, sport, team and match changes, score reversals, match start and final confirmation ([audit actions](#audit-rows)).
 - `outbox_events`: committed changes waiting to be broadcast.
 
-These are planned record names, not existing database tables. Use `roster_players` as the canonical player table name; do not create a second `players` table for the same records. Use database constraints for relationships and uniqueness. Save the sport configuration version with each match so later settings do not alter a live match.
+Planned tables, not created yet:
+
+- `roster_players`: validated player entries of a sport team; display name, branch/year, captain marker, optional jersey number and active state.
+- `match_roster`: selected `roster_players` for a match, with active/substitute state.
+- `bracket_slots`: final slots linked to the final semifinal winners.
+- `sport_standings`: derived standings.
+
+No `match_result_reviews` table exists; the manager-review proposal is superseded, so do not build review endpoints. Use `roster_players` as the canonical name for validated player records; do not create a second `players` table for them. Use database constraints for relationships and uniqueness. Save the sport configuration version with each match so later settings do not alter a live match.
+
+### Why `teams.players`
+
+Player_Entries are optional display data for managers. They are never public and nothing reads them for scoring, eligibility or statistics yet. A jsonb column on `teams` (array, at most 30 entries, validated by `validatePlayers` in `backend/src/validate.js`) stores them without two tables that no code reads. When validated rosters are scoped (eligibility, match squads, substitutes), they go into `roster_players` and `match_roster` through a migration; that change also decides how existing `teams.players` entries map to them.
 
 Before backend work, agree the task's routes, payloads, statuses, authorization and error cases in these shared docs. Record unresolved decisions in `memory.md` and block the dependent task in `tasks.md`. The selected stack is a plan; it does not prove that the service, schema or capacity exists.
 
@@ -252,7 +273,7 @@ No Postgres runs on any team device, including when the schema changes. All envi
 
   `CLERK_SECRET_KEY` and `CLERK_JWT_KEY` are Worker secrets; `CLERK_PUBLISHABLE_KEY`, `AUTHORIZED_PARTIES` and `INVITE_REDIRECT_URL` (the sign-up page URL in invitation emails) are Worker vars. The Worker reads them for staff routes ([Sign-in setup](#sign-in-setup)). The vars are set per environment in `backend/wrangler.jsonc`; set the secrets once per environment with `npx wrangler secret put <NAME> --env <env>`. They are never in the config or the deploy workflow.
 - **Wrangler environments:** `env.staging` uses `workers_dev` and the Clerk development instance, and sets `ENABLE_TEST_ENGINE`. `env.production` sets `workers_dev: false`, one zone route on the custom domain, the Clerk production instance vars and no `ENABLE_TEST_ENGINE`. Each environment repeats its DO, Hyperdrive and cron bindings. `backend/test/node/wrangler-config.spec.js` checks this. Set the route's fail-closed request-limit mode in the Cloudflare dashboard ([Rate limiting](#rate-limiting-and-quota-failure)).
-- **Environment addresses:** staging serves `https://thaparlympics-staging.bhatiaarnav05.workers.dev` (Clerk development instance); production serves `https://campuscores.live` through the zone route `campuscores.live/*` and a proxied `AAAA 100::` apex record (Clerk production instance; its DNS records stay DNS only). `www.campuscores.live` is not configured. Both environments are deployed from commit `4405c8b` (20 October 2026); the smoke checks pass on both. The production Clerk Worker secrets, the route fail-closed mode and the rate-limit rule are set outside source; Arnav confirmed them on 21 October 2026 ([tasks.md](tasks.md#follow-up-tasks) F7, F9).
+- **Environment addresses:** staging serves `https://thaparlympics-staging.bhatiaarnav05.workers.dev` (Clerk development instance); production serves `https://campuscores.live` through the zone route `campuscores.live/*` and a proxied `AAAA 100::` apex record (Clerk production instance; its DNS records stay DNS only). `www.campuscores.live` is not configured. Production serves `1435628` (20 October 2026); staging serves the latest `develop` deploy. Deployed revisions and smoke results are in [tasks.md](tasks.md#current-task-claims). The production Clerk Worker secrets, the route fail-closed mode and the rate-limit rule are set outside source; Arnav confirmed them on 21 October 2026 ([tasks.md](tasks.md#follow-up-tasks) F7, F9).
 - **Seed data:** `db/seed/fake.sql` holds clearly fake data for CI and staging only; never seed production.
 - **Super Admin bootstrap:** [`.github/workflows/bootstrap.yml`](../.github/workflows/bootstrap.yml) (manual; inputs `environment`, `clerk_user_id`) runs [`backend/scripts/bootstrap-super-admin.js`](../backend/scripts/bootstrap-super-admin.js) with that environment's `DATABASE_URL`. In one locked transaction it creates one active `SUPER_ADMIN` and an audit row, or refuses and changes nothing when an active Super Admin exists. Only when `BOOTSTRAP_ENV` is exactly `staging` does the check ignore the fake seed accounts (`clerk_user_id` starting `test_`); production and any other value keep the strict check.
 - **Backups:** [`.github/workflows/backup.yml`](../.github/workflows/backup.yml) runs nightly at 21:30 UTC (03:00 IST) and on manual dispatch, in GitHub Environment `production`. Neon Free keeps only 6 hours of restore history. Order: install `postgresql-client-18` from PGDG; fail unless the `pg_dump` and Neon server majors both equal `PG_MAJOR` (18, the Neon staging and production major; change it, and the `postgres:18` images, if Neon's major changes); `pg_dump --format=custom`; `gpg --symmetric --cipher-algo AES256` with the passphrase from a private file; delete the plaintext dump; upload only the `.gpg` file as artifact `production-backup-<run id>` (14-day retention); decrypt, `pg_restore --exit-on-error --no-owner --no-acl` into a throwaway `postgres:18` service; fail if any table created in `db/migrations` or `schema_migrations` is missing. Any failed step fails the run. Secrets in Environment `production`: `DATABASE_URL` (above) and `BACKUP_PASSPHRASE` (long random passphrase; store a copy outside GitHub, because GitHub cannot show it again and without it no backup can be decrypted). To restore: download the artifact, run `gpg --decrypt` with the passphrase, then `pg_restore` into a new Neon branch or project. The workflow is disabled in GitHub since 20 October 2026. It returns before launch with private R2 storage and its own environment ([memory.md](memory.md#public-repository-and-ci--20-october-2026)).
@@ -274,35 +295,23 @@ flowchart LR
 
 ### Public read API
 
-Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No authentication; every caller gets the same body through the cached configuration.
+Source: [`backend/src/routes/public.js`](../backend/src/routes/public.js). No authentication; every caller gets the same body through the cached configuration. No Clerk call.
 
-- `GET /api/tournaments` → `{ tournaments: [tournament] }`
-- `GET /api/tournaments/:key` (ID or slug) → `{ tournament }` with `sports` (sport keys) and `matches`
-- `GET /api/sports/:sport/matches` → `{ matches }`: that sport's matches across public tournaments, each with `tournamentName` and `tournamentSlug`
-- `GET /api/matches/:id` → `{ match }` with `snapshot` (the latest Match_Room snapshot data, or `null`)
+- Public tournaments are `status IN ('ONGOING','COMPLETED')`. `DRAFT` and `ARCHIVED` tournaments, and every match of them, return 404. Every match of a public tournament is public, Regular_Matches included.
+- `GET /api/tournaments` → `{ tournaments: [tournament] }`, latest start date first.
+- `GET /api/tournaments/:key` → `{ tournament }` with `sports` (sport keys) and `matches` (no `snapshot`). `:key` is an ID or a slug; a slug always contains a letter, so the two never collide. A key that is neither returns 400 `BAD_REQUEST`.
+- `GET /api/sports/:sport/matches` → `{ matches }`: that sport's matches across public tournaments, each with `tournamentName` and `tournamentSlug`. An unknown sport key returns 404.
+- `GET /api/matches/:id` → `{ match }` with `snapshot` (the latest Match_Room snapshot data, or `null`).
 - An ID is a positive integer without a leading zero, up to 18 digits. Otherwise 400 `BAD_REQUEST`. An unknown or non-public ID returns 404 `NOT_FOUND`.
-- Every body and Room_Message goes through `toPublic(kind, obj)` in [`backend/src/http.js`](../backend/src/http.js). It copies only the allow-listed fields for `tournament`, `match`, `snapshot` and `card`. Database IDs are strings; dates are ISO text.
-- Current limits: `snapshot` is `null` until the match has a `match_snapshots` row (its first accepted score action). The lifecycle and public visibility of tournaments and matches are set by the Slice 1 rules below (they supersede the earlier "DRAFT and CUSTOM are not public" limit).
-
-## Staff roles and manager console — Slice 1, 22 October 2026
-
-Slice 1 of the staff roles and manager console adds the backend: the schema migration, scope and validation helpers, the manager API, scope checks on assign and revoke, email/name storage at invitation acceptance, the public read changes and the new START rule. The manager and admin screens come in later slices. The full contract is in the spec design (`.kiro/specs/staff-roles-manager-console/design.md`); this section records the parts other teams depend on. Source: `backend/src/{scope.js, validate.js, routes/manage.js}`, `shared/time.mjs`, `db/migrations/20261022090000_manager_scope.sql`.
-
-Manager scope (change 1). A Tournament_Manager manages only the tournament they own (`tournaments.owner_account_id`) and the Tournament_Sports listed for them in the new `tournament_sport_managers` table (`(tournament_sport_id, account_id)`, with `added_by` and an `account_id` index). A Super_Admin keeps every capability everywhere. `scope.js` resolves this: `scopeDecision`, `requireScope` (403 `SCOPE_FORBIDDEN`) and `scopeFilter` for list queries. This replaces the global-manager rule in [Roles and access](#roles-and-access) and [memory.md](memory.md#staff-roles-and-manager-console--slice-1-22-october-2026); there is now a tournament-scoped manager table.
-
-Schema (changes 1 and 3). The expand-only migration adds `admin_accounts.email` (lower-case CHECK, backfilled from accepted invitations) and `name`, with a partial unique index `one_active_account_email` on ACTIVE rows; renames tournament status `PUBLISHED` to `ONGOING` and adds a `tournaments_status` CHECK (`DRAFT`, `ONGOING`, `COMPLETED`, `ARCHIVED`), a `tournaments_slug` CHECK, `image_key` (a Venue_Library key or NULL) and `owner_account_id` (backfilled to the first ACTIVE Super_Admin, then NOT NULL); and makes `teams.branch`/`year` nullable, adds a `teams_year` CHECK, a `players` jsonb column (array, at most 30 entries) and a case- and space-insensitive unique name index `teams_unique_name`. `teams.players` holds optional display Player_Entries `[{ name, jersey?, captain? }]`, never public; the validated `roster_players` and `match_roster` tables in [Main data records](#main-data-records) stay planned, so no second player table is read yet. Every schema change is a `dbmate` migration applied only by CI, never through the Neon console.
-
-Statuses (change 3). `DRAFT` and `ARCHIVED` are private; `ONGOING` and `COMPLETED` are public. A `CUSTOM` match (a Regular_Match, display name "Match") is public with its tournament; it still never advances the bracket. Phases (upcoming, live, past, "Not scored", "Final") are always derived, never stored.
-
-Manager API and changed endpoints (change 2). New router `backend/src/routes/manage.js` on the uncached pool, mounted in `index.js`, serves `GET/POST/PATCH/DELETE /api/manage/tournaments[...]`, sports, format, sport-manager, team and match endpoints. Every manager or admin request runs this order: `clerkAuth` (401), `requireRole` (403 `NOT_STAFF`/`ACCOUNT_DISABLED`/`ROLE_FORBIDDEN`), parse and validate (400 `BAD_REQUEST` naming the first field), then one `withTx`: lock and load (404), `requireScope` (403 `SCOPE_FORBIDDEN`), state rules (409 with a specific code), then the write and one Audit_Row. Lock order is match rows first (ascending ID), then the tournament row (`FOR SHARE` for match commands, `FOR UPDATE` for tournament edits), so a concurrent status change cannot pass a match that is becoming Live. `POST /api/matches/:id/assignments` and `POST /api/assignments/:id/revoke` now run `requireScope` after the match lock. `POST /api/invites/accept` stores `email` and `name` and backfills an empty email on the caller's existing account from the Clerk call it already makes, so no extra Clerk call. `DELETE /api/me` returns 409 `OWNER_TRANSFER_REQUIRED` for an owner. `audit(tx, {...})` in `db.js` writes the Audit_Row inside the transaction; a failed insert aborts it.
-
-Public reads (change 2). Public tournaments are `status IN ('ONGOING','COMPLETED')`; `DRAFT` and `ARCHIVED` return 404. `GET /api/tournaments/:key` accepts an ID or a slug (slugs always contain a letter, so they never collide with IDs); the `CUSTOM` filter is removed, so Regular_Matches are public. New `GET /api/sports/:sport/matches` returns matches across public tournaments. Each tournament and match carries a derived `phase`; `tournament` adds `imageKey` (the stored key, else `VENUE_KEYS[(id − 1) mod 5]`); `match` adds `tournamentName` and `tournamentSlug`. The Public_DTO allow-lists in `http.js` gain only `phase`, `imageKey`, `tournamentName` and `tournamentSlug`; no staff, owner, scope, assignment, branch, year or player field is exposed.
-
-START rule (change 6). `startDecision({ now, scheduledAt, tournamentStatus })` in `scoring.js` accepts START only when the tournament is Ongoing and database time is at or after the scheduled time and before Match_Day_End (the next Event_Time_Zone midnight); otherwise it returns `TOURNAMENT_NOT_ONGOING`, `START_TOO_EARLY` or `MATCH_DAY_OVER`. It runs only for START, after the existing account, assignment, window, permission and match-state checks, and before the lease check. The retired `requireToday`/`is_today` and `NOT_TODAY` are gone; later commands of a Live match have no date check. At START, `matches.config_version` takes `tournament_sports.config_version` and `privateMatch` is `!['ONGOING','COMPLETED'].includes(tournamentStatus)`. This refines the scoring gate described in [Scoring authorization chain](#scoring-authorization-chain).
-
-Event_Time_Zone. `shared/time.mjs` is the one definition of the event zone (`{ name: 'Asia/Kolkata', label: 'IST', offsetMinutes: 330 }`) and holds `istDate`, `matchDayEnd`, `utcToIst`, `istToUtc`, `timeText`, `matchPhase`, `tournamentPhase` and `needsScorer`. Every zone literal and visible "IST" in the backend, frontend and shared code comes from it; `backend/test/node/event-time-zone.spec.js` fails the build on any stray zone literal and on a time function in the public SQL.
-
-Public phase clock. Public reads use the cached Hyperdrive pool with no time function in the SQL, so the rows stay cacheable; a query naming `now()` would be uncacheable. The Worker computes every phase from Worker_Time (`Date.now()`) through `shared/time.mjs` and returns `phase`; no phase is stored or cached and public responses get no HTTP or edge cache. Staff reads, staff writes and START select database `now()` instead, so a scorer and a viewer agree on the India_Time day (Requirements 15.12, 17.6, 17.15, 17.16). Decision recorded in [memory.md](memory.md#public-phase-clock--21-october-2026).
+- Every body and Room_Message goes through `toPublic(kind, obj)` in [`backend/src/http.js`](../backend/src/http.js). It copies only the allow-listed fields. Database IDs are strings; dates are `YYYY-MM-DD` text; times are ISO UTC.
+  - `tournament`: `id`, `slug`, `name`, `startsOn`, `endsOn`, `status`, `phase`, `imageKey`, `venue`, `description`, `sports`, `matches`.
+  - `match`: `id`, `tournamentId`, `tournamentName`, `tournamentSlug`, `sport`, `kind`, `stage`, `status`, `phase`, `scheduledAt`, `venue`, `seq`, `sides` (`[{ name }]`), `snapshot`.
+  - `card` (Home_Room): `id`, `sport`, `status`, `competition`, `tournamentId`, `sides`, `score`, `clock`, `seq`, `periods`, `winner`, `format`, `finalizedAt`, `gamePoints`, `serve`, `events` ([handoff.md](handoff.md#home_room-data)).
+  - `snapshot`: the Match_Room data ([handoff.md](handoff.md#match_room-data)).
+  - No staff, owner, scope, assignment, branch, year or player field is public.
+- `phase` is `upcoming`, `live` or `past`, computed in the Worker ([public phase clock](#event-time-zone-and-public-phase-clock)). `imageKey` is the stored `image_key`, else `VENUE_KEYS[(id − 1) mod 5]` (`field`, `stadium`, `court`, `tennis`, `track`), so one tournament always shows the same photograph.
+- `loadScoringContext` in `scoring.js` reads the tournament ID and `routes/actions.js` puts it on each card as `tournamentId`, so a tournament sport page can apply a live card for a match that its cached read does not contain yet.
+- Current limit: `snapshot` is `null` until the match has a `match_snapshots` row (its first accepted score action).
 
 ### Sign-in setup
 
@@ -311,8 +320,8 @@ Public phase clock. Public reads use the cached Hyperdrive pool with no time fun
 - Source: [`backend/src/auth.js`](../backend/src/auth.js). `clerkAuth` verifies the token locally with `CLERK_JWT_KEY` and checks `azp` against `AUTHORIZED_PARTIES` (comma-separated origins); no token or a bad token returns 401 `UNAUTHENTICATED`. `loadAccount` reads `admin_accounts` by Clerk user ID through the uncached configuration on every request. `requireRole('staff' | 'manager' | 'superAdmin')` returns 403 `NOT_STAFF`, `ACCOUNT_DISABLED` or `ROLE_FORBIDDEN`. A missing Clerk setting returns 500, so a misconfigured Worker never grants access.
 - `GET /api/me` (signed in) → `{ role, status }` for an `ACTIVE` staff account, else `{ role: 'VIEWER' }` (no row or `DISABLED`).
 - `POST /api/invites { email, role }` (manager or above; [`routes/invites.js`](../backend/src/routes/invites.js)) → 201 `{ invitation: { id, email, role, status, expiresAt } }`. The email is stored in lower case and expires after 7 days. A role the caller cannot invite returns 403 `ROLE_FORBIDDEN`; a bad email 400; an unexpired pending invitation for that email 409 `INVITE_PENDING`. The Clerk invitation (redirect `INVITE_REDIRECT_URL`) is created first; a Clerk failure returns 502 `CLERK_UNAVAILABLE` and stores no row. If the database step then fails, the Clerk invitation is revoked (best effort) and the call returns 500.
-- `POST /api/invites/accept` (signed in, no staff role needed) → `{ role, status }`. It matches the caller's verified Clerk emails to the oldest pending, unexpired invitation and creates the account with the invited role and `invited_by` in one transaction. No match returns 404 `INVITE_NOT_FOUND`; a caller who already has an account (also a disabled one) gets 409 `ACCOUNT_EXISTS` and nothing changes.
-- `POST /api/accounts/:id/disable { reason }` (Super Admin; [`routes/accounts.js`](../backend/src/routes/accounts.js)) → `{ account: { id, status, revokedAssignmentIds } }`. One transaction sets `DISABLED`, revokes the account's `ACTIVE` assignments with the reason, deletes its scorer leases and writes an `ACCOUNT_DISABLED` audit row. An empty reason returns 409 `REASON_REQUIRED`; the last active Super Admin 409 `LAST_SUPER_ADMIN`; an unknown ID 404.
+- `POST /api/invites/accept` (signed in, no staff role needed) → `{ role, status }`. It matches the caller's verified Clerk emails to the oldest pending, unexpired invitation and creates the account with the invited role, `invited_by`, `email` and `name` in one transaction. No match returns 404 `INVITE_NOT_FOUND`; a caller who already has an account (also a disabled one) gets 409 `ACCOUNT_EXISTS` and nothing changes, except that an empty `email` and `name` are filled ([Super Admin API](#super-admin-api)).
+- Account disable, enable, role change, staff lists, ownership transfer and invitation cancel are in the [Super Admin API](#super-admin-api).
 - The Clerk secret key stays on the Worker as a secret. Only the publishable key reaches the browser.
 - Staging uses a Clerk development instance on `workers.dev`. Clerk's shared Google credentials are acceptable there.
 - **Production identity setup** (manual, outside source; do it before the first production deploy):
@@ -354,129 +363,225 @@ These are Cloudflare and Clerk dashboard settings for the production zone. They 
   - On event days, check the Workers & Pages usage metrics by hand against the daily caps in [memory.md](memory.md#research-notes).
   - Workers Paid (the paid gate) adds usage-based alerts, if it is adopted.
 
-## Staff roles and manager console — Slice 2, 22 October 2026
+## Staff roles and manager console
 
-Slice 2 adds the frontend of the staff entry and the Tournament_Manager screens. It changes no API endpoint, schema or backend code; the screens use the Slice 1 manager API. Decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-2-22-october-2026).
+Implemented 22–23 October 2026 on `develop` ([tasks.md](tasks.md#current-task-claims)). This section is the contract for tournament ownership and sport scope, the Manager_Console, the Admin_Console, the tournament and match lifecycle and the START rule. Product behavior is in [prd.md](prd.md#staff-area). Decisions are in [memory.md](memory.md#staff-roles-and-manager-console--decisions). Source: `backend/src/{scope.js,validate.js,db.js}`, `backend/src/routes/{manage,admin,accounts,invites,assignments,me,public,actions}.js`, `shared/time.mjs`, `db/migrations/20261022090000_manager_scope.sql`, `frontend/src/features/{auth,staff,manage,admin,operator,tournaments}/`.
 
-Router. `frontend/src/main.jsx` uses `createBrowserRouter([{ path: '*', element: <App /> }])` with `RouterProvider`, so `useBlocker` works for the unsaved-changes guard. `App.jsx` keeps its `<Routes>` and its scroll effect; no public route moved.
+### Manager scope
 
-Staff entry (change 5). Every account page and staff route renders `AuthArea` with a `screen` key, through `staff('<screen>')` in [`App.jsx`](../frontend/src/app/App.jsx). `AuthArea` stays a lazy chunk, so public pages load no Clerk code. `SiteHeader` has no "My Matches" link.
+- A Tournament_Owner (`tournaments.owner_account_id`) has scope over the tournament and all its Tournament_Sports. The creator becomes the owner. Only a Super_Admin transfers ownership.
+- A Sport_Manager (a row in `tournament_sport_managers`) has scope over only that Tournament_Sport. The owner or a Super_Admin adds and removes Sport_Managers. The account must be an ACTIVE Tournament_Manager who is not the owner and not already on that sport; every other email gets the one 400 `MANAGER_NOT_ELIGIBLE` message, so the reply reveals nothing about other accounts.
+- A Super_Admin has scope over everything. A Match_Scorer has no Manager_Scope and keeps the `SCORE` permission only.
+- `scope.js` decides it: `scopeDecision` (pure), `requireScope(tx, account, target)` (403 `SCOPE_FORBIDDEN`) and `scopeFilter` for list queries. Target level: details, status, delete, sports, Sport_Managers and photograph are tournament level (owner only); Default_Format, teams, matches and Assignments are sport level (owner or that sport's Sport_Manager).
+- Removing a Sport_Manager keeps the manager's ACTIVE Assignments. A disable or role change deletes the account's Sport_Manager rows ([Super Admin API](#super-admin-api)).
 
-| Path | Screen |
+### Tournament statuses and phases
+
+| Status | Public | Allowed changes (`TRANSITIONS` in `validate.js`) |
+| --- | --- | --- |
+| `DRAFT` (private setup) | No | → `ONGOING` ("Publish"; 409 `NO_SPORTS` without a sport) |
+| `ONGOING` | Yes | → `COMPLETED` (409 `LIVE_MATCHES` while a match is Live) |
+| `COMPLETED` | Yes | → `ONGOING`, → `ARCHIVED` |
+| `ARCHIVED` | No | → `COMPLETED` |
+
+Any other pair returns 409 `STATUS_CHANGE_INVALID`. A Completed or Archived tournament refuses every change except a status change (409 `TOURNAMENT_LOCKED`), also for assignments. Only a Draft can be deleted (409 `NOT_DRAFT`). The migration renamed stored `PUBLISHED` to `ONGOING`.
+
+Phases are derived, never stored ([`shared/time.mjs`](../shared/time.mjs)):
+
+- Match_Phase: `live` (`LIVE`); `upcoming` (`SCHEDULED` before Match_Day_End); `past` (`APPROVED`, or `SCHEDULED` after Match_Day_End, which is Not_Scored). Staff labels: Live, Scheduled, Final, Not scored (`staffPhase` in `labels.js`).
+- Tournament_Phase: `upcoming` (Ongoing, start date after today), `live` (Ongoing, today within the dates), `past` (Completed, or Ongoing with the end date before today). "Today" is the current India_Time date.
+- Match_Day_End is the next Event_Time_Zone midnight after the scheduled time. Not_Scored needs no cron job and cannot drift.
+
+### Event time zone and public phase clock
+
+- `shared/time.mjs` is the one definition of the event zone: `EVENT_TIME_ZONE = { name: 'Asia/Kolkata', label: 'IST', offsetMinutes: 330 }`, with `istDate`, `matchDayEnd`, `utcToIst`, `istToUtc`, `timeText`, `matchPhase`, `tournamentPhase` and `needsScorer`. India_Time has a fixed offset and no daylight saving time, so plain arithmetic is exact. SQL gets the zone name as a parameter.
+- Guard: [`backend/test/node/event-time-zone.spec.js`](../backend/test/node/event-time-zone.spec.js) scans `backend/src`, `backend/scripts`, `frontend/src` and `shared` (except `shared/time.mjs` and `sample*.js` Display_Fixtures). It fails on `Asia/Kolkata`, a `5:30` offset, `330`/`19800` or `IST` as a literal, and on `now()`, `current_date`, `current_timestamp` or `localtimestamp` in `backend/src/routes/public.js`.
+- Public phase clock (confirmed by Arnav, 21 October 2026). Public reads use the cached Hyperdrive pool with no time function in the SQL; Hyperdrive does not cache a query that names `now()`. The Worker therefore computes every public `phase` from Worker_Time (`Date.now()`). No phase is stored or cached, and public responses get no HTTP or edge cache. The frontend groups by the returned `phase` and never reads device time for a phase.
+- Staff reads, staff writes and START use database `now()`, so a scorer and the server agree on the India_Time day. Worker_Time and database time can differ by clock skew only.
+
+### Staff request order
+
+Every manager and Super Admin request runs on the uncached pool in this order:
+
+1. `clerkAuth` → 401 `UNAUTHENTICATED`.
+2. `loadAccount` + `requireRole('manager' | 'superAdmin')` → 403 `NOT_STAFF` (Viewer), `ACCOUNT_DISABLED`, `ROLE_FORBIDDEN`.
+3. Parse IDs and body (`validate.js`) → 400 `BAD_REQUEST` with the message `<field>: <fix>` for the first invalid field. A malformed ID is 400.
+4. In one `withTx`: lock and load the target → 404 `NOT_FOUND`.
+5. `requireScope` → 403 `SCOPE_FORBIDDEN`.
+6. State rules → 409 with a specific code.
+7. The write and its Audit_Row in the same transaction.
+
+Every refusal writes nothing. `backend/test/authz-matrix.spec.js` checks each endpoint for anonymous, invalid token, Viewer, DISABLED account, Match_Scorer, Tournament_Manager in and out of scope, owner and Super_Admin.
+
+### Manager API
+
+Source: [`routes/manage.js`](../backend/src/routes/manage.js), `requireRole('manager')`. "Owner" means Tournament_Owner or Super_Admin; "sport scope" means owner or a Sport_Manager of that sport. Staff rows carry ISO UTC `scheduledAt` plus India_Time `date` and `time` text.
+
+| Method and path | Scope | Body | Success | Specific errors |
+| --- | --- | --- | --- | --- |
+| `GET /api/manage/home` | Rows in scope | — | `{ today, tournaments[], todayMatches: { live, scheduled, final, notScored }, needsScorer }`; each group `{ items (≤ 50), total }`; `needsScorer` covers the next 7 India_Time dates. A Super_Admin also gets `pendingInvitations` (count of PENDING invitations unexpired by database `now()`) | — |
+| `GET /api/manage/tournaments` | In scope | — | `{ tournaments: [{ id, slug, name, status, startsOn, endsOn, imageKey, isOwner, sports[], owner?, sportManagers? }] }` by start date, then name. `owner: { accountId, name, email }` and `sportManagers: [{ sport, accountId, name, email }]` only on rows the caller owns (a Super_Admin owns every row here) | — |
+| `POST /api/manage/tournaments` | Any manager | `{ name, startsOn, endsOn?, venue?, description? }` | 201 `{ tournament, isOwner, ownerId }`; status `DRAFT`, the caller is owner | 400 field |
+| `GET /api/manage/tournaments/:slug` | In scope | — | `{ tournament, isOwner, nextStep, sports: [{ sport, defaultFormat, configVersion, teamCount, matchCount, managers? }] }`; a Sport_Manager gets only their sports | 404 |
+| `PATCH /api/manage/tournaments/:slug` | Owner | Any of `name, startsOn, endsOn, venue, description, imageKey` | `{ tournament, isOwner, ownerId }` | 400 field; 409 `DATES_EXCLUDE_MATCHES` (message has the count), `TOURNAMENT_LOCKED` |
+| `POST /api/manage/tournaments/:slug/status` | Owner | `{ status, reason? }` | `{ tournament, isOwner, ownerId }` | 409 `STATUS_CHANGE_INVALID`, `NO_SPORTS`, `LIVE_MATCHES` |
+| `DELETE /api/manage/tournaments/:slug` | Owner | `{ reason? }` | `{ removed: { sports, teams, matches, assignments, sportManagers } }` | 409 `NOT_DRAFT` |
+| `POST /api/manage/tournaments/:slug/sports` | Owner | `{ sport }` | 201 `{ sport, defaultFormat }` (the Official_Preset) | 400 unknown key; 409 `SPORT_EXISTS`, `TOURNAMENT_LOCKED` |
+| `DELETE /api/manage/tournaments/:slug/sports/:sport` | Owner | — | `{ removed: { teams, sportManagers } }` | 409 `SPORT_HAS_MATCHES`, `TOURNAMENT_LOCKED` |
+| `PUT /api/manage/tournaments/:slug/sports/:sport/format` | Sport scope | `{ format }` | `{ defaultFormat, configVersion, changed }`; an equal format writes nothing | 400 `validateFormat` message; 409 `TOURNAMENT_LOCKED` |
+| `POST /api/manage/tournaments/:slug/sports/:sport/managers` | Owner | `{ email }` | 201 `{ manager: { accountId, name, email } }` | 400 `MANAGER_NOT_ELIGIBLE`; 409 `TOURNAMENT_LOCKED` |
+| `DELETE /api/manage/tournaments/:slug/sports/:sport/managers/:accountId` | Owner | — | `{ removed: true }` | 404; 409 `TOURNAMENT_LOCKED` |
+| `GET /api/manage/tournaments/:slug/sports/:sport/teams` | Sport scope | — | `{ teams: [{ id, name, branch, year, players, locked, used }] }` | — |
+| `POST /api/manage/tournaments/:slug/sports/:sport/teams` | Sport scope | `{ name, branch?, year?, players? }` | 201 `{ team }` | 400 field; 409 `DUPLICATE_NAME`, `TOURNAMENT_LOCKED` |
+| `PATCH /api/manage/teams/:id` | Sport scope | Team fields | `{ team }` | 409 `TEAM_IN_USE` (used by a Live, Final or Not_Scored match), `DUPLICATE_NAME`, `TOURNAMENT_LOCKED` |
+| `DELETE /api/manage/teams/:id` | Sport scope | — | `{ removed: true }` | 409 `TEAM_IN_USE` (any match uses it), `TOURNAMENT_LOCKED` |
+| `GET /api/manage/matches?tournament=&sport=&date=&phase=` | In scope | — | `{ matches[] (≤ 500), total }` by time, then ID; `phase` is `live`, `upcoming` or `past` | 400 bad filter |
+| `POST /api/manage/matches` | Sport scope | `{ tournament, sport, date, time, stage?, sideA?, sideB?, venue? }` | 201 `{ match }`; `kind` `BRACKET` with a stage, else `CUSTOM` | 400 field; 409 `STAGE_TAKEN`, `TOURNAMENT_LOCKED` |
+| `GET /api/manage/matches/:id` | Sport scope | — | `{ match }` with its Assignment and flags | 404 |
+| `PATCH /api/manage/matches/:id` | Sport scope | Any of `date, time, stage, sideA, sideB, venue` | `{ match }` | 409 `MATCH_CLOSED` (Live, Final or Not_Scored), `STAGE_TAKEN`, `TOURNAMENT_LOCKED` |
+| `DELETE /api/manage/matches/:id` | Sport scope | — | `{ removed: true }`; revokes the ACTIVE Assignment and drops the lease | 409 `MATCH_CLOSED` (Live, Final, Not_Scored or any score action), `TOURNAMENT_LOCKED` |
+
+Staff match row: `{ id, tournament: { slug, name, status }, sport, kind, stage, status, phase, label, scheduledAt, date, time, venue, sides: [{ id, name }], score, scorer: { name, email } | null, assignmentId, canEdit, canDelete, canAssign, canScore }`. The screens render no control that the flags or `isOwner` refuse.
+
+Field rules (`validate.js`; the screens repeat them for on-blur checks):
+
+| Form | Rules |
 | --- | --- |
-| `/sign-in` | Sign-in choice: "Continue as guest", "Sign in as Match Scorer", "Sign in as Tournament Manager". A signed-in user goes to the start screen |
-| `/sign-in/scorer/*`, `/sign-in/manager/*` | Clerk `SignIn` (`routing="path"`), then `/start` |
-| `/start` | `POST /api/invites/accept` once per session, then `GET /api/me`, then replace with the start screen of the role |
-| `/operator/matches`, `/operator/matches/:matchId/score` | My Matches and Score console, now inside `StaffShell` |
-| `/manage`, `/manage/tournaments/new`, `/manage/tournaments/:slug`, `.../setup`, `.../setup/:step`, `.../details`, `.../sports/:sport`, `.../sports/:sport/teams` | Manager home, Guided_Setup, Tournament overview, details, Sport setup, Teams |
-| `/manage/matches`, `/manage/matches/new`, `/manage/matches/:matchId` | Matches and Match editor |
-| `/manage/matches/:matchId/scorer`, `/manage/invite` | Assign scorer and Invite scorer (Slice 3, [below](#staff-roles-and-manager-console--slice-3-22-october-2026)) |
-| `/admin`, `/admin/tournaments`, `/admin/staff`, `/admin/staff/invite`, `/admin/staff/:accountId`, `/admin/invitations` | Super Admin screens (Slice 5, [below](#staff-roles-and-manager-console--slice-5-23-october-2026)) |
+| Tournament | Name trimmed 1–120; start date `YYYY-MM-DD`; end date ≥ start (defaults to start); venue ≤ 200; description ≤ 1000; `imageKey` one of `field`, `stadium`, `court`, `tennis`, `track`, or empty for Automatic |
+| Team | Name trimmed 1–120, unique per Tournament_Sport ignoring case and outer spaces; branch ≤ 120; year 2000–2099; ≤ 30 players; player name 1–120; jersey 0–99 and captain only for football, basketball and volleyball; at most 1 captain |
+| Match | India_Time `date` and `time` (`YYYY-MM-DD`, `HH:MM`); date not before today and within the tournament dates; sides of the same Tournament_Sport and different; both sides required except for FINAL; venue ≤ 200; stage unique per Tournament_Sport |
+| Email | Trimmed, lower-cased, ≤ 254, the invitation pattern |
+| Reason | Required (non-empty after trim) for disable, reassign and revoke; optional elsewhere; ≤ 500 |
 
-Role gate. `AuthArea` `SCREENS` lists each screen's title, allowed roles, current navigation item and page. `useMe` reads `GET /api/me` once per Staff_Area mount. While it loads, the screen shows a text status; a network error or 5xx shows "Try again"; a 401 shows the sign-in prompt; a role that the screen does not allow shows "You do not have access to this page". The role comes only from `/api/me`. Start screens: Match Scorer `/operator/matches`, Tournament Manager `/manage`, Super Admin `/admin` (`STAFF_NAV` and `startScreen` in [`labels.js`](../frontend/src/features/staff/labels.js)).
+### Assignments and the operator list
 
-Manager screens (change 4). Each screen is a presentational View (approved in Slice 0) plus a thin container in `frontend/src/features/manage/*Page.jsx`. The containers use `useStaffData` (read on entry and "Try again" only), `useMutation` (one request per press) and `useUnsavedGuard` (`useBlocker` plus `beforeunload`, with `ConfirmDialog`), all in `frontend/src/features/staff/`. A 401 offers "Sign in again" through Clerk `openSignIn()` and keeps the values. The Match editor offers stage SF1, SF2, FINAL or none; a match with no stage is a Regular_Match, and every screen shows it as "Match" (`stageLabel` in `labels.js`). There is no custom match control.
+Source: [`routes/assignments.js`](../backend/src/routes/assignments.js).
 
-Errors. `messageFor` in `labels.js` maps each Error_Body code to one plain sentence and, for some codes, to a form field; no code or request ID is shown. A `BAD_REQUEST` message "<field>: <fix>" goes below that field.
-
-Current limits (contract mappings in the containers):
-
-- Tournament create and edit: the API names the date fields `startDate` and `endDate` in 400 messages, and the form names them `startsOn` and `endsOn`. `renameFields` with `TOURNAMENT_TOKENS` in [`setup.js`](../frontend/src/features/manage/setup.js) maps them.
-- Teams: the API Player_Entry jersey field is `jersey`; `TeamForm` keeps it as `number`. `TeamsPage.jsx` and `setup.js` map it on read and write.
-- Matches phase filter: the page values are the staff phases `live`, `scheduled`, `final` and `not-scored`. The API filter accepts only `live`, `upcoming` and `past`, so Final and Not scored both read `past` and the page keeps only the rows of the chosen phase ([`MatchesPage.jsx`](../frontend/src/features/manage/MatchesPage.jsx)). The API returns at most 500 rows, so these two filters can show fewer rows than exist when more than 500 past matches match the other filters.
-- The Match editor of a Live, Final or Not scored match shows a read-only summary with no form and no Primary_Action ([memory.md](memory.md#staff-roles-and-manager-console--slice-2-22-october-2026)).
-
-## Staff roles and manager console — Slice 3, 22 October 2026
-
-Slice 3 adds scorer assignment by email, the Assign scorer and Invite scorer screens, and the Score_Console side of the START rule (change 6). No schema change. Decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-3-22-october-2026). Source: [`routes/assignments.js`](../backend/src/routes/assignments.js), `frontend/src/features/manage/{AssignScorerPage,InviteScorerPage}.jsx`, `frontend/src/features/operator/`.
-
-Email and self assign. `POST /api/matches/:id/assignments` accepts one target, checked in this order:
+`POST /api/matches/:id/assignments` (`requireRole('manager')`) locks the match, then the tournament `FOR SHARE`, then runs `requireScope`. It accepts one target, checked in this order:
 
 | Body | Result |
 | --- | --- |
 | `{ self: true, reason? }` | Assigns the caller; audit action `SELF_ASSIGNED` |
-| `{ email, reason? }` | The email is trimmed and lower-cased like invitations. The caller's own ACTIVE email is a self assign. An ACTIVE `MATCH_OPERATOR` is assigned. Otherwise 400: `INVITE_PENDING` (a pending, unexpired invitation), `NOT_A_SCORER` (any other account, also DISABLED) or `SCORER_NOT_FOUND` (no account). Each message starts with `email:` |
+| `{ email, reason? }` | Trimmed and lower-cased. The caller's own ACTIVE email is a self assign. An ACTIVE `MATCH_OPERATOR` is assigned. Otherwise 400 with a message that starts `email:`: `INVITE_PENDING` (a pending, unexpired invitation), `NOT_A_SCORER` (any other account, also DISABLED) or `SCORER_NOT_FOUND` (no account) |
 | `{ accountId, validFrom?, validUntil?, reason? }` | Legacy body, unchanged |
 
-The email resolves after the match lock and `requireScope`, so an out-of-scope caller learns nothing about accounts. Every refusal writes nothing. A Final or Not_Scored match returns 409 `MATCH_CLOSED`; a match that has a scorer needs `reason` (409 `REASON_REQUIRED`), then the existing reassign contract applies. The new assignment has no window and removes the match's lease.
+- The email resolves only after the scope check, so an out-of-scope caller learns nothing about accounts.
+- A Final or Not_Scored match returns 409 `MATCH_CLOSED`; a Completed or Archived tournament 409 `TOURNAMENT_LOCKED`. A match that has a scorer needs `reason` (409 `REASON_REQUIRED`); then the reassign contract applies (revoke the old row and insert the new one in one audited transaction; 409 `ASSIGNMENT_CONFLICT` on a race).
+- A new assignment has no window and removes the match's lease. Managers do not set Assignment windows: the frontend never sends `validFrom` or `validUntil`, and the API keeps accepting them for compatibility.
+- `POST /api/assignments/:id/revoke { reason }` runs `requireScope` after the match lock and before the write.
 
-Assignment windows in the UI (change 7). Managers do not set windows. The Frontend never sends `validFrom` or `validUntil`; the API still accepts them for compatibility.
+`GET /api/operator/matches` (any staff role) lists the caller's ACTIVE Assignments. Each row has `status`, `correctionRoute`, `format`, `isToday`, `validNow` and:
 
-Operator list. `GET /api/operator/matches` rows keep `format`, `isToday` and `validNow` and add:
+- `canStart`: `true` only for a `SCHEDULED` match that passes `startDecision` with database `now()`.
+- `startReason`: the `startDecision` code for a `SCHEDULED` match that cannot start, else `null`. A match with no `scheduledAt` gives `START_TOO_EARLY`.
+- `notScored`: `true` for a `SCHEDULED` match after its Match_Day_End.
+- `defaultFormat`: the Tournament_Sport Default_Format (`tournament_sports.config.format`), else the sport's Official_Preset.
 
-- `canStart`: `true` only for a `SCHEDULED` match that passes `startDecision` with database `now()`, the same rule as START in `POST /api/matches/:id/actions`.
-- `startReason`: the `startDecision` code (`TOURNAMENT_NOT_ONGOING`, `START_TOO_EARLY`, `MATCH_DAY_OVER`) for a `SCHEDULED` match that cannot start, else `null`. A match with no `scheduledAt` gives `START_TOO_EARLY`.
-- `notScored`: `true` for a `SCHEDULED` match whose Match_Phase is past (Not_Scored).
-- `defaultFormat`: the Tournament_Sport Default_Format (`tournament_sports.config.format`), else the Official_Preset of the sport.
+### START rule
 
-The Score_Console reads `canStart` once, when the page loads; it does not refresh it on a timer. "Start match" stays off until a reload after the start time. The server still decides every START; a refusal pauses the queue and shows the reason as text.
+`startDecision({ now, scheduledAt, tournamentStatus })` in [`scoring.js`](../backend/src/scoring.js) accepts START only when the tournament is Ongoing and database time is at or after the scheduled time and before Match_Day_End. Otherwise it refuses, checked in this order: 409 `TOURNAMENT_NOT_ONGOING`; 403 `START_TOO_EARLY` (also for a match with no scheduled time); 409 `MATCH_DAY_OVER`.
 
-Screens:
+- It runs only for START, after the account, assignment, window, permission and match-state checks of the [scoring chain](#scoring-authorization-chain) and before the lease check. Later commands of a Live match have no date check, also after Match_Day_End.
+- A match not started by Match_Day_End is Not_Scored and can never start.
+- At START, `matches.config_version` takes `tournament_sports.config_version`. When the tournament is not `ONGOING` or `COMPLETED`, the outbox event is marked `private` and `publishEvent` sends it to no Live_Room.
 
-- Assign scorer (`/manage/matches/:matchId/scorer`) reads `GET /api/manage/matches/:id` and sends the bodies above, or `POST /api/assignments/:id/revoke { reason }` through `ConfirmDialog` for "Remove scorer". `SCORER_NOT_FOUND` offers "Invite as Match Scorer", which opens `/manage/invite?email=<email>`. Matches shows a "Score" button when the caller holds the match's ACTIVE Assignment.
-- Invite scorer (`/manage/invite`) sends the existing `POST /api/invites { email, role: 'MATCH_OPERATOR' }` and shows `expiresAt` in India_Time.
-- Both forms offer "Try again" after a 500, 502 or no response and resend the same values; a 401, also inside the Remove scorer dialog, offers "Sign in again" and keeps the values (Requirements 20.3, 20.8).
-- The Score_Console frame follows the role from `GET /api/me`: a Match_Scorer gets My Matches and "Back to My Matches"; a Tournament_Manager or Super_Admin gets Matches and "Back to Matches".
-- `FormatForm` offers the Tournament default format first, then the Official_Preset, then "Changed for this match". A Regular_Match shows the stage "Match".
-- My Matches puts a Not_Scored match in Completed with the state "Not scored" and no scoring link.
+### Super Admin API
 
-Shared staff components. `ConfirmDialog` cancels on a `close` event only when the dialog is closed at that moment: a queued `close` from an earlier opening could arrive after a reopen and close the new dialog. `StaffShell` moves focus to the `h1` when a status or alert appears and focus has fallen to the page body, for example after a save reloads the form.
+Every endpoint below is `clerkAuth` → `loadAccount` → `requireRole('superAdmin')`. A Tournament_Manager or Match_Scorer gets 403 `ROLE_FORBIDDEN`; a Viewer gets 403 `NOT_STAFF`. Source: [`routes/admin.js`](../backend/src/routes/admin.js), [`routes/accounts.js`](../backend/src/routes/accounts.js), [`routes/invites.js`](../backend/src/routes/invites.js).
 
-## Staff roles and manager console — Slice 4, 22 October 2026
+| Endpoint | Body | Reply | Refusals |
+| --- | --- | --- | --- |
+| `GET /api/admin/staff?role=&status=&offset=` | — | `{ staff: [{ id, name, email, role, status, tournaments: [name] }], nextOffset }`: ACTIVE first, then email, then ID; 50 per page; `nextOffset` is `null` on the last page. `tournaments` lists the owned tournaments and those with a managed sport | 400 for an unknown `role` or `status` |
+| `GET /api/admin/staff/:id` | — | `{ member: { id, name, email, role, status, owned: [{ slug, name }], sportScope: [{ tournament: { slug, name }, sport }], activeAssignments } }` | 404 |
+| `POST /api/accounts/:id/disable` | `{ reason }` | `{ account: { id, status: 'DISABLED', revokedAssignmentIds } }` | 409 `REASON_REQUIRED`; then in order 404, 409 `ALREADY_DISABLED`, `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
+| `POST /api/accounts/:id/enable` | `{ reason? }` | `{ account: { id, status: 'ACTIVE' } }`; the role stays; no Assignment, lease or scope is restored | 404; 409 `ALREADY_ACTIVE`; 409 `ACCOUNT_EXISTS` when another ACTIVE account now holds the email |
+| `POST /api/accounts/:id/role` | `{ role, reason? }` | `{ account: { id, role, status }, revokedAssignmentIds }` | 400 unknown role; then in order 404, 409 `ACCOUNT_DISABLED`, 400 same role, 409 `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
+| `POST /api/admin/tournaments/:slug/owner` | `{ email, reason? }` | `{ tournament: { slug, owner: { accountId, name, email } } }` | 404; 400 `email:` when the email is not an ACTIVE Tournament_Manager or is the current owner |
+| `GET /api/admin/invitations?offset=` | — | `{ invitations: [{ id, email, role, invitedBy, expiresAt }], nextOffset }`: PENDING and unexpired by database `now()`, soonest expiry first, 50 per page | — |
+| `POST /api/invites/:id/cancel` | `{ reason? }` | `{ invitation: { id, status: 'REVOKED' } }` | 404; 409 `INVITE_CLOSED`; 502 `CLERK_UNAVAILABLE` |
 
-Slice 4 connects the public tournament and sport pages to the public read API (change 9) and shows Regular_Matches with their public tournament (change 4). No schema change and no new endpoint. Product behavior is in [prd.md](prd.md#public-tournament-pages-change-9-implemented-22-october-2026). Source: `frontend/src/features/tournaments/{TournamentsPage,TournamentPage,TournamentSportPage}.jsx`, [`publicTournaments.js`](../frontend/src/features/tournaments/publicTournaments.js), [`mergeCards.js`](../frontend/src/features/tournaments/mergeCards.js), `features/sports/SportPage.jsx`, `features/home/HomePage.jsx`.
+- Disable and role change revoke the account's ACTIVE Assignments and delete its `scorer_leases` and `tournament_sport_managers` rows in the same transaction.
+- An ownership transfer deletes the new owner's Sport_Manager rows in that tournament. The previous owner keeps no scope.
+- Invitation cancel reads the row first: missing is 404, closed or expired is 409 `INVITE_CLOSED`, with no Clerk call. It then calls Clerk `revokeInvitation` outside any transaction, so no row lock is held across the network call. A Clerk 404 counts as revoked. Any other Clerk failure is 502 `CLERK_UNAVAILABLE` and the row stays PENDING. Last, a conditional update closes the row only while it is still PENDING and unexpired; a concurrent accept or cancel that won gives 409 `INVITE_CLOSED`.
+
+Other changed endpoints:
+
+- `POST /api/invites/accept` stores `email` (the invitation email) and `name` (Clerk first and last name) on the new account. It also fills an empty `email` and `name` of the caller's existing account (for example the bootstrapped Super Admin) from the `users.getUser` call it already makes, so it adds no Clerk call.
+- `DELETE /api/me` returns 409 `OWNER_TRANSFER_REQUIRED` for a tournament owner, before Clerk is called. It treats `ALREADY_DISABLED` from a concurrent delete or disable as done and continues to the Clerk delete, like a retry.
+
+### Lock order
+
+Keep these orders in new code. A different order can deadlock or let a guard race.
+
+- Match commands (edit, delete, assign, revoke, START): the match row `FOR UPDATE`, then the tournament `FOR SHARE`. START reads the tournament status under that lock, so a concurrent change to Completed cannot pass a match that is becoming Live. Match create has no match row yet; it locks the tournament `FOR SHARE`.
+- Tournament status change and detail edit: the tournament `FOR UPDATE` only; they read matches without locks.
+- Draft tournament delete: the tournament's matches `FOR UPDATE` in ID order, then the tournament `FOR UPDATE`.
+- Sport, Default_Format, Sport_Manager and team create: the tournament `FOR UPDATE`, then the `tournament_sports` row `FOR UPDATE`. Team edit and delete lock the team row.
+- Tournament, then account: the Sport_Manager add and the ownership transfer lock the tournament `FOR UPDATE`, then the account `FOR SHARE`.
+- Tournament create locks only the caller's own account `FOR SHARE` and re-checks it. A concurrent disable or role change either commits first, so the share lock sees a non-eligible row and refuses, or waits and then sees the new tournament and refuses with 409 `OWNER_TRANSFER_REQUIRED`.
+- `lockAccount` (in `accounts.js`, shared by disable, enable and role change) locks the target and every ACTIVE Super_Admin `FOR UPDATE` in ID order, so two concurrent requests cannot both remove the last ACTIVE Super_Admin (`backend/test/admin.spec.js` runs this race). Account rows are locked before any Assignment, lease or Sport_Manager row; these paths lock no match or tournament row.
+
+### Audit rows
+
+`audit(tx, { actorId, action, entity, entityId, requestId, before, after, reason })` in `backend/src/db.js` writes the Audit_Row inside the transaction; a failed insert aborts it and the client gets 500. Actions: `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED`, `TOURNAMENT_STATUS_CHANGED`, `TOURNAMENT_DELETED`, `OWNER_TRANSFERRED`, `SPORT_ADDED`, `SPORT_REMOVED`, `SPORT_FORMAT_CHANGED`, `SPORT_MANAGER_ADDED`, `SPORT_MANAGER_REMOVED`, `TEAM_CREATED`, `TEAM_UPDATED`, `TEAM_DELETED`, `MATCH_CREATED`, `MATCH_UPDATED`, `MATCH_DELETED`, `ASSIGNMENT_CREATED`, `SELF_ASSIGNED`, `ASSIGNMENT_REVOKED`, `ACCOUNT_DISABLED`, `ACCOUNT_ENABLED`, `ROLE_CHANGED`, `INVITE_CANCELLED`, plus the invitation, acceptance and scoring actions that existed before.
+
+### Staff screens
+
+- Router: `frontend/src/main.jsx` uses `createBrowserRouter([{ path: '*', element: <App /> }])` with `RouterProvider`, so `useBlocker` works for the unsaved-changes guard. Routes stay in [`App.jsx`](../frontend/src/app/App.jsx).
+- Every account and staff route renders `AuthArea` with a `screen` key through `staff('<screen>')`. `AuthArea` is a lazy chunk, so public pages load no Clerk code. `SiteHeader` has no "My Matches" link.
+
+| Path | Screen |
+| --- | --- |
+| `/sign-in` | Sign-in choice: "Continue as guest", "Sign in as Match Scorer", "Sign in as Tournament Manager". A signed-in user goes to the start screen |
+| `/sign-in/scorer/*`, `/sign-in/manager/*`, `/sign-up/*` | Clerk `SignIn` or `SignUp` (`routing="path"`), then `/start` |
+| `/start` | `POST /api/invites/accept` once per session (404 `INVITE_NOT_FOUND` and 409 `ACCOUNT_EXISTS` are ignored), then `GET /api/me`, then replace with the start screen of the role |
+| `/operator/matches`, `/operator/matches/:matchId/score` | My Matches and Score console |
+| `/manage`, `/manage/tournaments/new`, `/manage/tournaments/:slug`, `.../setup`, `.../setup/:step`, `.../details`, `.../sports/:sport`, `.../sports/:sport/teams` | Manager home, Guided_Setup (5 steps), Tournament overview, Tournament details, Sport setup, Teams |
+| `/manage/matches`, `/manage/matches/new`, `/manage/matches/:matchId`, `/manage/matches/:matchId/scorer`, `/manage/invite` | Matches, Match editor, Assign scorer, Invite scorer |
+| `/admin`, `/admin/tournaments`, `/admin/staff`, `/admin/staff/invite`, `/admin/staff/:accountId`, `/admin/invitations` | Admin home, All tournaments, Staff list, Invite staff, Staff member detail, Pending invitations |
+
+- Role gate: `AuthArea` `SCREENS` lists each screen's title, allowed roles, current navigation item and page. `useMe` reads `GET /api/me` once per Staff_Area mount; the role comes only from there. While it loads, the screen shows a text status; a network error or 5xx shows "Try again"; a 401 shows the sign-in prompt; a role that the screen does not allow, `ROLE_FORBIDDEN` or `SCOPE_FORBIDDEN` shows "You do not have access to this page".
+- Navigation (`STAFF_NAV` and `startScreen` in [`labels.js`](../frontend/src/features/staff/labels.js)); the first item is the start screen:
+  - Match Scorer: My Matches · Account.
+  - Tournament Manager: Home (`/manage`) · Matches · Invite scorer · Account.
+  - Super Admin: Home (`/admin`) · Tournaments · Matches · Staff · Account.
+- Containers: each screen is a presentational View plus a thin container (`frontend/src/features/manage/*Page.jsx`, `frontend/src/features/admin/*Page.jsx`). Shared hooks in `frontend/src/features/staff/`: `useStaffData` (one read on entry and one per "Try again"; no timer or poll), `useMutation` (one request per press), `useUnsavedGuard` (`useBlocker` plus `beforeunload`, with `ConfirmDialog`). `usePagedList` (admin) appends the next page on "Load more"; a failed page keeps the rows and offers "Try again".
+- Errors: `messageFor` in `labels.js` maps each Error_Body code to one plain sentence and, for some codes, to a form field. A `BAD_REQUEST` message `<field>: <fix>` goes below that field. No code or request ID is shown. A 401 offers "Sign in again" through Clerk `openSignIn()` and keeps the values. Forms offer "Try again" after a 500, 502 or no response and resend the same values. `DialogRecovery` adds these controls inside a `ConfirmDialog`, and "Reload the page" after a 403 or 409 that means the item changed.
+- Labels: a match with no stage shows "Match" (`stageLabel`); there is no custom match control. The Match editor offers stage SF1, SF2, FINAL or none. Times show in India_Time with the Event_Time_Zone label.
+- `ConfirmDialog` (native modal): Cancel has `autofocus` before `showModal()`, so opening never focuses and blurs the Reason field. It cancels on a `close` event only when the dialog is closed at that moment, because a queued `close` of an earlier opening can arrive after a reopen.
+- `StaffShell` focuses the `h1` on route entry and moves focus to the `h1` when a status or alert appears and focus has fallen to the page body.
+- The Staff list filters live in the query string (`?role=&status=`); an unknown value counts as no filter. `StaffListPage` merges each change into the last requested filters until the new query renders, so two quick changes keep both.
+- Score console: the frame follows the role from `GET /api/me` (Match Scorer: My Matches and "Back to My Matches"; manager or Super Admin: Matches and "Back to Matches"). `FormatForm` offers the Tournament default format first, then the Official_Preset, then "Changed for this match". "Start match" follows `canStart`, read once at page load; a refusal from the server pauses the queue and shows the reason as text. My Matches puts a Not_Scored match in Completed as "Not scored", with no scoring link.
+
+### Public tournament pages
+
+Source: `frontend/src/features/tournaments/{TournamentsPage,TournamentPage,TournamentSportPage}.jsx`, [`publicTournaments.js`](../frontend/src/features/tournaments/publicTournaments.js), [`mergeCards.js`](../frontend/src/features/tournaments/mergeCards.js), [`venues.js`](../frontend/src/features/tournaments/venues.js), `features/sports/SportPage.jsx`, `features/home/HomePage.jsx`.
 
 | Route | Read | Sections |
 | --- | --- | --- |
 | `/tournaments` | `GET /api/tournaments` | Live, Upcoming and Past Tournaments by each row's `phase` |
 | `/tournaments/:slug` | `GET /api/tournaments/:key` | Facts (dates, venue, description) and sport tiles in `sports.js` order |
 | `/tournaments/:slug/:sport` | `GET /api/tournaments/:key` (the sport's `matches`) | Live, Upcoming and Past Matches by `phase`, date chips, match dialog |
-| `/sports/:sport` | `GET /api/sports/:sport/matches` | Live from the home-room cards; Upcoming and Past from the read by `phase`, date chips from the read's India_Time dates |
+| `/sports/:sport` | `GET /api/sports/:sport/matches` | Live from the home-room cards; Upcoming and Past from the read by `phase`; date chips from the read's India_Time dates |
 | `/` (tournament row) | `GET /api/tournaments` | Only rows with `phase: 'live'`; empty message "No tournaments are live right now." |
 
-Read rules. `usePublicRead(path)` wraps `useStaffData` with no token: one GET on entry and one per "Try again", no poll or timer (Requirement 22.1). A 404, or a 400 for a malformed key, is "Tournament not found". An unknown sport key sends no read. A failed read marks only the sections that use it. Without `VITE_API_BASE` the pages read nothing and show the Display_Fixtures (`fixtureTournaments`, `fixtureMatches`). The header "Tournaments" link opens `/tournaments` and has `aria-current` there.
+- `usePublicRead(path)` wraps `useStaffData` with no token: one GET on entry and one per "Try again", no poll or timer. A 404, or a 400 for a malformed key, is "Tournament not found". An unknown sport key sends no read. A failed read marks only the sections that use it. Without `VITE_API_BASE` the pages read nothing and show the Display_Fixtures (`fixtureTournaments`, `fixtureMatches`).
+- Live merge: each page with matches merges `useHomeCards()` cards into the read with `mergeCards(matches, cards)`. Every ID appears once; the card's `status` and `score` win; the read's time, venue, stage, phase and sides stay; a card that the read lacks is appended. A LIVE or APPROVED card gives its phase from its status; a SCHEDULED match keeps the API `phase`, because only Worker_Time knows when its day ended.
+- A tournament sport page applies a card when its `tournamentId` names the tournament. The Sport page filters cards by sport only.
+- `toEventProp` in `venues.js` maps a public tournament to the existing `TournamentCard` `event` prop, with the Venue_Library image, alt text and crop.
 
-Live merge. Each page with matches merges `useHomeCards()` cards into the read with `mergeCards(matches, cards)`: every ID once, the card's `status` and `score` win, the read's time, venue, stage, phase and sides stay, and a card the read lacks is appended (Requirement 17.13; Property 15 in `frontend/tests/staff-helpers.property.spec.js`). A LIVE or APPROVED card gives its phase from its status; a SCHEDULED match keeps the API `phase`, because only Worker_Time knows when its day ended (Not scored).
+### Delivery and limits of the staff area
 
-Card `tournamentId`. The Home_Room card gains `tournamentId` (string). `loadScoringContext` in `scoring.js` reads `t.id`, `routes/actions.js` puts it on the card, and the `card` allow-list in `http.js` passes it ([handoff.md](handoff.md#home_room-data)). A tournament sport page applies a card when its `tournamentId` names the tournament, so a match created after the cached read still shows. The Sport page filters cards by sport only.
-
-Current limits:
-
+- Manager and Super Admin screens load data only on screen entry and on "Try again". Manager and admin mutations send no Room_Message; schedule and setup changes reach viewers at their next page entry. Score commands keep the outbox path.
+- Clerk is called only for sign-in and sign-up, invitation create, accept and cancel, and account deletion. Public requests make no Clerk call.
+- Contract mappings in the containers: the API names the tournament date fields `startDate` and `endDate` in 400 messages and the form names them `startsOn` and `endsOn` (`renameFields` with `TOURNAMENT_TOKENS` in [`setup.js`](../frontend/src/features/manage/setup.js)). The API Player_Entry field `jersey` is `number` in `TeamForm` (mapped in `TeamsPage.jsx` and `setup.js`).
+- Matches phase filter: the page values are the staff phases `live`, `scheduled`, `final` and `not-scored`; the API accepts `live`, `upcoming` and `past`. Final and Not scored both read `past`, and the page keeps only the rows of the chosen phase ([`MatchesPage.jsx`](../frontend/src/features/manage/MatchesPage.jsx)). The API returns at most 500 rows, so these two filters can show fewer rows than exist when more than 500 past matches match the other filters.
+- The Match editor of a Live, Final or Not scored match shows a read-only summary with no form and no Primary_Action (Open item in [memory.md](memory.md#open-items-for-arnav)).
+- The Score console does not refresh `canStart` on a timer; a scorer who opens it early reloads after the start time.
+- The public header shows "Sign in" also to a signed-in user, because public pages load no Clerk code ([tasks.md](tasks.md#follow-up-tasks) F15).
 - The public pages do not move focus to the `h1` on route entry; the scroll effect in `App.jsx` handles the position only.
-- A card in a room snapshot stored before `tournamentId` existed has no `tournamentId`. A tournament sport page applies it only when the read contains its match ID; the next published action replaces the card.
-
-## Staff roles and manager console — Slice 5, 23 October 2026
-
-Slice 5 adds the Super Admin API and screens (change 8). No schema change. Product behavior is in [prd.md](prd.md#staff-management-change-8-implemented-23-october-2026); decisions are in [memory.md](memory.md#staff-roles-and-manager-console--slice-5-23-october-2026). Source: [`routes/admin.js`](../backend/src/routes/admin.js), [`routes/accounts.js`](../backend/src/routes/accounts.js), [`routes/invites.js`](../backend/src/routes/invites.js), [`routes/manage.js`](../backend/src/routes/manage.js), `frontend/src/features/admin/*Page.jsx`.
-
-Every endpoint below is `clerkAuth` → `loadAccount` → `requireRole('superAdmin')` on the uncached pool. A Tournament_Manager or Match_Scorer gets 403 `ROLE_FORBIDDEN`; a Viewer gets 403 `NOT_STAFF` (`backend/test/authz-matrix.spec.js`). Each accepted change writes one Audit_Row; a refusal writes none. A malformed ID is 400 `BAD_REQUEST`.
-
-| Endpoint | Body | Reply | Refusals |
-| --- | --- | --- | --- |
-| `GET /api/admin/staff?role=&status=&offset=` | — | `{ staff: [{ id, name, email, role, status, tournaments: [name] }], nextOffset }`: ACTIVE first, then email, then ID; 50 per page; `nextOffset` is `null` on the last page. `tournaments` lists the owned tournaments and those with a managed sport | 400 for an unknown `role` or `status` |
-| `GET /api/admin/staff/:id` | — | `{ member: { id, name, email, role, status, owned: [{ slug, name }], sportScope: [{ tournament: { slug, name }, sport }], activeAssignments } }` | 404 `NOT_FOUND` |
-| `POST /api/accounts/:id/disable` | `{ reason }` | `{ account: { id, status: 'DISABLED', revokedAssignmentIds } }` | 409 `REASON_REQUIRED`; then in order 404, 409 `ALREADY_DISABLED`, `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
-| `POST /api/accounts/:id/enable` | `{ reason? }` | `{ account: { id, status: 'ACTIVE' } }`; the role stays, nothing else is restored | 404; 409 `ALREADY_ACTIVE`; 409 `ACCOUNT_EXISTS` when another ACTIVE account now holds the email (unique index) |
-| `POST /api/accounts/:id/role` | `{ role, reason? }` | `{ account: { id, role, status }, revokedAssignmentIds }` | 400 unknown role; then in order 404, 409 `ACCOUNT_DISABLED`, 400 same role, 409 `LAST_SUPER_ADMIN`, `OWNER_TRANSFER_REQUIRED` |
-| `POST /api/admin/tournaments/:slug/owner` | `{ email, reason? }` | `{ tournament: { slug, owner: { accountId, name, email } } }` | 404; 400 `email:` when the email is not an ACTIVE Tournament_Manager or is the current owner |
-| `GET /api/admin/invitations?offset=` | — | `{ invitations: [{ id, email, role, invitedBy, expiresAt }], nextOffset }`: PENDING and unexpired by database `now()`, soonest expiry first, 50 per page | — |
-| `POST /api/invites/:id/cancel` | `{ reason? }` | `{ invitation: { id, status: 'REVOKED' } }` | 404; 409 `INVITE_CLOSED`; 502 `CLERK_UNAVAILABLE` |
-
-Effects. Disable and role change revoke the account's ACTIVE Assignments, delete its `scorer_leases` rows and delete its `tournament_sport_managers` rows in the same transaction. An ownership transfer deletes the new owner's Sport_Manager rows in that tournament; the previous owner keeps no scope. `DELETE /api/me` treats `ALREADY_DISABLED` from a concurrent delete or disable as done and continues to the Clerk delete, like a retry.
-
-Lock rules. These keep the guards race-free and the lock order acyclic:
-
-- `lockAccount` (in `accounts.js`, shared by disable, enable and role change) locks the target and every ACTIVE Super_Admin `FOR UPDATE` in ID order. Two concurrent requests therefore cannot both remove the last ACTIVE Super_Admin (`backend/test/admin.spec.js` runs this race in a throwaway schema). Account rows are locked before any Assignment, lease or Sport_Manager row; these paths lock no match or tournament row.
-- Tournament, then account. The ownership transfer locks the tournament `FOR UPDATE`, then the new owner's account `FOR SHARE`. The Sport_Manager add in `manage.js` uses the same order. Tournament create locks the caller's own account `FOR SHARE` first and re-checks it, and locks no other row before it. A concurrent disable or role change of that account either commits first, so the share lock sees a non-eligible row and refuses, or waits and then sees the new tournament and refuses with 409 `OWNER_TRANSFER_REQUIRED`.
-
-Invitation cancel and Clerk. The route reads the row first: a missing row is 404 and a closed or expired row is 409 `INVITE_CLOSED` with no Clerk call. It then calls Clerk `revokeInvitation` outside any transaction, so no row lock is held across the network call. A Clerk 404 means the Clerk invitation no longer exists, so the row is closed as revoked. Any other Clerk failure is 502 `CLERK_UNAVAILABLE` and the row stays PENDING. Last, a conditional update closes the row only while it is still PENDING and unexpired; a concurrent accept or cancel that won gives 409 `INVITE_CLOSED`. Open gap: a non-404 Clerk reply that means "already revoked" also gives 502, and the row stays PENDING until it expires ([memory.md](memory.md#staff-roles-and-manager-console--slice-5-23-october-2026)).
-
-Manager reads for the Super Admin screens:
-
-- `GET /api/manage/tournaments`: a row the caller owns carries `owner: { accountId, name, email }` and `sportManagers: [{ sport, accountId, name, email }]` (ordered by sport, then account). A Super_Admin owns every row for this purpose. A row the caller sees only as a Sport_Manager carries neither field. Both come from correlated subqueries in the same statement.
-- `GET /api/manage/home`: a Super_Admin reply adds `pendingInvitations`, the count of PENDING invitations unexpired by database `now()`. Other roles get no such field.
-
-Screens. Each screen is a View plus a thin container in `frontend/src/features/admin/`. `usePagedList` reads a page on entry and appends the next one on "Load more"; a failed page keeps the rows and offers "Try again". `DialogRecovery` adds the recovery control inside a `ConfirmDialog` (its `actions` prop): "Try again" resends the values in the dialog after no response, a 500 or a 502; "Sign in again" after a 401; "Reload the page" after a 403 or 409 that means the account or invitation changed. The Staff list filters live in the query string (`?role=&status=`); an unknown value counts as no filter. `ConfirmDialog` marks Cancel `autofocus` before `showModal()`, so opening a dialog never focuses and blurs the Reason field.
+- A card in a room snapshot stored before `tournamentId` existed has none. A tournament sport page applies it only when the read contains its match ID; the next published action replaces the card.
+- A Clerk reply other than 404 that means "already revoked" also gives 502 on invitation cancel, and the row stays PENDING until it expires (Open item in [memory.md](memory.md#open-items-for-arnav)).
 
 ## Live updates and offline scoring
 
@@ -485,7 +590,7 @@ Screens. Each screen is a View plus a thin container in `frontend/src/features/a
 - Publish from the database outbox after transaction commit. Each snapshot carries the match sequence; a room ignores an older sequence. On reconnect, the client replaces its state with the room's first message.
 - While a match is `LIVE`, the assigned operator can undo or correct as many times as needed, with no extra permission and no reason prompt. Each undo is stored as a linked reversal action with actor and server time; accepted actions are never erased. Live undos show no public correction marker. After operator final confirmation, no edits or reopening are allowed.
 - The operator downloads the current match snapshot, stores actions locally when offline, sends them in order after reconnect, and retries with the same action ID to prevent duplicate scoring.
-- The server validates each synced action against the operator's assignment and the score sequence, using **server receipt time** (the device clock is untrusted). If actions arrive after `valid_until` or after the assignment was revoked, sync pauses and a manager either extends the window or resolves the conflict.
+- The server validates each synced action against the operator's assignment and the score sequence, using **server receipt time** (the device clock is untrusted). If actions arrive after the assignment was revoked, or after `valid_until` of a legacy assignment with a window, sync pauses until a manager in scope assigns the match again.
 - Mark offline actions as pending until the server confirms them. Pause sync and request manager resolution if match state or score sequence conflicts.
 - One primary scoring device per match, enforced by `scorer_leases`.
 - Split a room across several Durable Objects only if a measurement shows one room is not enough.
@@ -493,15 +598,15 @@ Screens. Each screen is a View plus a thin container in `frontend/src/features/a
 ## Security basics
 
 - Spectators view public tournament and match data without signing in; they cannot change data.
-- Anyone can sign in through Clerk, but only an invitation recorded in our database grants a staff role. Every protected request checks the token, loads the account from the database, and checks its role; scoring commands also run the full assignment chain.
+- Anyone can sign in through Clerk, but only an invitation recorded in our database grants a staff role. Every protected request checks the token, loads the account from the database, and checks its role; manager requests also check the Manager_Scope, and scoring commands also run the full assignment chain.
 - An operator attempting to score or open the private view of an unassigned match receives 403 Forbidden. A locked match returns 409.
 - Managers can invite Match Operators only; only Super Admins create managers and Super Admins.
 - Viewer sockets are receive-only and ignore incoming messages. Scoring commands use HTTPS and run the authorization chain per command; room membership grants nothing.
 - Keep database credentials and the Clerk secret key on the Worker as secrets.
-- Validate input on the backend, use HTTPS/WSS in deployed environments, and audit account changes, assignments, revocations, reassignments, score reversals, match start and final confirmation.
+- Validate input on the backend, use HTTPS/WSS in deployed environments, and audit every privileged mutation ([Audit rows](#audit-rows)).
 
 ## Operator scoring integration contract — 20 October 2026
 
 All commands keep the existing action ID, client sequence, assignment and lease contract. Start stores a validated format and source/version with the match. Scoring and manual early set endings derive a new snapshot. Final confirmation writes the final status and snapshot in the same transaction as the action, audit and outbox. Replaying a lost final response is idempotent; new writes to a final match are refused. The backend and frontend use the same pure scoring calculations, but the backend validates and decides acceptance. Pending offline projections are never presented as server-accepted results.
 
-Private scoring reads return only the assigned match and its accepted scoring actions through the uncached connection. Public snapshots/cards allow-list set/period points, winners, current state and display events; they exclude staff IDs, device IDs, tokens and raw command history. The home feed separates live matches from completed results. Public visibility still follows the published tournament/non-custom match boundary.
+Private scoring reads return only the assigned match and its accepted scoring actions through the uncached connection. Public snapshots/cards allow-list set/period points, winners, current state and display events; they exclude staff IDs, device IDs, tokens and raw command history. The home feed separates live matches from completed results. Public visibility follows the tournament status: every match of an Ongoing or Completed tournament is public ([Public read API](#public-read-api)).

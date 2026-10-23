@@ -1,6 +1,6 @@
 # Thaparlympics Design Language
 
-Updated 9 October 2026. This guide records the approved, implemented homepage and provides the shared visual language for future pages. Values below come from the current React components, CSS and local artwork. Product scope and future workflows belong in [prd.md](prd.md), implementation contracts in [handoff.md](handoff.md), and sport rules in [rules.md](rules.md).
+Updated 23 October 2026. This guide records the approved, implemented homepage, the shared visual language for future pages and the final Staff_Style of the staff screens (section 12). Values below come from the current React components, CSS and local artwork. Product scope and future workflows belong in [prd.md](prd.md), implementation contracts in [handoff.md](handoff.md), and sport rules in [rules.md](rules.md).
 
 ## 1. Visual character
 
@@ -117,7 +117,7 @@ background:
 
 ### Tournament photography
 
-Tournament cards use local, high-quality Unsplash photos of sports venues, with no athletes: `tournament-field.webp`, `tournament-stadium.webp`, `tournament-court.webp`, `tournament-tennis.webp`, and `tournament-track.webp`. These are photos, not sport gradient backgrounds. Show a `2 / 1` image above white details using `width: 100%`, `height: auto`, `object-fit: cover`; preserve each image's crop from the Venue_Library in `venues.js` (`position`). No image overlay is applied. Keep source/license records when adding or replacing photography.
+Tournament cards use the Venue_Library: five local, high-quality Unsplash photos of sports venues, with no athletes: `tournament-field.webp`, `tournament-stadium.webp`, `tournament-court.webp`, `tournament-tennis.webp`, and `tournament-track.webp`. A manager picks one in Tournament details, or "Automatic" (a fixed photo per tournament ID). These are photos, not sport gradient backgrounds. Show a `2 / 1` image above white details using `width: 100%`, `height: auto`, `object-fit: cover`; preserve each image's crop from the Venue_Library in `venues.js` (`position`). No image overlay is applied. Keep source/license records when adding or replacing photography.
 
 ## 5. Shapes, borders and elevation
 
@@ -244,7 +244,7 @@ The field is decorative, not a repeated background for every section. Reduced mo
 - Keep section hierarchy clear: one page `h1`, section `h2`, card `h3`. Decorative icons/canvas stay hidden from assistive technology; meaningful images have useful alt text.
 - Respect reduced motion. Do not require hover to reveal essential information or controls.
 - Keep the approved card colors, rounded shapes, white detail areas and horizontal usage when replacing temporary content. Match names/scores/clocks/columns and tournament names/IDs/dates remain editable display fixtures.
-- For a future page, begin with shared colors, font hierarchy, container gutters, card radii, icons and focus states. Reuse the existing header/rail/card components where their contract fits; add only the feature's necessary layout. An unbuilt form, dashboard or new status is not already designed by this guide.
+- For a future page, begin with shared colors, font hierarchy, container gutters, card radii, icons and focus states. Reuse the existing header/rail/card components where their contract fits; add only the feature's necessary layout. A new staff form or list uses the Staff_Style in section 12. Another unbuilt page type or a new status is not already designed by this guide.
 - When an approved design changes, update this guide and the actual CSS/component together; record the decision in `memory.md`. Keep asset credits current.
 
 ## 11. Source map for agents
@@ -260,13 +260,14 @@ The field is decorative, not a repeated background for every section. Reduced mo
 | Venue crop, title/date layout and tournament interactions | [TournamentCard.css](../frontend/src/features/tournaments/TournamentCard.css), [TournamentCard.jsx](../frontend/src/features/tournaments/TournamentCard.jsx) |
 | Sport keys/colors and outline icons | [sports.js](../frontend/src/data/sports.js), [SportIcon.jsx](../frontend/src/components/SportIcon.jsx) |
 | Artwork and license records | `frontend/public/assets/`, [asset-sources.md](asset-sources.md) |
-| Staff_Style and shared staff components (proposed) | [staff.css](../frontend/src/features/staff/staff.css), `frontend/src/features/staff/` |
+| Staff_Style and shared staff components | [staff.css](../frontend/src/features/staff/staff.css), `frontend/src/features/staff/` |
+| Manager and Super Admin lists, facts and forms | [manage.css](../frontend/src/features/manage/manage.css), [admin.css](../frontend/src/features/admin/admin.css) |
 
-## 12. Staff_Style (proposed)
+## 12. Staff_Style
 
-Status: **proposed**. It becomes approved with the Stage 1 Layout_Approval in [memory.md](memory.md). Until then, change these values only with the layout review.
+Status: **final**. Arnav approved it with the layout on 21 October 2026, commit `27db57d` ([memory.md](memory.md#stage-1-layout-approval--21-october-2026)). The values below are the shipped values in `staff.css`, `manage.css` and `admin.css`. Change them only with a new approval, and change this section and the CSS together.
 
-Staff screens (Manager console, Admin console and Match Scorer pages) are work screens for coaches, often on a phone. They keep `SiteHeader`, the colors of section 2 and the section container of section 6. They use quiet white panels on the page tint, ink text, one blue Primary_Action and color only for status and live data. These values apply only inside `.staff`; the public pages keep sections 1 to 11.
+Staff screens (Manager console, Admin console and Match Scorer pages) are work screens for coaches, often on a phone. They keep `SiteHeader`, the colors of section 2 and the section container of section 6. They use quiet white panels on the page tint, ink text, one blue Primary_Action and color only for status and live data. These values apply only inside `.staff`; the public pages keep sections 1 to 11. Reused public components inside staff screens (My Matches cards, Score console sections) keep their own section 8 styles.
 
 | Token | Value |
 | --- | --- |
@@ -274,21 +275,29 @@ Staff screens (Manager console, Admin console and Match Scorer pages) are work s
 | Body, field values, labels, button labels | 17px, line height 1.5; labels weight 700 |
 | Minimum visible text | 14px (help text, table metadata), `#50688c` |
 | `h1` | 32px / 800 (28px at <=767px), letter spacing -.03em |
-| `h2` | 24px / 800 |
-| Form control | White, 1px `#50688c` border, 14px radius, minimum height 52px, 12px x 16px padding |
-| Primary_Action | Filled `#0755ff`, white 17px bold label, 14px radius, minimum height 52px, 24px side padding; full content width at <=767px |
-| Secondary button | White, 2px `#0755ff` border, `#0755ff` label, same size |
-| Text button and inline link | `#0755ff`, underlined, target at least 44x44px |
+| `h2` | 24px / 800, letter spacing -.03em |
+| `h3` | 20px / 800, letter spacing -.02em; list group headings in Admin home 17px / 700 |
+| Container | Section 6 widths: `min(1280px, 100% - 64px)` with 34px inline padding; `min(760px, 100% - 40px)` at <=1023px; `100% - 32px` at <=767px. Main area 32px top / 72px bottom (24px / 48px at <=767px) |
+| Staff navigation | One row of 44px text links, weight 700, 24px apart, below `SiteHeader` with a 1px `#e7edf7` bottom border; scrolls sideways inside its own row on phones. Current item and hover in `#0755ff` with a 2px `#b7ceff` underline |
+| Form control | White, 1px `#50688c` border, 14px radius, minimum height 52px, 12px x 16px padding; checkboxes and radios 24px with `#0755ff` accent in 44px rows |
+| Primary_Action | Filled `#0755ff` (hover `#064ae0`), white 17px bold label, 14px radius, minimum height 52px, 24px side padding; full content width at <=767px |
+| Secondary button | White (hover `#eaf2ff`), 2px `#0755ff` border, `#0755ff` label, same size |
+| Text button and inline link | `#0755ff`, underlined with a 3px offset, target at least 44x44px |
 | Destructive button | Filled `#d5203e`, white label; only the confirm button of the confirmation dialog |
-| Error text | `#d5203e`, 17px bold, prefixed "Error:" for screen readers; invalid field border 2px `#d5203e` |
+| Busy or disabled control | Opacity .66, progress cursor |
+| Error text | `#d5203e`, 17px bold, prefixed "Error:" for screen readers; invalid field border 2px `#d5203e`; error summary: white panel with a 2px `#d5203e` border, at most 640px wide |
 | Panel | White, 16px radius, 1px `#e7edf7` border, no shadow, 24px padding (16px at <=767px) |
+| Lists | Below 768px: stacked white cards (16px radius, 1px `#e7edf7` border, 16px padding) with labelled lines in `#50688c`. From 768px: a white table with a 16px radius, 1px `#e7edf7` row rules, 14px bold `#50688c` column headers, 12px x 16px cells, no zebra stripes |
+| Facts | Label in 14px bold `#50688c` above or beside its value |
+| Owner marker | 14px bold ink text on a `#eaf2ff` pill beside the tournament name |
+| Confirmation dialog | Native modal, at most 560px wide, 24px padding (16px at <=767px), 16px radius, 1px `#e7edf7` border, shadow `0 12px 30px rgb(35 65 110 / 10%)`, backdrop `rgb(7 18 39 / 56%)`; buttons full width at <=767px |
 | Spacing | 8 / 16 / 24 / 32 / 48px; 16px between fields, 24px before the Primary_Action, 48px between sections |
 | Form column | Maximum width 640px |
 | Reading width | Paragraph and help text maximum `80ch` at >=1024px |
 | Status | Text label always; Live adds an 11px `#ff334b` dot beside the text; Not scored text `#50688c`; Final ink bold |
 | Focus | Section 10 style: 3px `#0755ff` outline, 5px offset (2px inside table cells), never clipped |
-| Motion | None; reduced motion keeps none |
+| Motion | None: no transition or animation inside `.staff`, also without reduced motion |
 
-Rules: exactly one Primary_Action per screen and per open dialog. `#607697` is not used for text on the tint, because it measures 4.4:1 on `#f6faff`. Measured contrast: `#50688c` on white 5.7:1 and on `#f6faff` 5.4:1; `#0755ff` on white and white on `#0755ff` 5.6:1; white on `#d5203e` and `#d5203e` on white 5.1:1. Re-measure on the real surfaces during the layout review.
+Rules: exactly one Primary_Action per screen and per open dialog, after the content it acts on, and at the top of list screens. A dialog with a destructive confirm has no Primary_Action. The sign-in choice page (`SignInChoiceView.css`) has three equal full-width secondary links in a 400px column, 16px apart, under a 40px / 800 `h1` (32px at <=767px), and no Primary_Action. `#607697` is not used for text on the tint, because it measures 4.4:1 on `#f6faff`. Measured contrast: `#50688c` on white 5.7:1 and on `#f6faff` 5.4:1; `#0755ff` on white and white on `#0755ff` 5.6:1; white on `#d5203e` and `#d5203e` on white 5.1:1.
 
 Shared components in `frontend/src/features/staff/`: `StaffShell` (header, staff navigation, Back link, `h1`, live regions), `ScreenState` (loading, error with "Try again", empty) and `NoAccess`, `Field`, `ErrorSummary`, `ConfirmDialog` (native modal), `labels.js` (display names and error sentences) and `formatSummary.js` (Default_Format summary).

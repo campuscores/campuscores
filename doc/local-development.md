@@ -164,7 +164,13 @@ cd output/load && npx wrangler dev --config wrangler.jsonc --port 8788 --ip 127.
 BASE=http://127.0.0.1:8788 CLIENTS=120 RAMP_S=15 HOLD_S=30 BURST=40 SETTLE_S=10 node output/load/harness.mjs
 ```
 
-The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Engine `POINT` actions to `/api/matches/:id/actions`. It needs a deployed staging Worker and a test operator; see the exact command and preconditions in [tasks.md](tasks.md#capacity-results-simulated-clients). Never put the secret key in a committed file or shell history that others can read.
+The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Engine `POINT` actions to `/api/matches/:id/actions`. It needs a deployed staging Worker and a test operator; the preconditions are in [tasks.md](tasks.md#capacity-results-simulated-clients). Full run (all values default to the thresholds):
+
+```sh
+BASE=https://thaparlympics-staging.bhatiaarnav05.workers.dev PUBLISH=api MATCH_IDS=<4 live match ids> \
+  CLERK_SECRET_KEY=<staging secret> CLERK_SESSION_ID=<test operator session> node output/load/harness.mjs
+```
+ Never put the secret key in a committed file or shell history that others can read.
 
 ## Common problems
 
@@ -178,7 +184,7 @@ The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Eng
 | Browser executable missing | Install the browsers as above, or select installed Chrome for the Chromium projects. |
 | WebKit fails with "Host system is missing dependencies" | Run `sudo npx playwright install-deps webkit`. The message names the missing libraries, for example `libavif16`. Until then, run the other projects: `npm test -- --project=chromium --project=firefox --project=pixel`. |
 | Preview shows old source | Run `npm run build` again, then refresh. |
-| Tournament detail is blank | Tournament routes are reserved; their UI is not implemented yet. |
+| Tournament pages show sample tournaments | The build has no `VITE_API_BASE`, so the public pages show display fixtures. Set it to read the API. |
 | A teammate cannot open your localhost URL | They must pull the same branch and start their own server. The address refers to their machine. |
 
 ## Generated files and deployment
