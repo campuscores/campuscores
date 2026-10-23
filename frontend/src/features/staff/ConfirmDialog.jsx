@@ -63,7 +63,10 @@ export default function ConfirmDialog({ open, title, effects = [], confirmLabel,
       cancelButton.current.focus();
     } else if (!open && box.open) {
       box.close();
-      opener.current?.focus();
+      if (opener.current?.isConnected) opener.current.focus();
+      // The opener is gone (its row was removed). Safari focuses the dialog itself on a button click, and focus would
+      // stay on the closed dialog; release it so StaffShell moves focus to the h1.
+      else if (box.contains(document.activeElement)) document.activeElement.blur();
     }
   }, [open]);
   // Nothing is cancelled while a request is in flight; its result decides what happens next.

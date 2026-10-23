@@ -134,8 +134,18 @@ export function held() {
   return { reply, release };
 }
 
+/**
+ * The key that moves focus like `key` ('Tab' or 'Shift+Tab'). macOS WebKit (the webkit, iphone and ipad projects on a
+ * Mac) follows Safari: plain Tab skips buttons and links, and Option+Tab reaches every control. Other keys pass through.
+ */
+export function tabKey(page, key = 'Tab') {
+  if (process.platform !== 'darwin' || page.context().browser()?.browserType().name() !== 'webkit') return key;
+  return { Tab: 'Alt+Tab', 'Shift+Tab': 'Alt+Shift+Tab' }[key] ?? key;
+}
+
 /** Press Tab (or `key`, such as 'Shift+Tab') until `target` has focus: keyboard only, at most `max` presses. */
 export async function tabTo(page, target, key = 'Tab', max = 40) {
+  key = tabKey(page, key);
   for (let n = 0; n < max && !(await target.evaluate(el => el === document.activeElement)); n++) await page.keyboard.press(key);
   await expect(target).toBeFocused();
 }
