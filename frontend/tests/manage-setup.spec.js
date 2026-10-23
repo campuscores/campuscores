@@ -2,7 +2,7 @@
 // Tournament overview and details, and Teams. Live-mode build with a stub Clerk and a mocked API whose replies copy
 // backend/src/routes/manage.js; each test checks the request bodies against the fields manage.js reads.
 import { test, expect } from '@playwright/test';
-import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabTo } from './helpers.js';
+import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabKey, tabTo } from './helpers.js';
 import { LATER, TODAY, tournamentApi, tournamentRow } from './manage-fakes.js';
 
 
@@ -270,7 +270,7 @@ test('Tournament overview: Delete and Publish open ConfirmDialog on Cancel, Tab 
   for (const key of ['Tab', 'Shift+Tab']) {
     await cancel.focus();
     for (let n = 0; n < 6; n++) {
-      await page.keyboard.press(key);
+      await page.keyboard.press(tabKey(page, key));
       const where = await dialog(page).evaluate(box => (box.contains(document.activeElement) ? 'dialog' : document.activeElement === document.body ? 'browser' : document.activeElement.outerHTML));
       expect(['dialog', 'browser']).toContain(where);
       if (where === 'dialog') inDialog.add(await page.evaluate(() => document.activeElement.textContent || document.activeElement.tagName));
@@ -337,7 +337,7 @@ test('Teams: rows follow locked and used, Edit maps the jersey both ways, and De
   const api = await tournamentApi(page, {
     tournament: tournamentRow({ status: 'ONGOING' }), sports: [{ sport: 'football', matchCount: 1 }],
     teams: { football: [
-      { id: '31', name: 'Red Falcons', branch: 'CSE', year: 2025, players: [{ name: 'Asha', jersey: 9, captain: true }], locked: false, used: false },
+      { id: '31', name: 'Red Falcons', branch: 'CSE', year: 3, players: [{ name: 'Asha', jersey: 9, captain: true }], locked: false, used: false },
       { id: '32', name: 'Blue Hawks', branch: null, year: null, players: [], locked: true, used: true },
     ] },
   });
@@ -349,10 +349,16 @@ test('Teams: rows follow locked and used, Edit maps the jersey both ways, and De
   await button(page, 'Edit Red Falcons').click();
   await expect(main(page).getByRole('heading', { name: 'Edit Red Falcons' })).toBeVisible();
   await expect(main(page).getByText('Asha, number 9, captain')).toBeVisible();
+  // Year is the college year: a select of 1st to 4th year, or Not set.
+  const year = field(page, 'Year (optional)');
+  await expect(year).toHaveValue('3');
+  await expect(year.locator('option')).toHaveText(['Not set', '1st year', '2nd year', '3rd year', '4th year']);
+  await year.selectOption({ label: '4th year' });
   await field(page, 'Branch (optional)').fill('ECE');
   await button(page, 'Save changes').click();
   await expect(page.getByRole('status').filter({ hasText: 'Red Falcons saved.' })).toBeVisible();
-  expect(api.sent('PATCH', '/manage/teams/31').map(r => r.body)).toEqual([{ name: 'Red Falcons', branch: 'ECE', year: 2025, players: [{ name: 'Asha', jersey: 9, captain: true }] }]);
+  expect(api.sent('PATCH', '/manage/teams/31').map(r => r.body)).toEqual([{ name: 'Red Falcons', branch: 'ECE', year: 4, players: [{ name: 'Asha', jersey: 9, captain: true }] }]);
+  await expect(main(page).locator('.data-card p:visible, td:visible').filter({ hasText: '4th year' })).toHaveCount(1); // the Year column shows the label
   expect(api.state.teams.football[0].players).toEqual([{ name: 'Asha', jersey: 9, captain: true }]);
 
   const remove = button(page, 'Delete Red Falcons');

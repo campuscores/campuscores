@@ -194,8 +194,8 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager_scope migration constraints',
     expect(err).toBeUndefined();
   });
 
-  it('teams_year rejects a year below 2000 and above 2099', async () => {
-    for (const year of [1999, 2100]) {
+  it('teams_year rejects a college year below 1 and above 4, and a calendar year', async () => {
+    for (const year of [0, 5, 2026]) {
       const { err } = await inRolledBackTx([
         `INSERT INTO teams (tournament_sport_id, label, year) VALUES (2, 'Year Edge (fake)', $1)`,
         [year],
@@ -204,8 +204,8 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('manager_scope migration constraints',
     }
   });
 
-  it('teams_year accepts the 2000 and 2099 boundaries', async () => {
-    for (const year of [2000, 2099]) {
+  it('teams_year accepts the 1 and 4 boundaries', async () => {
+    for (const year of [1, 4]) {
       const { err } = await inRolledBackTx([
         `INSERT INTO teams (tournament_sport_id, label, year) VALUES (2, 'Year Ok (fake)', $1)`,
         [year],

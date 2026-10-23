@@ -12,7 +12,7 @@ import { canAccess, clerkAuth, loadAccount, requireRole } from '../auth.js';
 import { audit, withClient, withTx } from '../db.js';
 import { AppError, jsonBody } from '../http.js';
 import { requireScope, scopeFilter } from '../scope.js';
-import { dateText, email, formatChanged, intRange, isLocked, matchFlags, slugify, statusChange, text, timeText, validatePlayers } from '../validate.js';
+import { dateText, email, formatChanged, isLocked, matchFlags, slugify, statusChange, teamYear, text, timeText, validatePlayers } from '../validate.js';
 
 // --- shared helpers ------------------------------------------------------
 
@@ -801,7 +801,7 @@ const duplicateName = (name) =>
 // Returns { branch, year, players } with branch/year null when absent.
 function teamFields(sport, body) {
   const branch = Object.hasOwn(body, 'branch') ? text(body.branch, 'branch', 120, { what: 'a branch' }) || null : null;
-  const year = Object.hasOwn(body, 'year') ? intRange(body.year, 'year', 2000, 2099, { what: 'a year' }) : null;
+  const year = Object.hasOwn(body, 'year') ? teamYear(body.year) : null;
   const players = validatePlayers(sport, body.players);
   return { branch, year, players };
 }
@@ -958,7 +958,7 @@ manageRoutes.patch('/manage/teams/:id', ...guard, async (c) => {
       // Validate only the fields sent; keep the current value otherwise.
       const name = Object.hasOwn(body, 'name') ? text(body.name, 'name', 120, { required: true, what: 'a team name' }) : team.label;
       const branch = Object.hasOwn(body, 'branch') ? (text(body.branch, 'branch', 120, { what: 'a branch' }) || null) : team.branch;
-      const year = Object.hasOwn(body, 'year') ? intRange(body.year, 'year', 2000, 2099, { what: 'a year' }) : team.year;
+      const year = Object.hasOwn(body, 'year') ? teamYear(body.year) : team.year;
       const players = Object.hasOwn(body, 'players') ? validatePlayers(team.sport, body.players) : (team.players ?? []);
 
       let row;

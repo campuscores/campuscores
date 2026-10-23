@@ -19,6 +19,7 @@ import {
   nextSlug,
   slugify,
   statusChange,
+  teamYear,
   text,
   timeText,
   TRANSITIONS,
@@ -263,25 +264,35 @@ describe('Property 9: Field validation names the first invalid field', () => {
     );
   });
 
-  // intRange(): year 2000-2099 boundaries 1999/2000/2099/2100 (Team field-limits, Requirement 11.2).
+  // intRange(): jersey 0-99 boundaries -1/0/99/100 (Team field-limits, Requirement 11.2).
   it('intRange accepts the inclusive bounds and rejects just outside, naming the field', () => {
-    expectAccepts(() => intRange(2000, 'year', 2000, 2099), 2000);
-    expectAccepts(() => intRange(2099, 'year', 2000, 2099), 2099);
-    expectRejects('year', () => intRange(1999, 'year', 2000, 2099));
-    expectRejects('year', () => intRange(2100, 'year', 2000, 2099));
+    expectAccepts(() => intRange(0, 'number', 0, 99), 0);
+    expectAccepts(() => intRange(99, 'number', 0, 99), 99);
+    expectRejects('number', () => intRange(-1, 'number', 0, 99));
+    expectRejects('number', () => intRange(100, 'number', 0, 99));
     fc.assert(
-      fc.property(fc.integer({ min: 2000, max: 2099 }), (year) => {
-        expectAccepts(() => intRange(year, 'year', 2000, 2099), year);
+      fc.property(fc.integer({ min: 0, max: 99 }), (n) => {
+        expectAccepts(() => intRange(n, 'number', 0, 99), n);
       }),
       { numRuns: 100 },
     );
     fc.assert(
-      fc.property(
-        fc.oneof(fc.integer({ max: 1999 }), fc.integer({ min: 2100 })),
-        (year) => {
-          expectRejects('year', () => intRange(year, 'year', 2000, 2099));
-        },
-      ),
+      fc.property(fc.oneof(fc.integer({ max: -1 }), fc.integer({ min: 100 })), (n) => {
+        expectRejects('number', () => intRange(n, 'number', 0, 99));
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  // teamYear(): college year 1st-4th, boundaries 0/1/4/5; empty means not set (Team field-limits).
+  it('teamYear accepts 1 to 4 and empty, and rejects every other value, naming "year"', () => {
+    for (const year of [1, 2, 3, 4]) expectAccepts(() => teamYear(year), year);
+    for (const empty of [null, undefined, '']) expectAccepts(() => teamYear(empty), null);
+    for (const bad of [0, 5, 2026, 2.5, 'x']) expectRejects('year', () => teamYear(bad));
+    fc.assert(
+      fc.property(fc.oneof(fc.integer({ max: 0 }), fc.integer({ min: 5 })), (year) => {
+        expectRejects('year', () => teamYear(year));
+      }),
       { numRuns: 100 },
     );
   });

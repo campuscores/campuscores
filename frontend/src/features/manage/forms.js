@@ -76,8 +76,10 @@ export const tournamentRules = ({ endRequired = false } = {}) => ({
 export const teamRules = {
   name: all(required('the team name'), maxLength(120, 'the team name')),
   branch: maxLength(120, 'the branch'),
-  year: value => (value === '' || (Number.isInteger(Number(value)) && value >= 2000 && value <= 2099) ? '' : 'Enter a year from 2000 to 2099.'),
+  year: value => (value === '' || ['1', '2', '3', '4'].includes(String(value)) ? '' : 'Choose 1st, 2nd, 3rd or 4th year.'),
 };
+/** College year labels of a team: `YEARS[year - 1]` for year 1–4. */
+export const YEARS = ['1st year', '2nd year', '3rd year', '4th year'];
 export const playerRules = {
   playerName: all(required('the player name'), maxLength(120, 'the player name')),
   number: value => (value === '' || (Number.isInteger(Number(value)) && value >= 0 && value <= 99) ? '' : 'Enter a jersey number from 0 to 99.'),

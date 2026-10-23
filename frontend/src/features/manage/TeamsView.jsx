@@ -4,7 +4,7 @@ import ConfirmDialog from '../staff/ConfirmDialog.jsx';
 import { messageFor, sportLabel } from '../staff/labels.js';
 import DataList from './DataList.jsx';
 import TeamForm from './TeamForm.jsx';
-import { TEAM_FIELDS, alertFor } from './forms.js';
+import { TEAM_FIELDS, YEARS, alertFor } from './forms.js';
 import { isLocked, TEAM_SPORTS, tournamentNav, tournamentPath } from './manage.js';
 import { RetrySave } from './SetupDetailsView.jsx';
 import './manage.css';
@@ -47,7 +47,7 @@ export default function TeamsView({ role, state, onRetry, tournament, sport, tea
           <DataList label={`${name} teams`} rows={teams} columns={[
             { label: 'Name', cell: team => team.name },
             { label: 'Branch', cell: team => team.branch || 'None' },
-            { label: 'Year', cell: team => team.year ?? 'None' },
+            { label: 'Year', cell: team => YEARS[team.year - 1] ?? 'None' },
             { label: teamSport ? 'Players' : 'Player names', cell: players },
           ]} actions={team => !locked && <>
             {!team.locked && <button type="button" className="button-text" onClick={() => onEdit(team)}>Edit<span className="sr-only"> {team.name}</span></button>}

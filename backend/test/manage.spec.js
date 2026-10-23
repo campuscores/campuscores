@@ -318,7 +318,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('validated field boundary values and a
     }
   });
 
-  it('team name: 0 and 121 rejected, 1 and 120 accepted; year 1999/2100 rejected, 2000/2099 accepted; 31 players rejected, 30 accepted', async () => {
+  it('team name: 0 and 121 rejected, 1 and 120 accepted; year 0/5 rejected, 1/4 accepted; 31 players rejected, 30 accepted', async () => {
     const f = await fixture();
     const call = asOwner(f);
     await f.addSport('badminton');
@@ -330,11 +330,13 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('validated field boundary values and a
     expect((await call('POST', teams, { name: 'a' })).status).toBe(201);
     expect((await call('POST', teams, { name: 'z'.repeat(120) })).status).toBe(201);
 
-    // Year boundaries (2000-2099 inclusive).
-    expect(await code(await call('POST', teams, { name: 'Year low (fake)', year: 1999 }))).toEqual([400, 'BAD_REQUEST']);
-    expect(await code(await call('POST', teams, { name: 'Year high (fake)', year: 2100 }))).toEqual([400, 'BAD_REQUEST']);
-    expect((await call('POST', teams, { name: 'Year min (fake)', year: 2000 })).status).toBe(201);
-    expect((await call('POST', teams, { name: 'Year max (fake)', year: 2099 })).status).toBe(201);
+    // College year boundaries (1st to 4th year inclusive); a calendar year is refused with the field fix.
+    expect(await code(await call('POST', teams, { name: 'Year low (fake)', year: 0 }))).toEqual([400, 'BAD_REQUEST']);
+    expect(await code(await call('POST', teams, { name: 'Year high (fake)', year: 5 }))).toEqual([400, 'BAD_REQUEST']);
+    const calendar = await call('POST', teams, { name: 'Calendar year (fake)', year: 2026 });
+    expect((await calendar.json()).error.message).toBe('year: Choose 1st, 2nd, 3rd or 4th year.');
+    expect((await call('POST', teams, { name: 'Year min (fake)', year: 1 })).status).toBe(201);
+    expect((await call('POST', teams, { name: 'Year max (fake)', year: 4 })).status).toBe(201);
 
     // Player count boundary (badminton allows player names, no jersey/captain).
     const players = (n) => Array.from({ length: n }, (_, i) => ({ name: `Player ${i + 1} (fake)` }));

@@ -120,7 +120,7 @@ Record each confirmed condition here and record its decision date in `memory.md`
 
 ## 9. Thapar context
 
-TIET's official sports information describes Thaparlympics as inter-branch. The selected initial product scope is football, volleyball, basketball, table tennis, lawn tennis, and badminton, configurable by tournament. [TIET sports overview](https://www.thapar.edu/students/pages/introduction-sports)
+TIET's official sports information describes Thaparlympics as inter-branch. A team's optional `year` is its college year, 1st to 4th (stored 1–4), not a calendar year (confirmed by Arnav, 23 October 2026; contract in [architecture.md](architecture.md#manager-api)). The selected initial product scope is football, volleyball, basketball, table tennis, lawn tennis, and badminton, configurable by tournament. [TIET sports overview](https://www.thapar.edu/students/pages/introduction-sports)
 
 ## 10. Accepted scoring feature and limits
 

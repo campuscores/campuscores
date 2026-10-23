@@ -17,10 +17,10 @@ INSERT INTO tournament_sports (id, tournament_id, sport) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO teams (id, tournament_sport_id, branch, year, label) VALUES
-  (1, 1, 'TEST-A', 2027, 'Test Team A (fake)'),
-  (2, 1, 'TEST-B', 2027, 'Test Team B (fake)'),
-  (3, 1, 'TEST-C', 2028, 'Test Team C (fake)'),
-  (4, 1, 'TEST-D', 2028, 'Test Team D (fake)')
+  (1, 1, 'TEST-A', 1, 'Test Team A (fake)'),
+  (2, 1, 'TEST-B', 1, 'Test Team B (fake)'),
+  (3, 1, 'TEST-C', 2, 'Test Team C (fake)'),
+  (4, 1, 'TEST-D', 2, 'Test Team D (fake)')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO matches (id, tournament_sport_id, kind, stage, side_a_team_id, side_b_team_id, scheduled_at, venue, status) VALUES

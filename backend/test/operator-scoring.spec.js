@@ -29,8 +29,8 @@ async function fixture(sport = 'badminton', { status = 'ONGOING', scheduledAt = 
   const { id: accountId } = await one("INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'MATCH_OPERATOR') RETURNING id", [`test_real_${suffix}`]);
   const { id: tournamentId } = await one('INSERT INTO tournaments (slug, name, status, owner_account_id) VALUES ($1, \'Scoring test\', $2, $3) RETURNING id', [`test-real-${suffix}`, status, accountId]);
   const { id: ts } = await one('INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, $2) RETURNING id', [tournamentId, sport]);
-  const { id: alpha } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'A', 2026, 'Alpha') RETURNING id", [ts]);
-  const { id: bravo } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'B', 2026, 'Bravo') RETURNING id", [ts]);
+  const { id: alpha } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'A', 3, 'Alpha') RETURNING id", [ts]);
+  const { id: bravo } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'B', 3, 'Bravo') RETURNING id", [ts]);
   const { id: matchId } = await one(`INSERT INTO matches (tournament_sport_id, kind, stage, side_a_team_id, side_b_team_id, scheduled_at) VALUES ($1, $2, $3, $4, $5, ${scheduledAt}) RETURNING id`, [ts, kind, kind === 'BRACKET' ? 'SF1' : null, alpha, bravo]);
   const { id: assignmentId } = await one('INSERT INTO match_operator_assignments (match_id, account_id, assigned_by, valid_from, valid_until) VALUES ($1, $2, $2, now() - interval \'1 hour\', now() + interval \'1 hour\') RETURNING id', [matchId, accountId]);
   const deviceId = crypto.randomUUID(), user = `test_real_${suffix}`;

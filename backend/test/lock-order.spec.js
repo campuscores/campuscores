@@ -27,8 +27,8 @@ async function fixture({ status = 'ONGOING', scheduledAt = 'now()', sport = 'bad
   const slug = `test-lock-${suffix}`;
   const { id: tournamentId } = await one("INSERT INTO tournaments (slug, name, status, owner_account_id) VALUES ($1, 'Lock order test', $2, $3) RETURNING id", [slug, status, managerId]);
   const { id: ts } = await one('INSERT INTO tournament_sports (tournament_id, sport) VALUES ($1, $2) RETURNING id', [tournamentId, sport]);
-  const { id: alpha } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'A', 2026, 'Alpha') RETURNING id", [ts]);
-  const { id: bravo } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'B', 2026, 'Bravo') RETURNING id", [ts]);
+  const { id: alpha } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'A', 3, 'Alpha') RETURNING id", [ts]);
+  const { id: bravo } = await one("INSERT INTO teams (tournament_sport_id, branch, year, label) VALUES ($1, 'B', 3, 'Bravo') RETURNING id", [ts]);
   const { id: matchId } = await one(`INSERT INTO matches (tournament_sport_id, kind, side_a_team_id, side_b_team_id, scheduled_at) VALUES ($1, 'CUSTOM', $2, $3, ${scheduledAt}) RETURNING id`, [ts, alpha, bravo]);
   await one('INSERT INTO match_operator_assignments (match_id, account_id, assigned_by, valid_from, valid_until) VALUES ($1, $2, $2, now() - interval \'1 hour\', now() + interval \'1 hour\') RETURNING id', [matchId, accountId]);
   const deviceId = crypto.randomUUID(), user = `test_lock_op_${suffix}`, manager = `test_lock_admin_${suffix}`;

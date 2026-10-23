@@ -124,7 +124,7 @@ test('Matches: Delete opens ConfirmDialog on Cancel, Escape returns focus, and a
   expect(api.sent('DELETE', '/manage/matches/21').map(r => r.body)).toEqual([{ reason: 'Rain' }]);
 });
 
-test('Add match by keyboard only: date and venue prefilled, India time, and the POST body matches the API contract', async ({ page, isMobile }) => {
+test('Add match by keyboard only: date and venue prefilled, India time, and the POST body matches the API contract', async ({ page, isMobile, browserName }) => {
   await mockStaff(page, { me: REPLIES.manager });
   const api = await matchesApi(page);
   await page.goto(NEW_MATCH);
@@ -137,7 +137,9 @@ test('Add match by keyboard only: date and venue prefilled, India time, and the 
 
   await tabTo(page, field(page, 'Time (IST)'));
   // Mobile Chromium renders a time input as a picker button with no typed segments; a phone user picks the time there.
-  if (isMobile) await field(page, 'Time (IST)').fill('14:30');
+  // WebKit's time field takes typed digits differently on each platform (CI typed "1430" and kept ""), so like a
+  // phone picker it gets the value set directly. Chromium and Firefox desktop take the typed 14 30.
+  if (isMobile || browserName === 'webkit') await field(page, 'Time (IST)').fill('14:30');
   else await page.keyboard.type('1430');
   await expect(field(page, 'Time (IST)')).toHaveValue('14:30');
   await tabTo(page, field(page, 'Side A'));

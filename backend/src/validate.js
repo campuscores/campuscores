@@ -66,6 +66,14 @@ export function intRange(value, field, min, max, { required = false, what = fiel
   return n;
 }
 
+/** A team's college year: 1 to 4 (1st to 4th year), or null when empty. Not a calendar year. */
+export function teamYear(value) {
+  if (value === '' || value == null) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 4) bad('year', 'Choose 1st, 2nd, 3rd or 4th year.');
+  return n;
+}
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Trimmed, lower-cased email, ≤254, the existing invite pattern. Returns the normalised email. */

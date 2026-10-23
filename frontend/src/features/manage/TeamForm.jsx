@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import ErrorSummary from '../staff/ErrorSummary.jsx';
 import Field from '../staff/Field.jsx';
-import { playerRules, teamRules, useForm } from './forms.js';
+import { playerRules, teamRules, useForm, YEARS } from './forms.js';
 import { TEAM_SPORTS } from './manage.js';
 
 const MAX_PLAYERS = 30;
@@ -59,7 +59,10 @@ export default function TeamForm({ id, sport, team, saving, error, submitLabel, 
       </div>
       <div id={detailsId} className="staff-form" hidden={!open}>
         <Field label="Branch" optional autoComplete="off" maxLength={120} {...form.field('branch')} />
-        <Field label="Year" optional type="number" inputMode="numeric" min={2000} max={2099} {...form.field('year')} />
+        <Field label="Year" optional as="select" {...form.field('year')}>
+          <option value="">Not set</option>
+          {YEARS.map((label, index) => <option key={label} value={String(index + 1)}>{label}</option>)}
+        </Field>
         <fieldset>
           <legend>{teamSport ? 'Players' : 'Player names'} <span className="field-optional">(optional, up to {MAX_PLAYERS})</span></legend>
           {players.length > 0 && (
