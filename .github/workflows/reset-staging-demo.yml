@@ -1,11 +1,7 @@
 name: Reset staging demo
 on:
+  # Manual only. It wipes staging tournament data, so it never runs on a push.
   workflow_dispatch:
-  # A dispatch-only workflow is registered only from the default branch (main). This push trigger runs the reset
-  # from develop when this file changes, after the staging Deploy of the same commit finishes (its fake seed runs first).
-  push:
-    branches: [develop]
-    paths: ['.github/workflows/reset-staging-demo.yml']
 permissions:
   contents: read
   actions: read
