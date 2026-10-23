@@ -188,8 +188,11 @@ test('menus and legacy links navigate and close correctly', async ({ page }) => 
   await expect(page).toHaveURL(/\/tournaments\/racquet-open$/);
   await page.goto('/index.html?preview=rectangular');
   await expect(page).toHaveURL(/\/$/);
-  await page.goto('/missing-page');
-  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  // The Stage 1 layout preview is removed, so /preview is an unknown path (staff roles Req 1.11).
+  for (const path of ['/preview', '/preview/admin-home?state=ready', '/missing-page']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  }
   await page.getByRole('link', { name: 'Return home' }).click();
   // The public header has no staff link (staff roles Req 4.1).
   await expect(page.locator('header a[href^="/operator"]')).toHaveCount(0);

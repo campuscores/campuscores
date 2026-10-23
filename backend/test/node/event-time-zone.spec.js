@@ -26,7 +26,6 @@ const rel = (abs) => relative(repoRoot, abs).replace(/\\/g, '/');
 
 function isExcluded(relPath) {
   if (relPath === 'shared/time.mjs') return true;
-  if (relPath === 'frontend/src/features/preview/previewData.js') return true;
   if (SAMPLE_FILE.test(relPath)) return true;
   return false;
 }

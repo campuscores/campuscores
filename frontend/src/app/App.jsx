@@ -18,14 +18,9 @@ const staff = screen => clerkKey
   ? <Suspense fallback={<p className="sr-only" role="status">Loading sign-in…</p>}><AuthArea screen={screen} /></Suspense>
   : <SignInUnavailable />;
 
-// Stage 1 layout preview: local and staging builds only. Production builds drop the chunk (Req 1.11).
-const preview = import.meta.env.DEV || import.meta.env.VITE_LAYOUT_PREVIEW === '1';
-const PreviewIndex = preview ? lazy(() => import('../features/preview/PreviewIndex.jsx')) : null;
-const previewPage = preview && <Suspense fallback={<p className="sr-only" role="status">Loading preview…</p>}><PreviewIndex /></Suspense>;
-
 // Paths whose every state renders StaffShell, which sets the document title. Without a Clerk key they show
 // SignInUnavailable, so this effect titles them.
-const shellTitled = path => (clerkKey && /^\/(operator|manage|admin)(\/|$)/.test(path)) || (preview && /^\/preview(\/|$)/.test(path));
+const shellTitled = path => clerkKey && /^\/(operator|manage|admin)(\/|$)/.test(path);
 
 export default function App() {
   const { pathname, hash, search, key } = useLocation();
@@ -85,8 +80,6 @@ export default function App() {
       <Route path="/admin/staff/:accountId" element={staff('staff-member')} />
       <Route path="/admin/invitations" element={staff('invitations')} />
       <Route path="/privacy" element={<PrivacyPage />} />
-      {preview && <Route path="/preview" element={previewPage} />}
-      {preview && <Route path="/preview/:screen" element={previewPage} />}
       <Route path="*" element={<main className="not-found"><h1>Page not found</h1><Link to="/">Return home</Link></main>} />
     </Routes>
   );

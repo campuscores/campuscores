@@ -62,8 +62,6 @@ jobs:
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-          # Stage 1 layout preview (/preview): staging only; production builds leave it out.
-          VITE_LAYOUT_PREVIEW: ${{ github.ref_name == 'develop' && '1' || '' }}
       - run: npx wrangler deploy --env "$DEPLOY_ENV"
         working-directory: backend
         env:
