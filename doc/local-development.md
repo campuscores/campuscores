@@ -147,6 +147,7 @@ The backend is planned and not implemented. The stack is a Cloudflare Worker (Ho
 - Database test files run in parallel on one database. Do not change shared seed rows; create throwaway rows, or change state inside a transaction that rolls back. Do not commit a second ACTIVE `SUPER_ADMIN`: the last-Super-Admin cases in `auth.spec.js`, `accounts.spec.js` and `bootstrap.spec.js` need the seed `test_super_admin` to be the only one. A test that needs a Super Admin uses `test_super_admin`.
 - Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
 - Only GitHub Actions applies migrations and deploys. Do not run them from a laptop.
+- `reset-staging-demo.yml` (manual, staging only) runs `backend/scripts/reset-staging-demo.js`: in one transaction it deletes all tournament and match data on staging, then creates Test Tournament with six sports, 36 teams and 18 matches that start now, all assigned to the TFC Demo Scorer. The script refuses to run unless `RESET_ENV=staging`.
 
 ## Load test (Load_Harness)
 

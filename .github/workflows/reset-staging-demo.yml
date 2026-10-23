@@ -1,0 +1,25 @@
+name: Reset staging demo
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    # Staging only: the environment is hard-coded and the script refuses any other RESET_ENV.
+    environment: staging
+    concurrency:
+      group: reset-staging-demo
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+      - run: npm ci
+      # One transaction: deletes all tournament and match data, then creates Test Tournament. It prints counts only.
+      - run: node backend/scripts/reset-staging-demo.js
+        env:
+          RESET_ENV: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
