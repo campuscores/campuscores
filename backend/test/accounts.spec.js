@@ -144,6 +144,57 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/invites', () => {
   });
 });
 
+// An invitation never changes an existing staff account, so it is refused before any Clerk invitation (24 October 2026).
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/invites for an email that already has a staff account', () => {
+  const invitationJson = (call) => [200, { object: 'invitation', id: `inv_${crypto.randomUUID()}`, email_address: call.body?.email_address, status: 'pending' }];
+  const withAccount = async (status, fn) => {
+    const user = `test_inv_existing_${crypto.randomUUID()}`;
+    const email = `${user}@example.test`;
+    const { id } = await one(`INSERT INTO admin_accounts (clerk_user_id, role, status, email) VALUES ($1, 'MATCH_OPERATOR', $2, $3) RETURNING id`, [user, status, email]);
+    try {
+      await fn({ user, email });
+    } finally {
+      await db(async (client) => {
+        await client.query('DELETE FROM admin_audit_log WHERE entity = $1 AND entity_id IN (SELECT id::text FROM staff_invitations WHERE email = $2)', ['staff_invitations', email]);
+        await client.query('DELETE FROM staff_invitations WHERE email = $1', [email]);
+        await client.query('DELETE FROM admin_accounts WHERE id = $1', [id]);
+      });
+    }
+  };
+  const invite = (email) => api('POST', '/api/invites', { user: 'test_super_admin', body: { email: email.toUpperCase(), role: 'MATCH_OPERATOR' } });
+  const stored = async (email) => (await one('SELECT count(*)::int AS n FROM staff_invitations WHERE email = $1', [email])).n;
+
+  it('an ACTIVE account: 409 STAFF_EXISTS, no Clerk call, nothing stored', async () => {
+    await withAccount('ACTIVE', async ({ email }) => {
+      const calls = stubClerk(invitationJson);
+      const res = await invite(email);
+      expect([res.status, (await res.json()).error.code]).toEqual([409, 'STAFF_EXISTS']);
+      expect(calls).toEqual([]);
+      expect(await stored(email)).toBe(0);
+    });
+  });
+
+  it('a DISABLED account whose sign-in exists: 409 STAFF_DISABLED, no invitation sent', async () => {
+    await withAccount('DISABLED', async ({ user, email }) => {
+      const calls = stubClerk((call) => (call.method === 'GET' ? [200, clerkUser(user, [email])] : invitationJson(call)));
+      const res = await invite(email);
+      expect([res.status, (await res.json()).error.code]).toEqual([409, 'STAFF_DISABLED']);
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([`GET /v1/users/${user}`]);
+      expect(await stored(email)).toBe(0);
+    });
+  });
+
+  it('a DISABLED account whose sign-in was deleted: the new invitation is sent', async () => {
+    await withAccount('DISABLED', async ({ user, email }) => {
+      const calls = stubClerk((call) => (call.method === 'GET' ? [404, { errors: [{ code: 'resource_not_found' }] }] : invitationJson(call)));
+      const res = await invite(email);
+      expect(res.status).toBe(201);
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([`GET /v1/users/${user}`, 'POST /v1/invitations']);
+      expect(await stored(email)).toBe(1);
+    });
+  });
+});
+
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/invites/accept', () => {
   // Inserts a MATCH_OPERATOR invitation, so no test creates an extra active Super Admin.
   const invite = (email, expiresIn = '1 day') =>

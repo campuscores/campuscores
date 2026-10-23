@@ -26,6 +26,23 @@ inviteRoutes.post('/invites', clerkAuth, loadAccount, requireRole('manager'), as
   if (pending.length) throw new AppError(409, 'INVITE_PENDING', 'This email already has a pending invitation');
 
   const clerk = c.get('clerk');
+  // An invitation never changes an existing staff account (accept answers ACCOUNT_EXISTS), so refuse it before any
+  // email goes out: 409 STAFF_EXISTS for an ACTIVE account, 409 STAFF_DISABLED for a disabled one whose sign-in still
+  // exists (a Super Admin re-enables it instead). A disabled account whose Clerk user was deleted cannot sign in
+  // again, so a new invitation (a new Clerk user, a new staff account) is allowed.
+  const { rows: staff } = await uncached(c, (client) =>
+    client.query(`SELECT clerk_user_id AS "clerkUserId", status FROM admin_accounts WHERE lower(email) = $1`, [email]),
+  );
+  if (staff.some((s) => s.status === 'ACTIVE')) throw new AppError(409, 'STAFF_EXISTS', 'This email already has a staff account');
+  for (const s of staff) {
+    try {
+      await clerk.users.getUser(s.clerkUserId);
+    } catch (err) {
+      if (err?.status === 404) continue; // the sign-in was deleted
+      throw clerkDown();
+    }
+    throw new AppError(409, 'STAFF_DISABLED', 'This email has a disabled staff account');
+  }
   let clerkInvite;
   try {
     clerkInvite = await clerk.invitations.createInvitation({
