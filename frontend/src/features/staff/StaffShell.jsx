@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router';
+import { useClerk } from '@clerk/react';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import { roleLabel, STAFF_NAV } from './labels.js';
 import './staff.css';
@@ -13,6 +14,8 @@ import './staff.css';
 export default function StaffShell({ role, title, current, back, status, alert, children }) {
   const heading = useRef(null);
   const { pathname } = useLocation();
+  // StaffShell renders only inside AuthArea's ClerkProvider. Sign out returns to Home (afterSignOutUrl).
+  const { signOut } = useClerk();
   useEffect(() => { document.title = `${title} | Campuscores`; }, [title]);
   useEffect(() => { heading.current.focus(); }, [pathname]);
   // A save or error that reloads the screen can remove the focused control, and focus then falls to the page body.
@@ -31,7 +34,10 @@ export default function StaffShell({ role, title, current, back, status, alert, 
               <ul>
                 {items.map(item => <li key={item.key}><Link to={item.to} aria-current={item.key === current ? 'page' : undefined}>{item.label}</Link></li>)}
               </ul>
-              <p className="staff-role">Signed in as {roleLabel(role)}</p>
+              <div className="staff-account">
+                <p className="staff-role">Signed in as {roleLabel(role)}</p>
+                <button type="button" className="button-text" onClick={() => signOut()}>Sign out</button>
+              </div>
             </div>
           </nav>
         )}

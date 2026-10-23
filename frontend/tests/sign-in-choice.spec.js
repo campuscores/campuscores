@@ -49,12 +49,41 @@ for (const role of ['scorer', 'manager', 'admin']) {
   });
 }
 
-test('signed-in Viewer on /sign-in opens Home', async ({ page }) => {
-  await mockStaff(page, { me: REPLIES.viewer });
+const signOutCalls = page => page.evaluate(() => Number(sessionStorage.getItem('__signOutCalls') ?? 0));
+/** An account without staff access is signed out once and sees the sign-in choice with the reason. */
+async function expectRejected(page) {
+  await expect(page).toHaveURL(`${APP}/sign-in?no-access`);
+  await expect(page.getByRole('alert')).toHaveText(/That email has no staff access, so you were signed out\./);
+  await expect(page.getByRole('main').getByRole('link', { name: 'Sign in as Match Scorer' })).toBeVisible();
+  await expect(staffNav(page)).toHaveCount(0);
+  expect(await signOutCalls(page)).toBe(1);
+}
+
+test('signed-in Viewer on /sign-in is signed out and told the email has no staff access', async ({ page }) => {
+  const calls = await mockStaff(page, { me: REPLIES.viewer });
   await page.goto(`${APP}/sign-in`);
-  await expect(page).toHaveURL(`${APP}/`);
-  await expect(page).toHaveTitle('Campuscores');
+  await expectRejected(page);
+  expect(calls.me).toBe(1); // signed out after the reload: no second GET /api/me
 });
+
+test('signed-in Viewer on a staff screen is signed out and sees no staff content', async ({ page }) => {
+  await mockStaff(page, { me: REPLIES.viewer });
+  await page.goto(`${APP}/operator/matches`);
+  await expectRejected(page);
+});
+
+for (const role of ['scorer', 'manager', 'admin']) {
+  test(`signed-in ${role} can sign out from the staff navigation`, async ({ page }) => {
+    await mockStaff(page, { me: REPLIES[role] });
+    await page.goto(`${APP}${START[role]}`);
+    await staffNav(page).getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(`${APP}/`);
+    expect(await signOutCalls(page)).toBe(1);
+    await page.goto(`${APP}${START[role]}`);
+    await expect(page.getByRole('main').getByRole('link', { name: 'Sign in' })).toBeVisible();
+    await expect(staffNav(page)).toHaveCount(0);
+  });
+}
 
 for (const [result, accept] of [['200', null], ['404 INVITE_NOT_FOUND', REPLIES.inviteNotFound], ['409 ACCOUNT_EXISTS', REPLIES.accountExists]]) {
   for (const role of ['scorer', 'manager', 'admin']) {
@@ -71,16 +100,11 @@ for (const [result, accept] of [['200', null], ['404 INVITE_NOT_FOUND', REPLIES.
   }
 }
 
-test('/start for a Viewer says the account has no staff access and links to Home', async ({ page }) => {
+test('/start for an email without an invitation or staff role signs it out with the reason', async ({ page }) => {
   const calls = await mockStaff(page, { me: REPLIES.viewer, accept: REPLIES.inviteNotFound });
   await page.goto(`${APP}/start`);
-  await expect(page.locator('h1')).toHaveText('This account has no staff access');
-  await expect(page).toHaveURL(`${APP}/start`);
-  await expect(staffNav(page)).toHaveCount(0);
-  await page.waitForLoadState('networkidle');
+  await expectRejected(page);
   expect(calls.accept).toBe(1);
-  await page.getByRole('main').getByRole('link', { name: 'Go to Home' }).click();
-  await expect(page).toHaveURL(`${APP}/`);
 });
 
 test('/start accept 5xx shows an error; Try again sends a second accept and continues', async ({ page }) => {

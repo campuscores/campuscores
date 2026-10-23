@@ -168,9 +168,7 @@ const NO_ACCESS = [
   ['scorer', '/admin', '/operator/matches'],
   ['manager', '/admin/staff', '/manage'],
   ['manager', '/admin/tournaments', '/manage'],
-  ['viewer', '/manage', '/'],
-  ['viewer', '/operator/matches', '/'],
-];
+]; // A Viewer is signed out instead (sign-in-choice.spec.js).
 for (const [role, path, start] of NO_ACCESS) {
   test(`${role} on ${path} sees no access with a link to ${start}`, async ({ page }) => {
     await mockStaff(page, { me: REPLIES[role] });
@@ -181,8 +179,7 @@ for (const [role, path, start] of NO_ACCESS) {
     const links = page.getByRole('main').getByRole('link');
     await expect(links).toHaveText(['Go to your start page']);
     await expect(links).toHaveAttribute('href', start);
-    if (role === 'viewer') await expect(staffNav(page)).toHaveCount(0);
-    else await expect(staffNav(page).getByRole('link')).toHaveText(NAV[role]);
+    await expect(staffNav(page).getByRole('link')).toHaveText(NAV[role]);
     await expectOneSiteHeader(page);
   });
 }
@@ -209,8 +206,10 @@ test('/start and /sign-in show exactly one site header in each state', async ({ 
   // The second GET /api/me (on /sign-in) never answers, so /sign-in stays in its loading state.
   await mockStaff(page, { me: n => n === 1 ? REPLIES.viewer : new Promise(() => {}), accept: REPLIES.inviteNotFound });
   await page.goto(`${APP}/start`);
-  await expect(page.locator('h1')).toHaveText('This account has no staff access');
+  await expect(page).toHaveURL(`${APP}/sign-in?no-access`); // the Viewer is signed out
+  await expect(page.locator('h1')).toHaveText('Sign in');
   await expectOneSiteHeader(page);
+  await page.evaluate(() => sessionStorage.removeItem('__stubSignedOut')); // signed in again for the next state
   await page.goto(`${APP}/sign-in`);
   await expect(page.getByText('Loading your account…')).toBeVisible();
   await expectOneSiteHeader(page);

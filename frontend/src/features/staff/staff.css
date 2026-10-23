@@ -35,6 +35,8 @@
   background: #b7ceff;
 }
 .staff-role { margin: 0 0 8px; color: #50688c; font-size: 14px; }
+.staff-account { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; margin-bottom: 8px; }
+.staff-account .staff-role { margin: 0; }
 
 .staff-main { padding-block: 32px 72px; }
 .staff-main h1 { margin: 0 0 24px; font-size: 32px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; overflow-wrap: anywhere; }
