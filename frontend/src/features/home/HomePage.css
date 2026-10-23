@@ -58,7 +58,7 @@
     }
     .athlete-card::before {
       content: "";
-      background: var(--panel-background) center / cover;
+      background: var(--panel-background) center / cover, var(--skeleton, #e4e9f1);
     }
     .player-core { z-index: 1; }
     .athlete-card img {

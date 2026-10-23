@@ -74,6 +74,58 @@ test('approved layout, local assets and text fit from phones to large screens', 
   expect(errors).toEqual([]);
 });
 
+test('image skeletons: neutral shimmer blocks while images load, alt text hidden, no layout shift, still with reduced motion', async ({ page }) => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route(/\/assets\/(?!logo).*\.webp$/, async route => { await held; await route.continue(); });
+  await page.goto('/');
+  const state = () => page.evaluate(() => {
+    const style = (el, pseudo) => getComputedStyle(el, pseudo);
+    const image = document.querySelector('.tournament-surface img'), panel = document.querySelector('.athlete-card'), match = document.querySelector('.match-surface');
+    const box = el => { const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+    return {
+      image: style(image).backgroundImage.includes('gradient'), imageColor: style(image).color, alt: Boolean(image.alt), playerColor: style(panel.querySelector('img')).color,
+      panel: style(panel, '::before').backgroundImage.includes('gradient'), match: match ? style(match, '::before').backgroundImage.split('gradient').length > 2 : true,
+      animation: style(image).animationName, boxes: [box(image), box(document.querySelector('.hero')), box(panel)],
+    };
+  });
+  const loading = await state();
+  expect(loading).toMatchObject({ image: true, imageColor: 'rgba(0, 0, 0, 0)', alt: true, playerColor: 'rgba(0, 0, 0, 0)', panel: true, match: true, animation: 'image-shimmer' });
+  release();
+  await page.locator('.tournament-surface img').first().evaluate(image => { image.loading = 'eager'; return image.decode(); });
+  expect((await state()).boxes).toEqual(loading.boxes);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect((await state()).animation).toBe('none');
+});
+
+test('header: logo home link at the left, the decorative name centered without overlap or wrap', async ({ page }) => {
+  await page.goto('/');
+  for (const width of [320, 360, 390, 429, 430, 767, 768, 900, 1023, 1024, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 800 });
+    const header = page.locator(width < 768 ? '.mobile-header' : '.desktop-banner');
+    await expect(header.getByRole('link', { name: 'Campuscores home' }), `${width}px`).toHaveCount(1);
+    await expect(header.locator('.site-title')).toHaveAttribute('aria-hidden', 'true');
+    const box = await header.evaluate(el => {
+      const rect = node => node.getBoundingClientRect();
+      const title = el.querySelector('.site-title'), range = document.createRange();
+      range.selectNodeContents(title);
+      const text = rect(range), logo = rect(el.querySelector('.site-name')), right = rect(el.querySelector('.desktop-nav, .mobile-menu'));
+      return { textLeft: text.left, textRight: text.right, logoRight: logo.right, rightLeft: right.left, logoLeft: logo.left, rightRight: right.right,
+        imageHeight: rect(el.querySelector('.site-name img')).height, rects: range.getClientRects().length, font: parseFloat(getComputedStyle(title).fontSize), header: rect(el).height };
+    });
+    const middle = (box.textLeft + box.textRight) / 2;
+    expect(box.rects, `${width}px one line`).toBe(1);
+    expect(box.textLeft - box.logoRight, `${width}px clear of the logo`).toBeGreaterThanOrEqual(8);
+    expect(box.rightLeft - box.textRight, `${width}px clear of the nav`).toBeGreaterThanOrEqual(8);
+    expect(box.font).toBeGreaterThanOrEqual(15);
+    expect(Math.abs(box.logoLeft - (width - box.rightRight)), `${width}px same inline padding`).toBeLessThan(1);
+    const trueCenter = width >= 1024 || (width >= 430 && width < 768);
+    expect(Math.abs(middle - (trueCenter ? width / 2 : (box.logoRight + box.rightLeft) / 2)), `${width}px centered`).toBeLessThan(1.5);
+    expect(box.imageHeight).toBe(width < 768 ? 26 : 34);
+    expect(box.header).toBeGreaterThanOrEqual(width < 768 ? 64 : 76);
+  }
+});
+
 test('sport filters change only live cards and support keyboard input', async ({ page }) => {
   await page.goto('/');
   const url = page.url();

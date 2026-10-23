@@ -4,7 +4,7 @@
       z-index: -1;
       inset: 0 0 64px;
       background: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)),
-        var(--match-background) center / cover;
+        var(--match-background) center / cover, var(--skeleton, #e4e9f1);
     }
     .match-header { padding: 16px 16px 34px; color: #fff; }
     .match-meta {
@@ -60,7 +60,7 @@
     .match-details .match-total { color: var(--blue); }
     
 @media (max-width: 767px) {
-  .match-surface::before { background-image: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)), var(--match-background-phone); }
+  .match-surface::before { background-image: linear-gradient(rgb(7 18 39 / 56%), rgb(7 18 39 / 56%)), var(--match-background-phone), var(--skeleton, linear-gradient(#e4e9f1, #e4e9f1)); }
   .match-card { flex-basis: min(312px, calc(100vw - 76px)); }
   .match-overview { font-size: clamp(12px, 3.4vw, 14px); }
   .match-overview strong { font-size: clamp(28px, 8vw, 32px); }

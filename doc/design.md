@@ -51,8 +51,11 @@ All sizes below are CSS pixels; `vw` values use viewport width. Weights are the 
 | --- | --- | --- | --- |
 | General body copy | Inherited browser base, normally 16px | Normal, normally 400 | Normal unless specified by the component. Use 16px for new paragraph copy rather than the small metadata scale. |
 | Wordmark, >=1024px | 24px | 900 | `1.2`; letter spacing `-.9px`; `.2px` text stroke. |
-| Wordmark, 768-1023px | 22px | 900 | Same desktop spacing/stroke. |
-| Wordmark, <=767px | 21px | 900 | `1.2`; letter spacing `-.7px`; same stroke. |
+| Wordmark, 768-1023px | `clamp(15px, 1.4vw + 11px, 22px)` | 900 | Same desktop spacing/stroke. |
+| Wordmark, 430-767px | 21px | 900 | `1.2`; letter spacing `-.7px`; same stroke. |
+| Wordmark, <=429px | `clamp(15px, 6vw, 21px)` | 900 | Same phone spacing/stroke. |
+
+Header layout (Arnav, 23 October 2026): the logo ([asset](asset-sources.md#header-logo), 34px high from 768px, 26px on phones) is the one home link at the left, alt "Campuscores home". The nav or menu sits at the same inline padding on the right. The "Campuscores" wordmark is decorative (`aria-hidden`), on one line and never overlaps. It is centered on the header at 430-767px and >=1024px. At <=429px and 768-1023px it is centered in the free space between the logo and the nav or menu. The desktop nav gap is `clamp(24px, 5vw - 27px, 34px)` (24px at 768-1023px).
 | Hero heading, >=1024px | `clamp(36px, 4.1vw, 62px)` | 800 | `1.06`; letter spacing `-.04em`. |
 | Hero heading, 768-1023px | `clamp(34px, 5.4vw, 52px)` | 800 | `1.06`; letter spacing `-.04em`. |
 | Hero heading, <=767px | `clamp(34px, 9.3vw, 48px)` | 800 | `1.06`; letter spacing `-.04em`. |
@@ -243,6 +246,7 @@ The field is decorative, not a repeated background for every section. Reduced mo
 - Preserve readable ink-on-white details and white-on-darkened-image headers. Labels, table structure and selection semantics accompany color.
 - Keep section hierarchy clear: one page `h1`, section `h2`, card `h3`. Decorative icons/canvas stay hidden from assistive technology; meaningful images have useful alt text.
 - Respect reduced motion. Do not require hover to reveal essential information or controls.
+- Image skeletons ([global.css](../frontend/src/styles/global.css)): hero panels, match textures and tournament images show a neutral `#e4e9f1` block with a subtle shimmer (5 runs, none with reduced motion) until the image paints over it. Images keep their alt text but use `color: transparent`, so no alt text shows while loading. The boxes keep their size, so nothing shifts.
 - Keep the approved card colors, rounded shapes, white detail areas and horizontal usage when replacing temporary content. Match names/scores/clocks/columns and tournament names/IDs/dates remain editable display fixtures.
 - For a future page, begin with shared colors, font hierarchy, container gutters, card radii, icons and focus states. Reuse the existing header/rail/card components where their contract fits; add only the feature's necessary layout. A new staff form or list uses the Staff_Style in section 12. Another unbuilt page type or a new status is not already designed by this guide.
 - When an approved design changes, update this guide and the actual CSS/component together; record the decision in `memory.md`. Keep asset credits current.

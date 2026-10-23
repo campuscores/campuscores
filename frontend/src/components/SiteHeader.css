@@ -13,11 +13,23 @@
       box-shadow: 0 8px 30px rgb(35 65 110 / 6%),
                   0 2px 5px rgb(35 65 110 / 3%);
     }
+    .desktop-banner, .mobile-header { position: relative; }
+    /* The logo is the one home link; its image keeps the 1600 × 533 ratio (34px high on desktop, 26px on phones). */
     .site-name {
       display: inline-flex;
       align-items: center;
       min-height: 44px;
       flex-shrink: 0;
+    }
+    .site-name img { display: block; width: auto; height: 34px; }
+    /* Decorative wordmark, centered on the header where it fits (≥1024px, 430–767px). It never wraps or takes input. */
+    .site-title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      white-space: nowrap;
       font-size: 24px;
       font-weight: 900;
       -webkit-text-stroke: .2px currentColor;
@@ -27,8 +39,8 @@
     .desktop-nav {
       display: flex;
       align-items: center;
-      gap: 34px;
-      padding-right: 9px;
+      /* Narrower gaps just above 1024px keep the centered name clear of the nav. Same inline padding as the logo. */
+      gap: clamp(24px, 5vw - 27px, 34px);
     }
     .nav-link, .sports-dropdown > summary {
       position: relative;
@@ -154,8 +166,14 @@
     
 @media (min-width: 768px) and (max-width: 1023px) {
   .desktop-banner { padding-inline: 26px; gap: 24px; }
-  .site-name { font-size: 22px; }
-  .desktop-nav { gap: 24px; padding-right: 0; }
+  .desktop-nav { gap: 24px; }
+}
+/* Where true centring does not fit, the name centers in the free space between the logo and the nav or menu. */
+@media (min-width: 768px) and (max-width: 1023px), (max-width: 429px) {
+  .site-title { position: static; transform: none; flex: 1 1 0; min-width: 0; text-align: center; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .site-title { font-size: clamp(15px, 1.4vw + 11px, 22px); }
 }
 @media (max-width: 767px) {
   .desktop-banner { display: none; }
@@ -165,5 +183,9 @@
     background: #fff; border: 1px solid rgb(222 231 246 / 70%); border-radius: 0;
     box-shadow: 0 8px 30px rgb(35 65 110 / 6%);
   }
-  .mobile-header .site-name { font-size: 21px; letter-spacing: -.7px; }
+  .mobile-header .site-name img { height: 26px; }
+  .mobile-header .site-title { font-size: 21px; letter-spacing: -.7px; }
+}
+@media (max-width: 429px) {
+  .mobile-header .site-title { font-size: clamp(15px, 6vw, 21px); }
 }

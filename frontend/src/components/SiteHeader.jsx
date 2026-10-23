@@ -27,6 +27,13 @@ export default function SiteHeader() {
   });
   const account = signedIn ? { to: '/start', label: 'Dashboard', current: location.pathname.startsWith('/start') ? 'page' : undefined } : { to: '/sign-in', label: 'Sign in', current: location.pathname.startsWith('/sign-in') ? 'page' : undefined };
   const tournamentsCurrent = /^\/tournaments\/?$/.test(location.pathname) ? 'page' : undefined;
+  // One home link (the logo); the centered name is decorative, so screen readers hear the home link once.
+  const home = <>
+    <Link className="site-name" to="/">
+      <img src="/assets/logo.webp" srcSet="/assets/logo-320.webp 320w, /assets/logo.webp 1600w" sizes="(max-width: 767px) 78px, 102px" width="102" height="34" alt="Campuscores home" />
+    </Link>
+    <span className="site-title" aria-hidden="true">Campuscores</span>
+  </>;
 
   useEffect(() => {
     const header = headerRef.current;
@@ -55,7 +62,7 @@ export default function SiteHeader() {
   return (
     <div ref={headerRef}>
       <header className="desktop-banner" aria-label="Thaparlympics desktop header">
-        <Link className="site-name" to="/" aria-label="Campuscores home">Campuscores</Link>
+        {home}
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link className="nav-link" to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
           <Link className="nav-link" to="/tournaments" aria-current={tournamentsCurrent}>Tournaments</Link>
@@ -64,7 +71,7 @@ export default function SiteHeader() {
         </nav>
       </header>
       <header className="mobile-header" aria-label="Thaparlympics mobile header">
-        <Link className="site-name" to="/" aria-label="Campuscores home">Campuscores</Link>
+        {home}
         <details className="mobile-menu">
           <summary aria-label="Menu" />
           <nav className="mobile-menu-panel" aria-label="Main navigation">

@@ -2,7 +2,7 @@
 // Keys are the stored `tournaments.image_key` values; `position` keeps each photo's approved crop.
 export const VENUES = {
   field: { image: 'tournament-field.webp', alt: 'Empty football pitch and stadium seating', position: 'center 85%' },
-  stadium: { image: 'tournament-stadium.webp', alt: 'Green football pitch beneath blue stadium seating', position: 'center 60%' },
+  stadium: { image: 'tournament-stadium.webp', alt: 'Thaparlympics 2026: red-clad Thapar campus buildings around a landscaped courtyard', position: 'center 60%' },
   court: { image: 'tournament-court.webp', alt: 'Empty indoor basketball court with a wooden floor', position: 'center' },
   tennis: { image: 'tournament-tennis.webp', alt: 'Empty blue tennis courts with nets and stadium seating', position: 'center 65%' },
   track: { image: 'tournament-track.webp', alt: 'Red athletics track with white lane markings', position: 'center' },
