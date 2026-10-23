@@ -26,12 +26,12 @@ export default function App() {
   const { pathname, hash, search, key } = useLocation();
   useEffect(() => {
     // StaffShell sets the title of staff screens; this effect runs after it and must not overwrite it.
-    if (!shellTitled(pathname)) document.title = pathname.startsWith('/sports/') ? 'Sports | Thaparlympics'
-      : /^\/tournaments\/?$/.test(pathname) ? 'Tournaments | Thaparlympics'
-      : pathname.startsWith('/tournaments/') ? 'Tournament | Thaparlympics'
-      : pathname.startsWith('/operator/') ? 'My Matches | Thaparlympics'
-      : pathname === '/privacy' ? 'Privacy | Thaparlympics'
-      : /^\/(sign-in|sign-up|account|start)(\/|$)/.test(pathname) ? 'Account | Thaparlympics' : 'Thaparlympics';
+    if (!shellTitled(pathname)) document.title = pathname.startsWith('/sports/') ? 'Sports | Campuscores'
+      : /^\/tournaments\/?$/.test(pathname) ? 'Tournaments | Campuscores'
+      : pathname.startsWith('/tournaments/') ? 'Tournament | Campuscores'
+      : pathname.startsWith('/operator/') ? 'My Matches | Campuscores'
+      : pathname === '/privacy' ? 'Privacy | Campuscores'
+      : /^\/(sign-in|sign-up|account|start)(\/|$)/.test(pathname) ? 'Account | Campuscores' : 'Campuscores';
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
     else window.scrollTo(0, 0);
   }, [pathname, hash, key]);

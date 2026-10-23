@@ -7,13 +7,13 @@ import './staff.css';
 /**
  * Frame of every Staff_Area screen: SiteHeader, the role's staff navigation with one `aria-current` item (`current`),
  * an optional Back link to the parent screen (`back: { to, label }`; none on the start screen), and `<main>` with the
- * screen `h1`, focused on entry, and the document title "<title> | Thaparlympics" (Req 4.9, 4.10, 21.4, 21.5).
+ * screen `h1`, focused on entry, and the document title "<title> | Campuscores" (Req 4.9, 4.10, 21.4, 21.5).
  * `status` (saves) and `alert` (mutation errors) fill polite and assertive live regions that stay in the page (Req 21.8).
  */
 export default function StaffShell({ role, title, current, back, status, alert, children }) {
   const heading = useRef(null);
   const { pathname } = useLocation();
-  useEffect(() => { document.title = `${title} | Thaparlympics`; }, [title]);
+  useEffect(() => { document.title = `${title} | Campuscores`; }, [title]);
   useEffect(() => { heading.current.focus(); }, [pathname]);
   // A save or error that reloads the screen can remove the focused control, and focus then falls to the page body.
   // Focus the h1 instead, so keyboard users continue from the top of the screen, next to the announcement (Req 21.1).

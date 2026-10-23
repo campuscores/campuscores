@@ -39,7 +39,7 @@ test('operator routes need sign-in and load no Clerk code without a key', async 
   for (const route of ['/operator/matches', '/operator/matches/1/score']) {
     await page.goto(route);
     await expect(page.locator('h1'), route).toHaveText('Sign-in unavailable');
-    await expect(page).toHaveTitle('My Matches | Thaparlympics');
+    await expect(page).toHaveTitle('My Matches | Campuscores');
   }
   expect(requests.filter(url => /clerk/i.test(url))).toEqual([]);
 });

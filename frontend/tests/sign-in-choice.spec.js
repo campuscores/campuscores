@@ -1,4 +1,4 @@
-﻿// Sign-in choice, /start and the GET /api/me states (Req 2.7, 4.2–4.8) on the live-mode build with a stub Clerk and a
+// Sign-in choice, /start and the GET /api/me states (Req 2.7, 4.2–4.8) on the live-mode build with a stub Clerk and a
 // mocked API. The stub exists only in this test's init script; the app code is the production build.
 import { test, expect } from '@playwright/test';
 import { mockStaff, REPLIES, STAFF_APP as APP } from './helpers.js';
@@ -31,7 +31,7 @@ test('signed out, /sign-in offers three choices, no Super Admin entry, and guest
   await expect(page.getByRole('link', { name: /Super Admin/ })).toHaveCount(0);
   await main.getByRole('link', { name: 'Continue as guest' }).click();
   await expect(page).toHaveURL(`${APP}/`);
-  await expect(page).toHaveTitle('Thaparlympics');
+  await expect(page).toHaveTitle('Campuscores');
   expect(calls).toEqual({ me: 0, accept: 0, other: 0 });
 });
 
@@ -53,7 +53,7 @@ test('signed-in Viewer on /sign-in opens Home', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.viewer });
   await page.goto(`${APP}/sign-in`);
   await expect(page).toHaveURL(`${APP}/`);
-  await expect(page).toHaveTitle('Thaparlympics');
+  await expect(page).toHaveTitle('Campuscores');
 });
 
 for (const [result, accept] of [['200', null], ['404 INVITE_NOT_FOUND', REPLIES.inviteNotFound], ['409 ACCOUNT_EXISTS', REPLIES.accountExists]]) {

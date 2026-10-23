@@ -48,7 +48,7 @@ async function mockPublic(page, replies = {}) {
 const h1 = page => page.getByRole('heading', { level: 1 });
 async function expectPage(page, heading, title) {
   await expect(h1(page)).toHaveText(heading);
-  await expect(page).toHaveTitle(`${title} | Thaparlympics`);
+  await expect(page).toHaveTitle(`${title} | Campuscores`);
 }
 // Ten minutes of page time: any poll, retry or refresh timer would fire and send a request (Req 22.1).
 const settle = page => page.clock.runFor(10 * 60 * 1000);
