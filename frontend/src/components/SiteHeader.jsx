@@ -20,7 +20,12 @@ function SportsDropdown() {
 export default function SiteHeader() {
   const headerRef = useRef(null);
   const location = useLocation();
-  const signInCurrent = location.pathname.startsWith('/sign-in') ? 'page' : undefined;
+  // Clerk's `__client_uat[_<id>]` cookie is a timestamp when signed in and "0" when signed out; reading it loads no Clerk code.
+  const signedIn = typeof document !== 'undefined' && document.cookie.split(';').some(part => {
+    const [name, value] = part.trim().split('=');
+    return name.startsWith('__client_uat') && Boolean(value) && value !== '0';
+  });
+  const account = signedIn ? { to: '/start', label: 'Dashboard', current: location.pathname.startsWith('/start') ? 'page' : undefined } : { to: '/sign-in', label: 'Sign in', current: location.pathname.startsWith('/sign-in') ? 'page' : undefined };
   const tournamentsCurrent = /^\/tournaments\/?$/.test(location.pathname) ? 'page' : undefined;
 
   useEffect(() => {
@@ -50,23 +55,23 @@ export default function SiteHeader() {
   return (
     <div ref={headerRef}>
       <header className="desktop-banner" aria-label="Thaparlympics desktop header">
-        <Link className="site-name" to="/" aria-label="Thaparlympics home">Thaparlympics</Link>
+        <Link className="site-name" to="/" aria-label="Campuscores home">Campuscores</Link>
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link className="nav-link" to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
           <Link className="nav-link" to="/tournaments" aria-current={tournamentsCurrent}>Tournaments</Link>
           <SportsDropdown />
-          {signInLink && <Link className="nav-link" to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
+          {signInLink && <Link className="nav-link" to={account.to} aria-current={account.current}>{account.label}</Link>}
         </nav>
       </header>
       <header className="mobile-header" aria-label="Thaparlympics mobile header">
-        <Link className="site-name" to="/" aria-label="Thaparlympics home">Thaparlympics</Link>
+        <Link className="site-name" to="/" aria-label="Campuscores home">Campuscores</Link>
         <details className="mobile-menu">
           <summary aria-label="Menu" />
           <nav className="mobile-menu-panel" aria-label="Main navigation">
             <Link to="/" aria-current={location.pathname === '/' ? 'page' : undefined}>Home</Link>
             <Link to="/tournaments" aria-current={tournamentsCurrent}>Tournaments</Link>
             <SportsDropdown />
-            {signInLink && <Link to="/sign-in" aria-current={signInCurrent}>Sign in</Link>}
+            {signInLink && <Link to={account.to} aria-current={account.current}>{account.label}</Link>}
           </nav>
         </details>
       </header>

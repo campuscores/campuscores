@@ -72,3 +72,18 @@
 .match-details[role="region"] td { min-width: 28px; }
 .match-details td strong { font-weight: 800; }
 .match-details .is-current { color: #d5203e; }
+/* Full-card button over a real home-room card; a scrollable score table stays above it so it can scroll. */
+.match-card-open {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  cursor: pointer;
+}
+.match-card-open:focus-visible { outline-offset: -3px; }
+.match-details[role="region"] { z-index: 2; }
+.match-card:has(.match-card-open:focus-visible) .match-surface { transform: none; opacity: 1; }

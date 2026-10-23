@@ -1,7 +1,11 @@
 import useHomeCards from '../matches/useHomeCards.js';
 import HorizontalRail from '../../components/HorizontalRail.jsx';
 import LiveMatchCard from '../matches/LiveMatchCard.jsx';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { sports } from '../../data/sports.js';
+import { toSportMatch } from '../sports/liveSportMatches.js';
+import SportMatchDialog from '../sports/SportMatchDialog.jsx';
+import '../sports/SportPage.css';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import Hero from './Hero.jsx';
 import SportsFilters from './SportsFilters.jsx';
@@ -29,6 +33,17 @@ export default function HomePage() {
   const tournamentsRead = usePublicRead(apiBase ? '/tournaments' : null);
   const tournaments = !apiBase ? sampleTournaments : (tournamentsRead.data?.tournaments ?? []).filter(t => t.phase === 'live').map(toEventProp);
   const tournamentNotice = !apiBase || tournamentsRead.status === 'ready' ? undefined : tournamentsRead.status === 'loading' ? 'Loading tournaments…' : UNAVAILABLE;
+  // Real home-room cards open the sport-page match dialog; the latest snapshot keeps it current. Fixtures stay static.
+  const [openCard, setOpenCard] = useState(null);
+  const triggerRef = useRef(null);
+  const onOpen = apiBase ? (match, trigger) => { triggerRef.current = trigger; setOpenCard(homeCards?.find(c => c.id === match.id) ?? null); } : undefined;
+  // Explicit focus return: Safari does not focus a clicked button, so the dialog cannot restore it.
+  function close() { setOpenCard(null); triggerRef.current?.focus(); }
+  const selectedCard = openCard ? homeCards?.find(c => c.id === openCard.id) ?? openCard : null;
+  const selectedSportObj = selectedCard ? sports.find(s => s.id === selectedCard.sport) : null;
+  const selectedMatch = selectedSportObj ? toSportMatch(selectedCard) : null;
+  const dialogTheme = selectedSportObj ? { '--match-background': `url('/assets/${selectedSportObj.id}-background.webp')`, '--match-background-phone': `url('/assets/${selectedSportObj.id}-background-640.webp')`, '--sport-color': selectedSportObj.color } : undefined;
+  const dialog = apiBase && <div style={dialogTheme}><SportMatchDialog sport={selectedSportObj ?? sports[0]} scoring={selectedMatch?.scoring} match={selectedMatch} onClose={close} /></div>;
   const tournamentsRow = <Tournaments tournaments={tournaments} empty={apiBase ? 'No tournaments are live right now.' : undefined} notice={tournamentNotice} onRetry={tournamentNotice === UNAVAILABLE ? tournamentsRead.reload : undefined} />;
-  return <><SiteHeader /><main><Hero /><SportsFilters selectedSport={selectedSport} onSelect={setSelectedSport} /><LiveMatches matches={matches} selectedSport={selectedSport} notice={notice} />{tournamentsRow}{completed.length > 0 && <section className="live-matches" aria-labelledby="final-results-title"><header className="live-heading"><h2 id="final-results-title">Final Results</h2></header><HorizontalRail className="match-scroll" label="Final results, scroll horizontally">{completed.map(match => <LiveMatchCard key={match.id} match={match} />)}</HorizontalRail></section>}</main></>;
+  return <><SiteHeader /><main><Hero /><SportsFilters selectedSport={selectedSport} onSelect={setSelectedSport} /><LiveMatches matches={matches} selectedSport={selectedSport} notice={notice} onOpen={onOpen} />{tournamentsRow}{completed.length > 0 && <section className="live-matches" aria-labelledby="final-results-title"><header className="live-heading"><h2 id="final-results-title">Final Results</h2></header><HorizontalRail className="match-scroll" label="Final results, scroll horizontally">{completed.map(match => <LiveMatchCard key={match.id} match={match} onOpen={onOpen} />)}</HorizontalRail></section>}{dialog}</main></>;
 }

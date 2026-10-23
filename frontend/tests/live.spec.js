@@ -53,6 +53,19 @@ test.describe('homepage live row', () => {
     await page.locator('.sports-nav [data-sport="basketball"]').click();
     await expect(finals.locator('.match-card')).toHaveCount(1);
   });
+  test('a live card opens the match dialog, follows new snapshots and Escape closes it', async ({ page }) => {
+    await socketCount(1);
+    sockets[0].send(snapshot(1, [card('1', 'Ana', 'Ben', [1, 0])]));
+    const open = page.getByRole('button', { name: 'Open match details: Ana vs Ben' });
+    await open.click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('#sport-dialog-title')).toHaveText('Ana1–0Ben');
+    sockets[0].send(snapshot(2, [card('1', 'Ana', 'Ben', [2, 0])]));
+    await expect(dialog.locator('#sport-dialog-title')).toHaveText('Ana2–0Ben');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(open).toBeFocused();
+  });
   test('a reconnected socket replaces state even with a lower seq', async ({ page }) => {
     await socketCount(1);
     sockets[0].send(snapshot(9, [card('1', 'Ana', 'Ben', [4, 2])]));
