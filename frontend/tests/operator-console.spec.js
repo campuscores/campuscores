@@ -1,4 +1,4 @@
-import { stubClerk } from './helpers.js';
+import { stubClerk, tabKey } from './helpers.js';
 // Operator console with a mocked API and a stub Clerk session (Req 19.1–19.10).
 // Runs against the live-mode build (port 4176), which has VITE_API_BASE and a fake Clerk key. The stub Clerk object
 // exists only in this test's init script; the app code and its sign-in check are the production ones.
@@ -197,9 +197,8 @@ test('429 (rate limit) retries the same action with backoff and does not pause',
   await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4']);
 });
 
-test('keyboard-only flow from My Matches to scoring, with 44px targets on phone and desktop', async ({ page, browserName }) => {
-  // macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
-  const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
+test('keyboard-only flow from My Matches to scoring, with 44px targets on phone and desktop', async ({ page }) => {
+  const tab = tabKey(page);
   const server = await mockApi(page);
   const focused = locator => locator.evaluate(el => el === document.activeElement);
   async function tabTo(locator) {
@@ -249,18 +248,19 @@ test('another device holds the lease: the notice is on top with Take over, and t
   await expect(heldNotice(page)).toHaveAttribute('role', 'alert');
   await expect(page.locator('main [role="alert"]', { hasText: 'Another device' })).toHaveCount(1); // announced once
   await expect(heldNotice(page).getByRole('heading', { level: 2 })).toHaveText('Another device is scoring this match');
-  await expect(heldNotice(page)).toContainText('Your actions stay saved on this device.');
+  await expect(heldNotice(page)).toContainText('Take over scoring to score here. This device then loads the latest score from the server.');
   await expect(page.locator('.score-console > :first-child')).toHaveClass(/is-top/);
   expect(await top(heldNotice(page))).toBeLessThan(await top(page.locator('.console-score')));
   await expect(status(page)).toHaveText('Not sending: another device is scoring');
 
-  await point(page, 'Alpha').click();
-  await expect(status(page)).toHaveText('Not sending: another device is scoring · 1 queued');
-  await page.waitForTimeout(300);
-  expect(server.actions).toEqual([]);
+  // Only the lease holder scores: no tap can be queued here while another device scores.
+  await expect(point(page, 'Alpha')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Undo last' })).toBeDisabled();
   await heldNotice(page).getByRole('button', { name: 'Take over scoring' }).click();
-  await expect(status(page)).toHaveText('Synced up to seq 4');
   await expect(heldNotice(page)).toHaveCount(0);
+  await expect(point(page, 'Alpha')).toBeEnabled();
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Synced up to seq 4');
   expect(server.actions.map(a => a.clientSeq)).toEqual([1]); // TAKEOVER starts the lease at 0
 });
 
@@ -273,10 +273,37 @@ test('a takeover by another device mid-match shows the top notice; this device n
   await expect(status(page)).toHaveText('Not sending: another device is scoring · 1 queued');
   await expect(heldNotice(page).getByRole('button', { name: 'Take over scoring' })).toBeVisible();
   await expect(page.locator('.console-notice:not(.is-top)')).toHaveCount(0); // no second, lower copy
+  await expect(heldNotice(page)).toContainText('discards its 1 unsent action');
+  await expect(point(page, 'Bravo')).toBeDisabled();
   await page.getByRole('main').getByRole('link', { name: 'Back to My Matches' }).click();
   await expect(page.locator('h1')).toHaveText('My Matches');
   await page.waitForTimeout(300);
   expect(server.releases).toEqual([]);
+});
+
+test('Take over discards the actions made while another device scored and continues from the server score', async ({ page }) => {
+  const server = await mockApi(page);
+  await openConsole(page, server);
+  server.lease = { deviceId: crypto.randomUUID(), lastClientSeq: 0 }; // the other device took over
+  let refused = false; // only the first action post is refused; preflights and later posts go to mockApi
+  await page.route(`${API}/matches/7/actions`, route => {
+    if (refused || route.request().method() !== 'POST') return route.fallback();
+    refused = true;
+    server.actions.push(route.request().postDataJSON());
+    return reply(route, 409, error('LEASE_REQUIRED'));
+  });
+  await point(page, 'Alpha').click(); // refused with LEASE_REQUIRED: it stays unsent here
+  await expect(heldNotice(page)).toContainText('discards its 1 unsent action');
+  await heldNotice(page).getByRole('button', { name: 'Take over scoring' }).click();
+  await expect(heldNotice(page)).toHaveCount(0);
+  await expect(log(page)).toHaveCount(0); // the refused action is gone, also after a reload
+  await page.reload();
+  await expect(page.locator('h1')).toHaveText('Alpha vs Bravo');
+  await expect(log(page)).toHaveCount(0);
+  await point(page, 'Bravo').click();
+  await expect(status(page)).toHaveText(/^Synced up to seq \d+$/);
+  // Only the refused post and the new point reached the server; the refused one was never resent.
+  expect(server.actions.map(a => a.payload.side)).toEqual([0, 1]);
 });
 
 /** Answers the next action post with 409 LEASE_REQUIRED, as the backend chain does after another device took over. */

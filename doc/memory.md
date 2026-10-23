@@ -297,3 +297,13 @@ Confirmed by Arnav. This replaces the optional Viewer account.
 - StaffShell shows a Sign out button next to "Signed in as" on every staff screen.
 - No database, role, assignment or match data changes. The backend already refuses Viewers on staff endpoints (403 `NOT_STAFF`).
 - Clerk still creates an account for an uninvited sign-up until the Clerk dashboard sets sign-up mode to Restricted (invitations still work). That is a dashboard setting owned by Arnav.
+
+## Deletes, scorer accounts and one scoring device — 24 October 2026
+
+Confirmed by Arnav.
+
+- Only a Super Admin deletes a tournament or a match. A Tournament Manager gets 403 `ROLE_FORBIDDEN` and sees no Delete control. A Super Admin may delete a tournament in any status and a match in any state; deletes cascade to score actions, snapshots, outbox events, leases and assignments. A published tournament or a played match needs a reason. The home Live_Room drops the deleted matches' cards.
+- Completing a tournament with a Live match stays refused (409 `LIVE_MATCHES`): the scorer finishes it or a Super Admin deletes it first.
+- Match Scorer logins are shared event accounts. They cannot delete themselves (`DELETE /api/me` 403 `SCORER_ACCOUNT_MANAGED`; no Delete link). A Super Admin disables them.
+- One device scores a match. Score controls stay off until this device holds the lease. **Take over scoring** discards this device's unsent actions and loads the server score first, so two devices' points never add up. Limit: a scoring page opened while offline cannot score until it gets the lease.
+- Public tournament list and detail reads use the uncached Hyperdrive pool, so a status change (for example Completed) shows on the next read.

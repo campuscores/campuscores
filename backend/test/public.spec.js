@@ -1,6 +1,7 @@
 import { env, exports as workerExports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { toPublic } from '../src/http.js';
+import { api } from './helpers.js';
 
 const worker = (path, headers = {}) => workerExports.default.fetch(new Request(`http://example.com${path}`, { headers }));
 
@@ -89,6 +90,15 @@ describe.skipIf(!env.HYPERDRIVE_CACHED)('public read routes against the seed', (
     const seedRows = tournament.matches.filter((m) => SEED_MATCHES[m.id]);
     expect(seedRows.map((m) => m.id)).toEqual(SEED_MATCH_ORDER);
     seedRows.forEach((m) => expectSeedMatch(m, SEED_MATCHES[m.id]));
+  });
+
+  // A staff edit of dates or sports must show on the next public read, not after the Hyperdrive cache window.
+  it('reads the tournament list and detail through the uncached pool', async () => {
+    const noCache = { HYPERDRIVE_CACHED: { connectionString: 'postgres://none:none@127.0.0.1:1/none' } };
+    for (const path of ['/api/tournaments', '/api/tournaments/1', '/api/tournaments/test-fake-cup']) {
+      expect((await api('GET', path, { env: noCache })).status, path).toBe(200);
+    }
+    expect((await api('GET', '/api/matches/1', { env: noCache })).status).toBe(500); // match reads stay cached
   });
 
   it('returns the same tournament by slug as by ID', async () => {

@@ -33,3 +33,16 @@ export function removeManagerDialog(manager, tournamentName) {
     effects: [`${who} can no longer change ${sport} in ${tournamentName}.`, 'Matches they already score keep their assignments.'],
   };
 }
+
+/**
+ * Delete-match dialog props (Super Admin only). A match that is not an untouched Upcoming one has public scores or a
+ * result, so the API needs a reason (409 REASON_REQUIRED) and the dialog says the score history goes too.
+ */
+export function deleteMatchDialog(match) {
+  const played = Boolean(match) && (match.phase !== 'upcoming' || match.status !== 'SCHEDULED' || match.hasActions);
+  return {
+    reason: played ? 'required' : 'optional',
+    effects: ['Removes the match from the schedule.', ...(played ? ['Removes its score history and result. Viewers stop seeing it.'] : []),
+      'Removes its scorer assignment.', 'This cannot be undone.'],
+  };
+}

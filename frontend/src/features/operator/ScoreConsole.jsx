@@ -4,7 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } 
 import { apiBase, apiFetch } from '../../services/api.js';
 import StaffShell from '../staff/StaffShell.jsx';
 import { emptyQueue, nextClientSeq, nextToSend, queueReducer, restoreQueue, retryDelay } from './queue.js';
-import { deviceId, loadActions, saveAction } from './queueStore.js';
+import { deleteActions, deviceId, loadActions, saveAction } from './queueStore.js';
 import { isClosed, sideName, sportLabel, stageLabel } from './operatorMatches.js';
 import './MyMatches.css';
 // RESTORE replaces the state with the stored queue after a reload (Req 19.8); every other event is the pure reducer.
@@ -114,8 +114,19 @@ export default function ScoreConsole({ matchId, getToken, role }) {
     held.current = { token, deviceId: device };
     return data;
   })().then(
-    data => { setLeaseError(null); setLease({ lastClientSeq: data.lease.lastClientSeq }); return true; },
-    err => { setLeaseError(err); return false; },
+    data => {
+      setLeaseError(null);
+      // KEEP (a re-check) may answer before a send that is already accepted, so never lower the number.
+      const last = data.lease.lastClientSeq;
+      setLease(l => ({ lastClientSeq: data.lease.decision === 'KEEP' ? Math.max(l?.lastClientSeq ?? 0, last) : last }));
+      return true;
+    },
+    err => {
+      // Another device holds the lease: stop sending and scoring here until "Take over scoring".
+      if (err.code === 'LEASE_HELD') { held.current = null; setLease(null); }
+      setLeaseError(err);
+      return false;
+    },
   ), [matchId, getToken, device]);
   // Release the lease when the scorer leaves, so a reload or another device gets GRANT. The queue stays in IndexedDB.
   // `keepalive` lets the pagehide request outlive the page; pagehide cannot await getToken(), so it uses the cached token.
@@ -140,14 +151,58 @@ export default function ScoreConsole({ matchId, getToken, role }) {
     addEventListener('pageshow', onShow);
     return () => { removeEventListener('pagehide', onHide); removeEventListener('pageshow', onShow); release(false); };
   }, []);
-  const takeOver = async () => { if (await acquire(true)) dispatch({ type: 'RESUME' }); };
+  /**
+   * Take over from another device (Arnav, 24 October 2026): only one device scores a match. This device's unsent
+   * actions were made while another device was scoring, so they are discarded (from IndexedDB first, so a reload never
+   * resends them). Then the console loads the accepted score and actions from the server and scoring continues from
+   * there, so two devices' points never add up.
+   */
+  const [takingOver, setTakingOver] = useState(false);
+  async function takeOver() {
+    if (takingOver) return;
+    setTakingOver(true);
+    try {
+      if (!(await acquire(true))) return;
+      await deleteActions(unsynced(queue.items).map(i => i.actionId));
+      const records = await loadActions(matchId);
+      if (match.status === 'SCHEDULED' || match.format || accepted?.format) {
+        const result = await apiFetch(`/operator/matches/${matchId}/scoring`, { token: await getToken() });
+        const byId = new Map(result.actions.map(a => [a.actionId, a]));
+        dispatch({ type: 'RESTORE', records: records.filter(r => byId.has(r.actionId)).map(r => ({ ...r, status: 'synced', seq: byId.get(r.actionId).seq })) });
+        setAccepted({ ...result.snapshot, seq: result.seq, actions: result.actions });
+        if (result.snapshot?.format) setMatch(m => ({ ...m, status: result.snapshot.status ?? m.status, format: result.snapshot.format }));
+      } else {
+        dispatch({ type: 'RESTORE', records: records.filter(r => r.status === 'synced') });
+        const { seq, snapshot } = (await apiFetch(`/matches/${matchId}`))?.match ?? {};
+        if (snapshot?.sides) setAccepted({ ...snapshot, seq });
+      }
+      setActionError('');
+    } catch (err) {
+      setActionError(`Could not load the latest score: ${err.message}. Try "Take over scoring" again.`);
+      setLease(null); // scoring stays off until the latest score is loaded
+      setLeaseError({ code: 'LEASE_HELD' });
+    } finally {
+      setTakingOver(false);
+    }
+  }
   const scoring = match && !isClosed(match);
   useEffect(() => {
     if (scoring && device && online && !lease && !leaseError) acquire(false);
   }, [scoring, device, online, lease, leaseError, acquire]);
+  // While this device scores, re-check the lease every 15 seconds and when the tab is shown again, so a takeover by
+  // another device shows here at once, before the next tap. KEEP changes nothing; LEASE_HELD stops scoring here.
+  const recheck = useEffectEvent(() => { if (lease && online && !takingOver && document.visibilityState === 'visible') acquire(false); });
+  useEffect(() => {
+    if (!scoring || !lease) return undefined;
+    const timer = setInterval(recheck, 15000);
+    const onVisible = () => recheck();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [scoring, Boolean(lease)]); // eslint-disable-line react-hooks/exhaustive-deps -- only start/stop with the lease
   // Send loop: one action at a time, head of the queue first, same actionId on every retry (Req 19.3, 19.5–19.7).
   useEffect(() => {
-    const item = online && lease && scoringLoaded ? nextToSend(queue) : null;
+    // Nothing goes out during a takeover: the unsent actions are being discarded.
+    const item = online && lease && scoringLoaded && !takingOver ? nextToSend(queue) : null;
     if (!item) return;
     const timer = setTimeout(async () => {
       dispatch({ type: 'SEND_START', actionId: item.actionId });
@@ -179,7 +234,7 @@ export default function ScoreConsole({ matchId, getToken, role }) {
       saveAction({ ...item, status: 'synced', seq: result.seq, snapshot: result.snapshot }).catch(() => {});
     }, retryDelay(queue));
     return () => clearTimeout(timer);
-  }, [queue, online, lease, scoringLoaded, matchId, getToken]);
+  }, [queue, online, lease, scoringLoaded, takingOver, matchId, getToken]);
   async function record(type, payload, reversesActionId = null) {
     if (saving.current) return false; // one write at a time, so two taps never share a clientSeq
     setActionError('');
@@ -215,11 +270,14 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   const title = `${sideName(match, 0)} vs ${sideName(match, 1)}`;
   // Another device holds the lease (refused at load, or taken over later): only a takeover lets this device sync.
   const leaseHeld = scoring && (leaseError?.code === 'LEASE_HELD' || queue.paused === 'LEASE_REQUIRED');
+  // Only the device that holds the lease scores (Arnav, 24 October 2026): no tap is queued before the lease answers.
+  const canScore = !scoring || (Boolean(lease) && !leaseHeld && !takingOver);
+  const unsent = unsynced(queue.items).length;
   const heldNotice = leaseHeld && (
     <div className="console-notice is-top" role="alert">
       <h2>Another device is scoring this match</h2>
-      <p>Your actions stay saved on this device.</p>
-      <div className="text-actions"><button type="button" className="scoring-action" onClick={takeOver}>Take over scoring</button></div>
+      <p>Take over scoring to score here. This device then loads the latest score from the server{unsent ? ` and discards its ${unsent} unsent ${unsent === 1 ? 'action' : 'actions'}` : ''}.</p>
+      <div className="text-actions"><button type="button" className="scoring-action" onClick={takeOver} aria-disabled={takingOver || undefined}>{takingOver ? 'Taking over…' : 'Take over scoring'}</button></div>
     </div>
   );
   const notices = <>
@@ -236,7 +294,9 @@ export default function ScoreConsole({ matchId, getToken, role }) {
         </div>
       )}
   </>;
-  const status = statusLine(queue, online, leaseHeld);
+  const status = scoring && !lease && !leaseError && !leaseHeld
+    ? (online ? 'Getting scoring access…' : 'Offline · connect to the internet to get scoring access')
+    : statusLine(queue, online, leaseHeld);
   const format = accepted?.format ?? match.format ?? queue.items.find(i => i.type === 'START')?.payload.format;
   if (match.status === 'SCHEDULED' || format) {
     const history = [...(accepted?.actions ?? []), ...unsynced(queue.items).filter(i => !(accepted?.actions ?? []).some(a => a.actionId === i.actionId))];
@@ -247,7 +307,7 @@ export default function ScoreConsole({ matchId, getToken, role }) {
       catch (err) { projectionError = err.message; }
     }
     const undo = activeActions(history).findLast(a => !['START', 'FINALIZE'].includes(a.type));
-    return shell(title, <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || Boolean(storeError) || Boolean(queue.paused) || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={status} notice={heldNotice} error={actionError || projectionError || storeError}>
+    return shell(title, <ScoringPage match={match} snapshot={projection} accepted={accepted} disabled={!ready || !scoringLoaded || busy || !canScore || Boolean(storeError) || Boolean(queue.paused) || match.validNow === false} pending={unsynced(queue.items).length} onAction={record} undoTarget={undo} status={status} notice={heldNotice} error={actionError || projectionError || storeError}>
       {notices}
       {!scoringLoaded && <p role="status">Loading accepted scoring actions…</p>}
     </ScoringPage>);
@@ -255,7 +315,7 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   const reversed = new Set(queue.items.map(i => i.reversesActionId).filter(Boolean));
   const undoTarget = queue.items.findLast(i => i.type === 'POINT' && !reversed.has(i.actionId));
   const pending = pendingPoints(accepted, queue.items);
-  const canRecord = ready && !busy && !storeError;
+  const canRecord = ready && !busy && !storeError && canScore;
   return shell(title,
     <div className="text-page score-console">
       {heldNotice}

@@ -37,6 +37,15 @@ export async function saveAction(record) {
   await committed(tx);
 }
 
+/** Removes stored actions by actionId; resolves after the delete is committed, so a reload never resends them. */
+export async function deleteActions(actionIds) {
+  if (!actionIds.length) return;
+  const tx = (await openQueueDb()).transaction('actions', 'readwrite');
+  const store = tx.objectStore('actions');
+  for (const id of actionIds) store.delete(id);
+  await committed(tx);
+}
+
 /** All stored actions for one match, in clientSeq order. */
 export async function loadActions(matchId) {
   const index = (await openQueueDb()).transaction('actions').objectStore('actions').index('matchClientSeq');

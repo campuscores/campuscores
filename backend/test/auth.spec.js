@@ -184,9 +184,9 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('DELETE /api/me', () => {
   });
 
   it('disables staff and revokes assignments before Clerk; a Clerk failure returns 502 and a retry completes', async () => {
-    // Throwaway operator and CUSTOM match, so the shared seed rows never change.
+    // Throwaway manager (who self-assigned) and CUSTOM match, so the shared seed rows never change.
     const user = `test_del_staff_${crypto.randomUUID()}`;
-    const { id: accountId } = await one(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'MATCH_OPERATOR') RETURNING id`, [user]);
+    const { id: accountId } = await one(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'TOURNAMENT_MANAGER') RETURNING id`, [user]);
     const { id: matchId } = await one(`INSERT INTO matches (tournament_sport_id, kind) VALUES (2, 'CUSTOM') RETURNING id`);
     const { id: assignmentId } = await one(
       'INSERT INTO match_operator_assignments (match_id, account_id, assigned_by) VALUES ($1, $2, 1) RETURNING id',
@@ -217,6 +217,21 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('DELETE /api/me', () => {
         await client.query('DELETE FROM matches WHERE id = $1', [matchId]);
         await client.query('DELETE FROM admin_accounts WHERE id = $1', [accountId]);
       });
+    }
+  });
+
+  it('refuses an ACTIVE Match Scorer with 403 SCORER_ACCOUNT_MANAGED, changes nothing and never calls Clerk', async () => {
+    const user = `test_del_scorer_${crypto.randomUUID()}`;
+    const { id: accountId } = await one(`INSERT INTO admin_accounts (clerk_user_id, role) VALUES ($1, 'MATCH_OPERATOR') RETURNING id`, [user]);
+    try {
+      const calls = stubClerk(() => deleted(user));
+      const res = await api('DELETE', '/api/me', { user });
+      expect(res.status).toBe(403);
+      expect((await res.json()).error.code).toBe('SCORER_ACCOUNT_MANAGED');
+      expect(calls).toEqual([]);
+      expect(await one('SELECT status FROM admin_accounts WHERE id = $1', [accountId])).toEqual({ status: 'ACTIVE' });
+    } finally {
+      await db((client) => client.query('DELETE FROM admin_accounts WHERE id = $1', [accountId]));
     }
   });
 

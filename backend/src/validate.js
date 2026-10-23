@@ -213,16 +213,18 @@ export function statusChange(from, to, { sportCount = 0, liveCount = 0 } = {}) {
  * @param {string} args.tournamentStatus DRAFT | ONGOING | COMPLETED | ARCHIVED
  * @param {boolean} args.inScope caller owns or manages the Tournament_Sport
  * @param {boolean} args.holdsAssignment caller holds the match's ACTIVE Assignment
- * @param {boolean} args.hasActions the match has at least one score action
+ * @param {boolean} args.hasActions the match has at least one score action (a delete then needs a reason)
+ * @param {boolean} args.superAdmin the caller is a Super Admin, the only role that deletes matches (24 October 2026)
  * @returns {{ canEdit: boolean, canDelete: boolean, canAssign: boolean, canScore: boolean }}
  */
-export function matchFlags({ phase, status, tournamentStatus, inScope, holdsAssignment, hasActions }) {
+export function matchFlags({ phase, status, tournamentStatus, inScope, holdsAssignment, superAdmin }) {
   const scope = Boolean(inScope) && !isLocked(tournamentStatus);
   const upcoming = phase === 'upcoming' && status === 'SCHEDULED'; // editable window
   const notClosed = phase !== 'past'; // Final or Not_Scored both report phase 'past'
   return {
     canEdit: scope && upcoming,
-    canDelete: scope && upcoming && !hasActions,
+    canDelete: scope && Boolean(superAdmin), // any match state; a played match needs a reason
+
     canAssign: scope && notClosed, // upcoming or live; assign refuses Final and Not_Scored
     canScore: Boolean(holdsAssignment) && !isLocked(tournamentStatus) && notClosed,
   };

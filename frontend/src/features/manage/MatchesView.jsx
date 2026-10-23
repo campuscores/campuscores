@@ -8,7 +8,7 @@ import { messageFor, PHASE_LABELS } from '../staff/labels.js';
 import { sports as SPORTS } from '../../data/sports.js';
 import DataList from './DataList.jsx';
 import { matchColumns, stageNames } from './matchColumns.jsx';
-import { homeBack, sidesText } from './manage.js';
+import { deleteMatchDialog, homeBack, sidesText } from './manage.js';
 import './manage.css';
 
 /**
@@ -59,8 +59,7 @@ export default function MatchesView({ role, state, onRetry, matches = [], total,
           </>} />
         </ScreenState>
       </section>
-      <ConfirmDialog open={Boolean(confirm)} title={confirm ? `Delete ${sidesText(confirm)}?` : ''} danger confirmLabel="Delete match" reason="optional"
-        effects={['Removes the match from the schedule.', 'Removes its scorer assignment.', 'This cannot be undone.']}
+      <ConfirmDialog open={Boolean(confirm)} title={confirm ? `Delete ${sidesText(confirm)}?` : ''} danger confirmLabel="Delete match" {...deleteMatchDialog(confirm)}
         saving={saving} error={confirm ? messageFor(error) : null} onConfirm={onConfirm} onCancel={onCancel} />
     </StaffShell>
   );

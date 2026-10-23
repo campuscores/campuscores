@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         <p>We keep your account until you delete it. When a staff account is deleted, we disable it and keep its audit records, so the score history stays accurate.</p>
 
         <h2>Delete your account</h2>
-        <p>You can delete your account at any time on the <Link to="/account/delete">account deletion page</Link>.</p>
+        <p>You can delete your account at any time on the <Link to="/account/delete">account deletion page</Link>. Match Scorer accounts are shared event accounts, so a Super Admin removes them.</p>
 
         <h2>Contact</h2>
         <p>For privacy questions, email <a href="mailto:bhatiaarnav05@gmail.com">bhatiaarnav05@gmail.com</a>.</p>

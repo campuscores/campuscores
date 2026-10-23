@@ -37,9 +37,11 @@ function dialogFor(confirm, tournament, sports) {
   }
   if (confirm.kind === 'delete') {
     const sum = key => sports.reduce((total, sport) => total + (sport[key] ?? 0), 0);
+    const published = tournament.status !== 'DRAFT'; // public results exist, so the API needs a reason
     return {
-      title: `Delete ${tournament.name}?`, danger: true, confirmLabel: 'Delete tournament', reason: 'optional',
+      title: `Delete ${tournament.name}?`, danger: true, confirmLabel: 'Delete tournament', reason: published ? 'required' : 'optional',
       effects: [`Removes ${count(sports.length, 'sport', 'sports')}, ${count(sum('teamCount'), 'team', 'teams')} and ${count(sum('matchCount'), 'match', 'matches')}.`,
+        ...(published ? ['Removes every score and result. Viewers can no longer see the tournament or its matches.'] : []),
         'Removes every scorer assignment and sport manager of this tournament.', 'This cannot be undone.'],
     };
   }
@@ -74,7 +76,7 @@ export default function TournamentOverviewView({ role, state, onRetry, tournamen
       status={status} alert={confirm ? '' : alertFor(error, ['email', 'sport'])}>
       <ErrorActions onSignIn={onSignIn} onReload={onReload} />
       <ScreenState state={state} what="the tournament" onRetry={onRetry}>
-        {tournament && <Overview key={tournament.status} tournament={tournament} isOwner={isOwner} nextStep={nextStep} sports={sports} saving={saving} error={error}
+        {tournament && <Overview key={tournament.status} tournament={tournament} isOwner={isOwner} canDelete={role === 'SUPER_ADMIN'} nextStep={nextStep} sports={sports} saving={saving} error={error}
           onRequest={onRequest} onAddManager={onAddManager} />}
       </ScreenState>
       <ConfirmDialog open={Boolean(confirm)} {...dialog} saving={saving} error={confirm ? messageFor(error) : null} onConfirm={onConfirm} onCancel={onCancel} />
@@ -82,7 +84,7 @@ export default function TournamentOverviewView({ role, state, onRetry, tournamen
   );
 }
 
-function Overview({ tournament, isOwner, nextStep, sports, saving, error, onRequest, onAddManager }) {
+function Overview({ tournament, isOwner, canDelete, nextStep, sports, saving, error, onRequest, onAddManager }) {
   const { slug, status } = tournament;
   const locked = isLocked(status);
   const targets = nextStatuses(status);
@@ -149,7 +151,8 @@ function Overview({ tournament, isOwner, nextStep, sports, saving, error, onRequ
             </div>
           </form>
         )}
-        {status === 'DRAFT' && (
+        {/* Only a Super Admin deletes a tournament, in any status (24 October 2026). */}
+        {canDelete && (
           <p><button type="button" className="button-text" onClick={() => onRequest({ kind: 'delete' })}>Delete tournament</button></p>
         )}
       </section>

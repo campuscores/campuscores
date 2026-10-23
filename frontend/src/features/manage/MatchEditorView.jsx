@@ -6,7 +6,7 @@ import MatchForm from './MatchForm.jsx';
 import SportChoice from './SportChoice.jsx';
 import { SaveRecovery } from './SetupDetailsView.jsx';
 import { MATCH_FIELDS, alertFor } from './forms.js';
-import { sidesText } from './manage.js';
+import { deleteMatchDialog, sidesText } from './manage.js';
 import './manage.css';
 
 /** Read-only summary of a Live, Final or Not scored match (Req 12.8, 14.3, 14.4). */
@@ -58,8 +58,7 @@ export default function MatchEditorView({ role, state, onRetry, match, tournamen
           <p className="staff-section"><button type="button" className="button-text" onClick={onRequestDelete}>Delete match</button></p>
         )}
       </ScreenState>
-      <ConfirmDialog open={Boolean(confirm)} title={match ? `Delete ${sidesText(match)}?` : ''} danger confirmLabel="Delete match" reason="optional"
-        effects={['Removes the match from the schedule.', 'Removes its scorer assignment.', 'This cannot be undone.']}
+      <ConfirmDialog open={Boolean(confirm)} title={match ? `Delete ${sidesText(match)}?` : ''} danger confirmLabel="Delete match" {...deleteMatchDialog(match)}
         saving={saving} error={confirm ? messageFor(error) : null} onConfirm={onConfirm} onCancel={onCancel} />
     </StaffShell>
   );

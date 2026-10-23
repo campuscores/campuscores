@@ -24,6 +24,30 @@ const notFound = (what) => new AppError(404, 'NOT_FOUND', `${what} not found`);
 // A Completed/Archived tournament refuses every change but a status change (Requirement 9.11).
 const locked = () => new AppError(409, 'TOURNAMENT_LOCKED', 'This tournament is locked and cannot be edited.');
 
+/**
+ * Deletes the matches that `matchSql` selects (a `SELECT m.id FROM matches m ...` with `params`) and every row that
+ * references them, children first: outbox events, snapshots, score actions, scorer leases and assignments. The caller
+ * already holds the match row locks (FOR UPDATE). Returns the deleted assignments result and the deleted match IDs.
+ */
+async function deleteMatchRows(tx, matchSql, params) {
+  const ids = `(${matchSql})`;
+  await tx.query(`DELETE FROM outbox_events WHERE match_id IN ${ids}`, params);
+  await tx.query(`DELETE FROM match_snapshots WHERE match_id IN ${ids}`, params);
+  await tx.query(`DELETE FROM score_actions WHERE match_id IN ${ids}`, params); // one statement, so Undo links check at its end
+  await tx.query(`DELETE FROM scorer_leases WHERE match_id IN ${ids}`, params);
+  const assignments = await tx.query(`DELETE FROM match_operator_assignments WHERE match_id IN ${ids}`, params);
+  const { rows } = await tx.query(`DELETE FROM matches WHERE id IN ${ids} RETURNING id::text AS id`, params);
+  return { assignments, matchIds: rows.map((r) => r.id) };
+}
+
+// After a committed delete, the home Live_Room stops showing the deleted matches' live and final cards. Best effort:
+// the delete already succeeded, and a failure only leaves a card until the room's next change for that match.
+const dropHomeCards = (c, matchIds) => {
+  if (!matchIds.length || !c.env.ROOMS) return;
+  const home = c.env.ROOMS.get(c.env.ROOMS.idFromName('home'));
+  c.executionCtx.waitUntil(home.removeCards(matchIds).catch(() => {}));
+};
+
 // Tournament-level scope predicate for a plain `tournaments t` list (no joined tournament_sports):
 // owned by the caller, or has at least one sport the caller manages. Super_Admin: no restriction.
 // `startIndex` is the first free placeholder; returns the SQL fragment and the params it adds.
@@ -471,10 +495,13 @@ manageRoutes.post('/manage/tournaments/:slug/status', ...guard, async (c) => {
 });
 
 // --- DELETE /api/manage/tournaments/:slug --------------------------------
-// Draft only (owner scope). Locks the tournament's matches in id order, then the tournament,
-// removes the subtree in one transaction and returns the removed counts (Requirement 9.12/9.13).
+// Super Admin only, any status (Arnav, 24 October 2026); a non-Draft needs a reason (409 REASON_REQUIRED). Locks the
+// tournament's matches in id order, then the tournament, removes the subtree with its score data in one transaction,
+// returns the removed counts (Requirement 9.12/9.13) and then drops the deleted matches' home cards.
 manageRoutes.delete('/manage/tournaments/:slug', ...guard, async (c) => {
   const account = c.get('account');
+  // Only a Super Admin deletes tournaments and matches (Arnav, 24 October 2026).
+  if (account.role !== 'SUPER_ADMIN') throw new AppError(403, 'ROLE_FORBIDDEN', 'Only a Super Admin can delete a tournament');
   const requestId = c.get('requestId');
   const slug = c.req.param('slug');
   // A DELETE body is optional; read the reason when one is sent.
@@ -493,14 +520,13 @@ manageRoutes.delete('/manage/tournaments/:slug', ...guard, async (c) => {
       );
       await tx.query('SELECT id FROM tournaments WHERE id = $1 FOR UPDATE', [current.id]);
       await requireScope(tx, account, { tournamentId: current.id });
-      if (current.status !== 'DRAFT') throw new AppError(409, 'NOT_DRAFT', 'Only a draft tournament can be deleted.');
+      // Any status may be deleted (Arnav, 24 October 2026). A published tournament has public results, so it needs a reason.
+      if (current.status !== 'DRAFT' && !reason) throw new AppError(409, 'REASON_REQUIRED', 'A reason is required to delete a published tournament');
 
-      // Remove the subtree bottom-up. A Draft has no score action, so assignments delete cleanly.
+      // Remove the subtree bottom-up, score data first (deleteMatchRows), then sports and the tournament.
       const sportIds = `(SELECT id FROM tournament_sports WHERE tournament_id = $1)`;
-      const matchIds = `(SELECT m.id FROM matches m WHERE m.tournament_sport_id IN ${sportIds})`;
-      const assignments = await tx.query(`DELETE FROM match_operator_assignments WHERE match_id IN ${matchIds}`, [current.id]);
-      await tx.query(`DELETE FROM scorer_leases WHERE match_id IN ${matchIds}`, [current.id]);
-      const matches = await tx.query(`DELETE FROM matches WHERE tournament_sport_id IN ${sportIds}`, [current.id]);
+      const { assignments, matchIds } = await deleteMatchRows(tx, `SELECT m.id FROM matches m WHERE m.tournament_sport_id IN ${sportIds}`, [current.id]);
+      const matches = { rowCount: matchIds.length };
       const sportManagers = await tx.query(`DELETE FROM tournament_sport_managers WHERE tournament_sport_id IN ${sportIds}`, [current.id]);
       const teams = await tx.query(`DELETE FROM teams WHERE tournament_sport_id IN ${sportIds}`, [current.id]);
       const sports = await tx.query('DELETE FROM tournament_sports WHERE tournament_id = $1', [current.id]);
@@ -517,10 +543,11 @@ manageRoutes.delete('/manage/tournaments/:slug', ...guard, async (c) => {
         actorId: account.id, action: 'TOURNAMENT_DELETED', entity: 'tournaments', entityId: String(current.id), requestId, reason,
         before: { slug, status: current.status }, after: counts,
       });
-      return counts;
+      return { counts, matchIds };
     }),
   );
-  return c.json({ removed });
+  dropHomeCards(c, removed.matchIds);
+  return c.json({ removed: removed.counts });
 });
 
 // --- Sports, Default_Format and Sport_Managers (task 7.2) ----------------
@@ -1073,11 +1100,12 @@ const MATCH_SELECT = `
 // Build the client row from a joined query row and attach the control flags. `now` is database time.
 // inScope is true for every row a scoped read or a located match returns (scopeFilter/requireScope
 // already restricted them); holdsAssignment and hasActions come from the query.
-function matchRowWithFlags(r, now) {
+function matchRowWithFlags(r, now, account) {
   const row = staffMatchRow(r, now);
   const flags = matchFlags({
     phase: row.phase, status: r.status, tournamentStatus: r.tournamentStatus,
     inScope: true, holdsAssignment: Boolean(r.holdsAssignment), hasActions: Boolean(r.hasActions),
+    superAdmin: account?.role === 'SUPER_ADMIN',
   });
   return { ...row, ...flags };
 }
@@ -1159,7 +1187,7 @@ manageRoutes.get('/manage/matches', ...guard, async (c) => {
   });
 
   const now = result.length ? Number(result[0].now) : Date.now();
-  let rows = result.map((r) => matchRowWithFlags(r, now));
+  let rows = result.map((r) => matchRowWithFlags(r, now, account));
   if (phase) rows = rows.filter((row) => row.phase === phase);
   const total = rows.length;
   return c.json({ matches: rows.slice(0, 500), total });
@@ -1242,7 +1270,7 @@ async function readMatchRow(c, account, id) {
     return row;
   });
   if (!r) throw notFound('Match');
-  return matchRowWithFlags(r, Number(r.now));
+  return matchRowWithFlags(r, Number(r.now), account);
 }
 
 // --- GET /api/manage/matches/:id -----------------------------------------
@@ -1265,7 +1293,7 @@ manageRoutes.get('/manage/matches/:id', ...guard, async (c) => {
          WHERE m.id = $2`,
         [account.id, id],
       );
-      return matchRowWithFlags(r, Number(r.now));
+      return matchRowWithFlags(r, Number(r.now), account);
     }),
   );
   return c.json({ match });
@@ -1337,14 +1365,14 @@ manageRoutes.patch('/manage/matches/:id', ...guard, async (c) => {
 });
 
 // --- DELETE /api/manage/matches/:id --------------------------------------
-// Delete a SCHEDULED match with no score action (sport scope). Revokes its ACTIVE Assignment and
-// drops its scorer lease in the same transaction (Requirement 12.9). 409 MATCH_CLOSED when the match
-// is Live, Final, Not_Scored or already has a score action (Requirement 12.10, design); 409
-// TOURNAMENT_LOCKED when the tournament is Completed/Archived. Lock order: match FOR UPDATE, then
-// the owning tournament FOR SHARE. Writes a MATCH_DELETED Audit_Row, plus an ASSIGNMENT_REVOKED
-// Audit_Row when an ACTIVE Assignment is revoked (one audit row per accepted mutation).
+// Super Admin only (Arnav, 24 October 2026), in any match state. A match that is Live, Final, Not_Scored or has a
+// score action needs a reason (409 REASON_REQUIRED). Deletes the match with its score data, scorer lease and
+// assignments in one transaction (deleteMatchRows), then drops its home card. 409 TOURNAMENT_LOCKED when the
+// tournament is Completed/Archived. Lock order: match FOR UPDATE, then the owning tournament FOR SHARE. Writes an
+// ASSIGNMENT_REVOKED Audit_Row when an ACTIVE Assignment existed, then a MATCH_DELETED Audit_Row.
 manageRoutes.delete('/manage/matches/:id', ...guard, async (c) => {
   const account = c.get('account');
+  if (account.role !== 'SUPER_ADMIN') throw new AppError(403, 'ROLE_FORBIDDEN', 'Only a Super Admin can delete a match');
   const requestId = c.get('requestId');
   const id = c.req.param('id');
   if (!/^\d+$/.test(id)) throw new AppError(400, 'BAD_REQUEST', 'id: This match id is not valid.');
@@ -1370,29 +1398,28 @@ manageRoutes.delete('/manage/matches/:id', ...guard, async (c) => {
       );
       await requireScope(tx, account, { tournamentSportId: match.tournamentSportId });
       if (t && isLocked(t.status)) throw locked();
-      // A Live/Final/Not_Scored match, or any match with a score action, cannot be deleted.
-      if (matchPhase({ status: match.status, scheduledAt: match.scheduledAt }, Number(match.now)) !== 'upcoming' || match.hasActions) throw matchClosed();
+      // A Live, Final or Not_Scored match, or one with a score action, has public results: it needs a reason.
+      const played = matchPhase({ status: match.status, scheduledAt: match.scheduledAt }, Number(match.now)) !== 'upcoming' || match.hasActions;
+      if (played && !reason) throw new AppError(409, 'REASON_REQUIRED', 'A reason is required to delete a played match');
 
-      // Revoke the ACTIVE Assignment (if any) and drop the scorer lease, then delete the match.
-      const { rows: [revoked] } = await tx.query(
-        `UPDATE match_operator_assignments SET status = 'REVOKED', revoked_at = now(), revoked_by = $2, revoke_reason = $3
-         WHERE match_id = $1 AND status = 'ACTIVE' RETURNING id, account_id`,
-        [match.id, account.id, reason],
+      const { rows: [active] } = await tx.query(
+        `SELECT id, account_id FROM match_operator_assignments WHERE match_id = $1 AND status = 'ACTIVE'`,
+        [match.id],
       );
-      if (revoked) {
+      if (active) {
         await audit(tx, {
-          actorId: account.id, action: 'ASSIGNMENT_REVOKED', entity: 'match_operator_assignments', entityId: String(revoked.id), requestId, reason,
-          before: { status: 'ACTIVE', accountId: String(revoked.account_id) }, after: { status: 'REVOKED' },
+          actorId: account.id, action: 'ASSIGNMENT_REVOKED', entity: 'match_operator_assignments', entityId: String(active.id), requestId, reason,
+          before: { status: 'ACTIVE', accountId: String(active.account_id) }, after: { status: 'REVOKED' },
         });
       }
-      await tx.query('DELETE FROM scorer_leases WHERE match_id = $1', [match.id]);
-      await tx.query('DELETE FROM matches WHERE id = $1', [match.id]);
+      await deleteMatchRows(tx, 'SELECT $1::bigint', [match.id]);
       await audit(tx, {
         actorId: account.id, action: 'MATCH_DELETED', entity: 'matches', entityId: String(match.id), requestId, reason,
-        before: { tournamentSportId: String(match.tournamentSportId), kind: match.kind, stage: match.stage, status: match.status },
+        before: { tournamentSportId: String(match.tournamentSportId), kind: match.kind, stage: match.stage, status: match.status, hasActions: Boolean(match.hasActions) },
       });
     }),
   );
+  dropHomeCards(c, [String(id)]);
   return c.json({ removed: true });
 });
 
