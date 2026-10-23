@@ -1,0 +1,39 @@
+name: Reset staging demo
+on:
+  # Manual only. It wipes staging tournament data, so it never runs on a push.
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    # Staging only: the environment is hard-coded and the script refuses any other RESET_ENV.
+    environment: staging
+    concurrency:
+      group: reset-staging-demo
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the staging Deploy of this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$GITHUB_SHA" --json status --jq '.[0].status // "none"')
+            echo "deploy: $state"
+            if [ "$state" = "completed" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Deploy did not finish in 30 minutes"; exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+      - run: npm ci
+      # One transaction: deletes all tournament and match data, then creates Test Tournament. It prints counts only.
+      - run: node backend/scripts/reset-staging-demo.js
+        env:
+          RESET_ENV: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
