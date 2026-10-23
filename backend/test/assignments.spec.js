@@ -426,6 +426,15 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('lease routes', () => {
       // Another staff user's release leaves the lease; the holder's own release removes it.
       expect((await api('DELETE', `/api/matches/${f.matchId}/lease`, { user: 'test_tournament_manager' })).status).toBe(204);
       expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 1 });
+      // With a deviceId, only the holding device releases: device a lost the lease to b and must not drop it.
+      const release = (body) => api('DELETE', `/api/matches/${f.matchId}/lease`, { user: f.user, body });
+      expect((await release({ deviceId: a })).status).toBe(204);
+      expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 1 });
+      expect(await code(await release({ deviceId: 'not-a-uuid' }))).toEqual([400, 'BAD_REQUEST']);
+      expect((await release({ deviceId: b.toUpperCase() })).status).toBe(204);
+      expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 0 });
+      // After a release the next request is a GRANT with a fresh sequence.
+      expect((await (await lease(a)).json()).lease).toMatchObject({ deviceId: a, lastClientSeq: 0, decision: 'GRANT' });
       expect((await api('DELETE', `/api/matches/${f.matchId}/lease`, { user: f.user })).status).toBe(204);
       expect(await one('SELECT count(*)::int AS n FROM scorer_leases WHERE match_id = $1', [f.matchId])).toEqual({ n: 0 });
     } finally {

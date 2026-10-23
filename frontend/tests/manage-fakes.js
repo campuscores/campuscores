@@ -218,6 +218,7 @@ export function assignFake() {
     }
     if (path === '/operator/matches') return [200, { matches: state.matches.filter(row => row.scorer === ME).map(operatorRow) }];
     if (/^\/operator\/matches\/\d+\/scoring$/.test(path)) return [200, { seq: 0, snapshot: null, actions: [] }];
+    if (method === 'DELETE' && /^\/matches\/\d+\/lease$/.test(path)) return [200, null]; // the console releases its lease on leave
     if ((m = /^\/matches\/(\d+)\/lease$/.exec(path))) return [200, { lease: { matchId: m[1], deviceId: body.deviceId, lastClientSeq: 0 } }];
     return fake.reply(request);
   }

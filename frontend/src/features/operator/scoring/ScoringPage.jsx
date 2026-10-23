@@ -46,7 +46,7 @@ const eventText = (e, match) => e.type === 'CARD' ? `${e.card === 'red' ? 'Red' 
   : e.type === 'SUB' ? `${e.on} on for ${e.off} · ${sideName(match, e.side)}` : `Foul · ${sideName(match, e.side)}`;
 
 /** Connected presentation only: every mutation goes through the durable queue in ScoreConsole. */
-export default function ScoringPage({ match, snapshot, accepted, disabled, pending, onAction, undoTarget, status, error, children }) {
+export default function ScoringPage({ match, snapshot, accepted, disabled, pending, onAction, undoTarget, status, notice, error, children }) {
   const [dialog, setDialog] = useState(null);
   const triggerRef = useRef(null);
   const restoreFocus = useCallback(() => triggerRef.current?.focus({ preventScroll: true }), []);
@@ -66,6 +66,7 @@ export default function ScoringPage({ match, snapshot, accepted, disabled, pendi
   const waitingExtra = format?.model === 'periods' && !currentPeriod && winner == null;
   // Content of the StaffShell <main>: the shell gives the "<A> vs <B>" h1 and the Back link (ScoreConsole).
   return <div className="scoring-page" data-sport={match.sport}>
+    {notice}
     <header className="scoring-top"><p className="scoring-meta"><span className="scoring-sport"><SportIcon sport={match.sport} className="scoring-sport-icon" />{sportLabel(match.sport)}</span><span>{match.venue}</span></p><p className="scoring-sync console-status" role="status" aria-live="polite">{status}</p></header>
     {error && <p className="text-error" role="alert">{error}</p>}
     {!format ? <FormatForm match={match} disabled={disabled} onAction={onAction} /> : <>

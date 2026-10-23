@@ -7,7 +7,7 @@ import { DEFAULT_FORMATS } from '../../shared/scoring.mjs';
 const APP = 'http://127.0.0.1:4176';
 const API = 'http://api.test/api';
 const TOKEN = 'operator-token';
-const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST' };
+const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, DELETE' };
 // Rows in the GET /api/operator/matches shape (backend/src/routes/assignments.js), including the START fields.
 const live = { id: 7, tournamentId: 1, sport: 'football', kind: 'BRACKET', stage: 'SF1', status: 'LIVE', correctionRoute: null, scheduledAt: '2026-10-12T09:30:00.000Z', venue: 'Court 1', seq: 3, sides: [{ name: 'Alpha' }, { name: 'Bravo' }],
   isToday: false, validNow: true, canStart: false, startReason: null, notScored: false, defaultFormat: DEFAULT_FORMATS.football };
@@ -26,11 +26,14 @@ const error = code => ({ error: { code, message: code, requestId: 'req-test' } }
  * `server.actions` keeps every posted body in arrival order; `server.auth` every Authorization header.
  */
 async function mockApi(page, actions) {
-  const server = { actions: [], auth: [], leases: 0, seq: 3, points: [1, 0], accepted: new Map() };
+  // `lease` follows backend leases.js: KEEP for the holding device, LEASE_HELD for another one unless it takes over,
+  // GRANT or TAKEOVER from lastClientSeq 0; a DELETE with the holder's deviceId removes it.
+  const server = { actions: [], auth: [], leases: 0, releases: [], lease: null, seq: 3, points: [1, 0], accepted: new Map() };
   server.accept = (route, body) => {
     const side = body.type === 'POINT' ? body.payload.side : server.accepted.get(body.reversesActionId);
     server.points[side] += body.type === 'POINT' ? 1 : -1;
     server.accepted.set(body.actionId, side);
+    if (server.lease) server.lease.lastClientSeq = body.clientSeq;
     server.seq += 1;
     return reply(route, 200, { actionId: body.actionId, seq: server.seq, snapshot: { sides: [{ name: 'Alpha', points: server.points[0] }, { name: 'Bravo', points: server.points[1] }] } });
   };
@@ -45,8 +48,16 @@ async function mockApi(page, actions) {
   await page.route(`${API}/operator/matches`, authed(route => reply(route, 200, { matches: [live, scheduled] })));
   await page.route(`${API}/matches/7`, route => reply(route, 200, { match: { id: 7, seq: 3, snapshot: { sides: [{ name: 'Alpha', points: 1 }, { name: 'Bravo', points: 0 }] } } }));
   await page.route(`${API}/matches/7/lease`, authed(route => {
+    const { deviceId, takeover } = route.request().postDataJSON() ?? {};
+    if (route.request().method() === 'DELETE') {
+      server.releases.push({ auth: route.request().headers().authorization, deviceId });
+      if (server.lease?.deviceId === deviceId) server.lease = null;
+      return route.fulfill({ status: 204, headers: cors });
+    }
     server.leases += 1;
-    return reply(route, 200, { lease: { matchId: 7, deviceId: route.request().postDataJSON().deviceId, lastClientSeq: 0 } });
+    if (server.lease && server.lease.deviceId !== deviceId && !takeover) return reply(route, 409, error('LEASE_HELD'));
+    if (server.lease?.deviceId !== deviceId) server.lease = { deviceId, lastClientSeq: 0 };
+    return reply(route, 200, { lease: { matchId: 7, deviceId, lastClientSeq: server.lease.lastClientSeq } });
   }));
   await page.route(`${API}/matches/7/actions`, authed(route => {
     const body = route.request().postDataJSON();
@@ -225,4 +236,110 @@ test('keyboard-only flow from My Matches to scoring, with 44px targets on phone 
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), `${width}px overflow`).toBe(false);
   }
+});
+
+const heldNotice = page => page.locator('.console-notice.is-top');
+const top = async locator => (await locator.boundingBox()).y;
+
+test('another device holds the lease: the notice is on top with Take over, and the status says nothing is sent', async ({ page }) => {
+  const server = await mockApi(page);
+  server.lease = { deviceId: crypto.randomUUID(), lastClientSeq: 9 }; // the same account's other device
+  await page.goto(`${APP}/operator/matches/7/score`);
+  await expect(page.locator('h1')).toHaveText('Alpha vs Bravo');
+  await expect(heldNotice(page)).toHaveAttribute('role', 'alert');
+  await expect(page.locator('main [role="alert"]', { hasText: 'Another device' })).toHaveCount(1); // announced once
+  await expect(heldNotice(page).getByRole('heading', { level: 2 })).toHaveText('Another device is scoring this match');
+  await expect(heldNotice(page)).toContainText('Your actions stay saved on this device.');
+  await expect(page.locator('.score-console > :first-child')).toHaveClass(/is-top/);
+  expect(await top(heldNotice(page))).toBeLessThan(await top(page.locator('.console-score')));
+  await expect(status(page)).toHaveText('Not sending: another device is scoring');
+
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Not sending: another device is scoring · 1 queued');
+  await page.waitForTimeout(300);
+  expect(server.actions).toEqual([]);
+  await heldNotice(page).getByRole('button', { name: 'Take over scoring' }).click();
+  await expect(status(page)).toHaveText('Synced up to seq 4');
+  await expect(heldNotice(page)).toHaveCount(0);
+  expect(server.actions.map(a => a.clientSeq)).toEqual([1]); // TAKEOVER starts the lease at 0
+});
+
+test('a takeover by another device mid-match shows the top notice; this device never releases their lease', async ({ page }) => {
+  const server = await mockApi(page);
+  await openConsole(page, server);
+  server.lease = { deviceId: crypto.randomUUID(), lastClientSeq: 0 }; // the other device took over
+  await mockActionsOnce(page, server);
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Not sending: another device is scoring · 1 queued');
+  await expect(heldNotice(page).getByRole('button', { name: 'Take over scoring' })).toBeVisible();
+  await expect(page.locator('.console-notice:not(.is-top)')).toHaveCount(0); // no second, lower copy
+  await page.getByRole('main').getByRole('link', { name: 'Back to My Matches' }).click();
+  await expect(page.locator('h1')).toHaveText('My Matches');
+  await page.waitForTimeout(300);
+  expect(server.releases).toEqual([]);
+});
+
+/** Answers the next action post with 409 LEASE_REQUIRED, as the backend chain does after another device took over. */
+async function mockActionsOnce(page, server) {
+  await page.route(`${API}/matches/7/actions`, route => {
+    if (route.request().method() === 'OPTIONS') return reply(route);
+    server.actions.push(route.request().postDataJSON());
+    return reply(route, 409, error('LEASE_REQUIRED'));
+  }, { times: 2 }); // the preflight and the post
+}
+
+test('leaving the console releases the lease: pagehide with keepalive and the cached token, unmount with a fresh one', async ({ page }) => {
+  const server = await mockApi(page);
+  await openConsole(page, server);
+  const device = server.lease.deviceId;
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Synced up to seq 4');
+
+  // The events of a page that enters the back-forward cache and comes back.
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  await expect.poll(() => server.releases).toEqual([{ auth: `Bearer ${TOKEN}`, deviceId: device }]);
+  expect(server.lease).toBe(null);
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect.poll(() => server.leases).toBe(2); // the restored page acquires the lease again (GRANT)
+  await point(page, 'Bravo').click();
+  await expect(status(page)).toHaveText('Synced up to seq 5');
+  expect(server.actions.map(a => a.clientSeq)).toEqual([1, 1]); // the GRANT restarted the lease at 0
+
+  await page.getByRole('main').getByRole('link', { name: 'Back to My Matches' }).click();
+  await expect(page.locator('h1')).toHaveText('My Matches');
+  await expect.poll(() => server.releases.length).toBe(2);
+  expect(server.releases[1]).toEqual({ auth: `Bearer ${TOKEN}`, deviceId: device });
+  expect(server.lease).toBe(null);
+  expect(page.errors).toEqual([]);
+});
+
+test('reload after a release resumes the stored queue in order, with no lost or duplicated action', async ({ page }) => {
+  const held = [];
+  // Backend rules (scoring.js decideAction): the same actionId replays; a new one needs lease.lastClientSeq + 1.
+  const server = await mockApi(page, (route, body) => {
+    if (held.length < 1 && server.accepted.size === 1) { held.push(body); return; } // the second action never gets an answer
+    if (server.accepted.has(body.actionId)) return reply(route, 409, error('UNEXPECTED_REPLAY'));
+    if (body.deviceId !== server.lease?.deviceId) return reply(route, 409, error('LEASE_REQUIRED'));
+    if (body.clientSeq !== server.lease.lastClientSeq + 1) return reply(route, 409, error('SEQUENCE_CONFLICT'));
+    return server.accept(route, body);
+  });
+  await openConsole(page, server);
+  await point(page, 'Alpha').click();
+  await expect(status(page)).toHaveText('Synced up to seq 4');
+  await point(page, 'Bravo').click();
+  await expect.poll(() => held.length).toBe(1);
+  await point(page, 'Alpha').click();
+  await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4', '#2 Point to Bravo · syncing', '#3 Point to Alpha · queued']);
+
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect.poll(() => server.lease).toBe(null);
+  await page.reload();
+  await expect(status(page)).toHaveText('Synced up to seq 6');
+  await expect(log(page)).toHaveText(['#1 Point to Alpha · synced, seq 4', '#2 Point to Bravo · synced, seq 5', '#3 Point to Alpha · synced, seq 6']);
+  const accepted = [...server.accepted.keys()];
+  expect(new Set(accepted).size).toBe(3);
+  expect(accepted[1]).toBe(held[0].actionId); // the unanswered action, sent again with the same actionId
+  expect(server.actions.slice(2).map(a => [a.clientSeq, a.payload.side])).toEqual([[1, 1], [2, 0]]); // fresh lease numbers
+  await expect(scoreRow(page, 'Alpha')).toHaveText(['3', '3']);
+  await expect(scoreRow(page, 'Bravo')).toHaveText(['1', '1']);
 });
