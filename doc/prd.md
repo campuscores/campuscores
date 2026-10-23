@@ -51,7 +51,7 @@ Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spec
 
 ### Spectator
 
-- Visits without signing in. Spectators do not sign in; an account without staff access is signed out ([decision](memory.md#staff-only-sign-in--24-october-2026)).
+- Visits without signing in. Spectators do not sign in; an account without staff access sees only the no-access page ([decision](memory.md#staff-only-sign-in--24-october-2026)).
 - Views public event, sport, team, match, score, player contribution, and sport-standing information.
 - Sees whether a match is scheduled, live, paused, completed, or otherwise ended according to the configured status model.
 - Show accepted live scores as provisional and operator-confirmed results as final and locked.
@@ -237,7 +237,7 @@ Implemented 23 October 2026 (change 8). Before this change, a Super Admin could 
 
 ### Authentication and authorization
 
-- Sign-in is for staff only (Arnav, 24 October 2026; [decision](memory.md#staff-only-sign-in--24-october-2026)). After sign-in, `/start` accepts a pending invitation. An account without an `ACTIVE` staff role (`GET /api/me` Viewer) is signed out at once and sees `/sign-in?no-access` with the reason. Every staff screen has a Sign out button in the staff navigation.
+- Sign-in is for staff (Arnav, 24 October 2026; [decision](memory.md#staff-only-sign-in--24-october-2026)). After sign-in, `/start` accepts a pending invitation. An account without an `ACTIVE` staff role (`GET /api/me` Viewer) stays signed in and sees "This account has no staff access" with **Check again** (accepts a later invitation) and **Sign out**. Every staff screen has a Sign out button in the staff navigation.
 - Staff roles come only from invitations recorded in our database. Super Admins invite managers and Super Admins. Managers and Super Admins invite Match Operators. The backend sends invitations through the Clerk Invitations API.
 - Spectator endpoints and data are read-only and need no account.
 - Every protected request verifies the token and reads the active account and role from the database. Every scoring request also checks the match assignment, server-time window, `SCORE` permission, match state and device lease.

@@ -206,10 +206,8 @@ test('/start and /sign-in show exactly one site header in each state', async ({ 
   // The second GET /api/me (on /sign-in) never answers, so /sign-in stays in its loading state.
   await mockStaff(page, { me: n => n === 1 ? REPLIES.viewer : new Promise(() => {}), accept: REPLIES.inviteNotFound });
   await page.goto(`${APP}/start`);
-  await expect(page).toHaveURL(`${APP}/sign-in?no-access`); // the Viewer is signed out
-  await expect(page.locator('h1')).toHaveText('Sign in');
+  await expect(page.locator('h1')).toHaveText('This account has no staff access');
   await expectOneSiteHeader(page);
-  await page.evaluate(() => sessionStorage.removeItem('__stubSignedOut')); // signed in again for the next state
   await page.goto(`${APP}/sign-in`);
   await expect(page.getByText('Loading your account…')).toBeVisible();
   await expectOneSiteHeader(page);
