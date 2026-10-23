@@ -1,0 +1,160 @@
+/* Staff_Style (doc/design.md section 12): quiet work screens with large type for coaches on phones.
+   Scoped to .staff so the public pages and SiteHeader keep their own styles. */
+.staff {
+  font-size: 17px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.staff *, .staff *::before, .staff *::after { transition: none; animation: none; }
+
+/* Same widths as the doc/design.md section container, so edges align with the header and public pages. */
+.staff-container { width: min(1280px, calc(100% - 64px)); padding-inline: 34px; margin-inline: auto; }
+
+/* Staff navigation: one row of 44px text links; scrolls sideways inside its own row on phones. */
+.staff-nav { border-bottom: 1px solid #e7edf7; }
+.staff-nav-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 24px; }
+.staff-nav ul {
+  flex: 0 1 auto;
+  display: flex;
+  gap: 24px;
+  min-width: 0;
+  margin: 0 -8px;
+  padding: 8px; /* room for the 3px + 5px focus outline inside the scroll box */
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+.staff-nav a { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; font-weight: 700; white-space: nowrap; }
+.staff-nav a:hover, .staff-nav a[aria-current="page"] { color: var(--blue); }
+.staff-nav a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: #b7ceff;
+}
+.staff-role { margin: 0 0 8px; color: #50688c; font-size: 14px; }
+
+.staff-main { padding-block: 32px 72px; }
+.staff-main h1 { margin: 0 0 24px; font-size: 32px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.staff-main h1:focus { outline: none; } /* focused on entry for screen readers; not a control */
+/* Element defaults with element-only specificity: a reused component's own class rules win, so the public cards and
+   sections inside staff screens (My Matches, Score console) keep the doc/design.md look. */
+:where(.staff-main) h2 { margin: 0 0 16px; font-size: 24px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; }
+:where(.staff-main) p { margin: 0 0 16px; }
+.staff-back { margin-bottom: 8px; }
+.staff-section { margin-top: 48px; }
+.staff-meta, .field-help { color: #50688c; font-size: 14px; }
+
+/* Polite and assertive regions stay in the page so screen readers hear each change. */
+.staff-main .staff-notice { margin: 0 0 24px; font-weight: 700; }
+.staff-main .staff-notice:empty { margin: 0; }
+.staff-notice.is-error, .field-error, .screen-error { color: #d5203e; font-weight: 700; }
+
+.staff-panel { padding: 24px; border: 1px solid #e7edf7; border-radius: 16px; background: #fff; }
+
+/* Forms: label above the field, help, field, error. 16px between fields, 24px before the Primary_Action. */
+.staff-form { display: grid; gap: 16px; max-width: 640px; }
+.staff-form .form-actions { margin-top: 8px; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 16px; }
+.field label, .staff legend { display: block; margin-bottom: 8px; font-weight: 700; }
+.field .field-help { margin: -4px 0 8px; }
+.field .field-error { margin: 8px 0 0; }
+.field-optional { font-weight: 400; }
+.staff fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.staff legend { padding: 0; }
+.staff :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 1px solid #50688c;
+  border-radius: 14px;
+  color: var(--ink);
+  font: inherit;
+  background: #fff;
+}
+.staff textarea { resize: vertical; }
+.staff [aria-invalid="true"] { border: 2px solid #d5203e; padding: 11px 15px; }
+.choice { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.choice input { flex-shrink: 0; width: 24px; height: 24px; margin: 0; accent-color: var(--blue); }
+
+/* Buttons: one filled Primary_Action per screen and per dialog. */
+.staff :is(.button-primary, .button-secondary, .button-danger) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+.staff .button-primary { color: #fff; background: var(--blue); }
+.staff .button-primary:hover { background: #064ae0; }
+.staff .button-secondary { border: 2px solid var(--blue); color: var(--blue); background: #fff; }
+.staff .button-secondary:hover { background: #eaf2ff; }
+.staff .button-danger { color: #fff; background: #d5203e; }
+.staff .button-text {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  color: var(--blue);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  cursor: pointer;
+}
+.staff :is(button, a)[aria-disabled="true"], .staff button:disabled { opacity: .66; cursor: progress; }
+
+/* Focus: the doc/design.md outline on every control, 2px offset inside table cells. */
+.staff :is(input, select, textarea):focus-visible { outline: 3px solid var(--blue); outline-offset: 5px; }
+.staff td :focus-visible { outline-offset: 2px; }
+
+/* Status markers: the text always carries the meaning; color only adds to it. */
+.status { display: inline-flex; align-items: center; gap: 8px; }
+.status[data-phase="live"]::before { content: ""; flex-shrink: 0; width: 11px; height: 11px; border-radius: 50%; background: #ff334b; }
+.status[data-phase="final"] { font-weight: 700; }
+.status[data-phase="not-scored"] { color: #50688c; }
+
+.error-summary { max-width: 640px; margin-bottom: 32px; padding: 24px; border: 2px solid #d5203e; border-radius: 16px; background: #fff; }
+.error-summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 5px; }
+.error-summary ul { margin: 0; padding-left: 20px; }
+
+/* Confirmation dialog: native modal; the page behind is inert. */
+.staff-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid #e7edf7;
+  border-radius: 16px;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(35 65 110 / 10%);
+}
+.staff-dialog::backdrop { background: rgb(7 18 39 / 56%); }
+.staff-dialog p { margin: 0; }
+.staff-dialog h2 { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; }
+.staff-dialog ul { margin: 0; padding-left: 20px; }
+
+@media (min-width: 1024px) {
+  :where(.staff-main) p, .field-help { max-width: 80ch; }
+}
+@media (max-width: 1023px) {
+  .staff-container { width: min(760px, calc(100% - 40px)); padding-inline: 0; }
+}
+@media (max-width: 767px) {
+  .staff-container { width: calc(100% - 32px); }
+  .staff-main { padding-block: 24px 48px; }
+  .staff-main h1 { font-size: 28px; }
+  .staff-panel, .staff-dialog, .error-summary { padding: 16px; }
+  .staff .button-primary { width: 100%; }
+  .staff-dialog .form-actions > * { flex: 1 1 100%; }
+}

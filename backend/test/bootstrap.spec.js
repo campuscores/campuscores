@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
-import { bootstrapSuperAdmin, isClerkUserId } from '../scripts/bootstrap-super-admin.js';
+import { bootstrapSuperAdmin, ignoresSeedAdmins, isClerkUserId } from '../scripts/bootstrap-super-admin.js';
 import { db, one } from './helpers.js';
 const probeId = () => `user_probe${crypto.randomUUID().replaceAll('-', '')}`;
 describe('isClerkUserId', () => {
@@ -11,6 +11,29 @@ describe('isClerkUserId', () => {
     }
   });
 });
+describe('ignoresSeedAdmins', () => {
+  it('relaxes the check only for the exact value staging', () => {
+    expect(ignoresSeedAdmins('staging')).toBe(true);
+    for (const other of ['production', undefined, '', 'Staging', 'staging ', 'dev']) {
+      expect(ignoresSeedAdmins(other), String(other)).toBe(false);
+    }
+  });
+});
+// Runs `fn(client, nested)` in an outer transaction that always rolls back. The script's own BEGIN/COMMIT
+// on `nested` become a savepoint, so no other suite ever sees the changed state or the new rows.
+const SAVEPOINT = { BEGIN: 'SAVEPOINT boot', COMMIT: 'RELEASE SAVEPOINT boot', ROLLBACK: 'ROLLBACK TO SAVEPOINT boot' };
+const rolledBack = (fn) =>
+  db(async (client) => {
+    const nested = { query: (text, params) => client.query(SAVEPOINT[text] ?? text, params) };
+    await client.query('BEGIN');
+    try {
+      // The script's lock, taken first so this transaction never upgrades a lock while others wait.
+      await client.query('LOCK TABLE admin_accounts IN SHARE ROW EXCLUSIVE MODE');
+      await fn(client, nested);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('bootstrapSuperAdmin against the seed', () => {
   it('refuses while an active SUPER_ADMIN exists and changes no row', async () => {
     const clerkUserId = probeId();
@@ -28,31 +51,41 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('bootstrapSuperAdmin against the seed'
 
   it('creates one active SUPER_ADMIN and an audit row when none exists', async () => {
     const clerkUserId = probeId();
-    // The seed Super Admin is disabled in an outer transaction that always rolls back; the script's own
-    // BEGIN/COMMIT become a savepoint, so no other suite ever sees the empty state or the new row.
-    const SAVEPOINT = { BEGIN: 'SAVEPOINT boot', COMMIT: 'RELEASE SAVEPOINT boot', ROLLBACK: 'ROLLBACK TO SAVEPOINT boot' };
-    await db(async (client) => {
-      const nested = { query: (text, params) => client.query(SAVEPOINT[text] ?? text, params) };
-      await client.query('BEGIN');
-      try {
-        // The script's lock, taken first so this transaction never upgrades a lock while others wait.
-        await client.query('LOCK TABLE admin_accounts IN SHARE ROW EXCLUSIVE MODE');
-        await client.query(`UPDATE admin_accounts SET status = 'DISABLED' WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE'`);
-        const account = await bootstrapSuperAdmin(nested, clerkUserId);
-        expect(account).toMatchObject({ clerk_user_id: clerkUserId, role: 'SUPER_ADMIN', status: 'ACTIVE' });
-        const { rows } = await client.query(`SELECT clerk_user_id FROM admin_accounts WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE'`);
-        expect(rows).toEqual([{ clerk_user_id: clerkUserId }]);
-        const audit = await client.query(`SELECT actor_label, entity FROM admin_audit_log WHERE action = 'SUPER_ADMIN_BOOTSTRAPPED' AND entity_id = $1`, [
-          account.id,
-        ]);
-        expect(audit.rows).toEqual([{ actor_label: 'bootstrap-workflow', entity: 'admin_accounts' }]);
-        // A second run now finds the new Super Admin.
-        await expect(bootstrapSuperAdmin(nested, probeId())).rejects.toThrow('An active SUPER_ADMIN already exists');
-      } finally {
-        await client.query('ROLLBACK');
-      }
+    await rolledBack(async (client, nested) => {
+      await client.query(`UPDATE admin_accounts SET status = 'DISABLED' WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE'`);
+      const account = await bootstrapSuperAdmin(nested, clerkUserId);
+      expect(account).toMatchObject({ clerk_user_id: clerkUserId, role: 'SUPER_ADMIN', status: 'ACTIVE' });
+      const { rows } = await client.query(`SELECT clerk_user_id FROM admin_accounts WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE'`);
+      expect(rows).toEqual([{ clerk_user_id: clerkUserId }]);
+      const audit = await client.query(`SELECT actor_label, entity FROM admin_audit_log WHERE action = 'SUPER_ADMIN_BOOTSTRAPPED' AND entity_id = $1`, [
+        account.id,
+      ]);
+      expect(audit.rows).toEqual([{ actor_label: 'bootstrap-workflow', entity: 'admin_accounts' }]);
+      // A second run now finds the new Super Admin.
+      await expect(bootstrapSuperAdmin(nested, probeId())).rejects.toThrow('An active SUPER_ADMIN already exists');
     });
     expect(await one(`SELECT status FROM admin_accounts WHERE clerk_user_id = 'test_super_admin'`)).toEqual({ status: 'ACTIVE' });
+    expect(await one('SELECT count(*)::int AS n FROM admin_accounts WHERE clerk_user_id = $1', [clerkUserId])).toEqual({ n: 0 });
+  });
+
+  it('ignores test_ seed Super Admins on staging only', async () => {
+    const clerkUserId = probeId();
+    await rolledBack(async (client, nested) => {
+      // Leave only seed (test_) Super Admins active, as on a freshly seeded staging database.
+      await client.query(
+        `UPDATE admin_accounts SET status = 'DISABLED' WHERE role = 'SUPER_ADMIN' AND status = 'ACTIVE' AND left(clerk_user_id, 5) <> 'test_'`,
+      );
+      expect((await client.query(`SELECT status FROM admin_accounts WHERE clerk_user_id = 'test_super_admin'`)).rows).toEqual([{ status: 'ACTIVE' }]);
+      for (const environment of ['production', undefined, 'Staging', 'dev']) {
+        await expect(bootstrapSuperAdmin(nested, probeId(), environment), String(environment)).rejects.toThrow('An active SUPER_ADMIN already exists');
+      }
+      const account = await bootstrapSuperAdmin(nested, clerkUserId, 'staging');
+      expect(account).toMatchObject({ clerk_user_id: clerkUserId, role: 'SUPER_ADMIN', status: 'ACTIVE' });
+      const audit = await client.query(`SELECT actor_label FROM admin_audit_log WHERE action = 'SUPER_ADMIN_BOOTSTRAPPED' AND entity_id = $1`, [account.id]);
+      expect(audit.rows).toEqual([{ actor_label: 'bootstrap-workflow' }]);
+      // A real (non-test_) Super Admin now exists, so staging refuses too.
+      await expect(bootstrapSuperAdmin(nested, probeId(), 'staging')).rejects.toThrow('An active SUPER_ADMIN already exists');
+    });
     expect(await one('SELECT count(*)::int AS n FROM admin_accounts WHERE clerk_user_id = $1', [clerkUserId])).toEqual({ n: 0 });
   });
 });

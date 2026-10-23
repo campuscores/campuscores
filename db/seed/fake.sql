@@ -1,14 +1,14 @@
 -- Clearly fake data for CI and staging only. Never run this against production.
 -- Explicit IDs make re-runs insert nothing; setval keeps later app inserts clear of these IDs.
 
-INSERT INTO admin_accounts (id, clerk_user_id, role, invited_by) VALUES
-  (1, 'test_super_admin', 'SUPER_ADMIN', NULL),
-  (2, 'test_tournament_manager', 'TOURNAMENT_MANAGER', 1),
-  (3, 'test_match_operator', 'MATCH_OPERATOR', 2)
+INSERT INTO admin_accounts (id, clerk_user_id, role, invited_by, email, name) VALUES
+  (1, 'test_super_admin', 'SUPER_ADMIN', NULL, 'test-super-admin@example.test', 'Test Super Admin (fake)'),
+  (2, 'test_tournament_manager', 'TOURNAMENT_MANAGER', 1, 'test-manager@example.test', 'Test Manager (fake)'),
+  (3, 'test_match_operator', 'MATCH_OPERATOR', 2, 'test-scorer@example.test', 'Test Scorer (fake)')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO tournaments (id, slug, name, starts_on, ends_on, status, venue, description) VALUES
-  (1, 'test-fake-cup', 'Test Fake Cup', '2026-01-10', '2026-01-12', 'PUBLISHED', 'Test Ground (fake)', 'Fake seed tournament for CI and staging.')
+INSERT INTO tournaments (id, slug, name, starts_on, ends_on, status, venue, description, owner_account_id) VALUES
+  (1, 'test-fake-cup', 'Test Fake Cup', '2026-01-10', '2026-01-12', 'ONGOING', 'Test Ground (fake)', 'Fake seed tournament for CI and staging.', 2)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tournament_sports (id, tournament_id, sport) VALUES
@@ -17,10 +17,10 @@ INSERT INTO tournament_sports (id, tournament_id, sport) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO teams (id, tournament_sport_id, branch, year, label) VALUES
-  (1, 1, 'TEST-A', 2027, 'Test Team A (fake)'),
-  (2, 1, 'TEST-B', 2027, 'Test Team B (fake)'),
-  (3, 1, 'TEST-C', 2028, 'Test Team C (fake)'),
-  (4, 1, 'TEST-D', 2028, 'Test Team D (fake)')
+  (1, 1, 'TEST-A', 1, 'Test Team A (fake)'),
+  (2, 1, 'TEST-B', 1, 'Test Team B (fake)'),
+  (3, 1, 'TEST-C', 2, 'Test Team C (fake)'),
+  (4, 1, 'TEST-D', 2, 'Test Team D (fake)')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO matches (id, tournament_sport_id, kind, stage, side_a_team_id, side_b_team_id, scheduled_at, venue, status) VALUES

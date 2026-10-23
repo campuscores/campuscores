@@ -72,10 +72,12 @@ describe('Property 1: input parsers accept exactly the valid forms', () => {
   const errorBody = (res, code, message) => ({ error: { code, message, requestId: res.headers.get('X-Request-Id') } });
   const HTTP_TIMEOUT_MS = 60_000; // 100 Worker requests outlast the 5 s default under load
 
+  // Only /api/matches/:id is ID-only. /api/tournaments/:key now accepts an ID or a slug, so a
+  // rejected ID there is tried as a slug (handled by the public endpoint tests, task 9.3).
   it('every rejected ID produces a 400 Error_Body', async () => {
     await fc.assert(
-      fc.asyncProperty(fc.oneof(nearMissId, fc.string()).filter((s) => pathSafe(s) && !isId(s)), fc.boolean(), async (s, match) => {
-        const res = await fetch(`/api/${match ? 'matches' : 'tournaments'}/${encodeURIComponent(s)}`);
+      fc.asyncProperty(fc.oneof(nearMissId, fc.string()).filter((s) => pathSafe(s) && !isId(s)), async (s) => {
+        const res = await fetch(`/api/matches/${encodeURIComponent(s)}`);
         expect(res.status).toBe(400);
         expect(await res.json()).toEqual(errorBody(res, 'BAD_REQUEST', 'Malformed ID'));
       }),

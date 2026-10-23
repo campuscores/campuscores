@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import SportIcon from '../../../components/SportIcon.jsx';
 import { sportLabel, sideName } from '../operatorMatches.js';
 import { DEFAULT_FORMATS, RULE_SOURCES, periodLabel, validateFormat } from '../../../../../shared/scoring.mjs';
+import { startReasonText } from '../../staff/labels.js';
+import FormatSettings from './FormatSettings.jsx';
 import './ScoringPage.css';
 
 function Dialog({ label, onClose, onReturnFocus, children }) {
@@ -11,13 +12,15 @@ function Dialog({ label, onClose, onReturnFocus, children }) {
   return <dialog ref={ref} className="scoring-dialog" aria-label={label} onCancel={onClose} onClose={onClose}>{children}</dialog>;
 }
 function FormatForm({ match, disabled, onAction }) {
-  const defaults = DEFAULT_FORMATS[match.sport];
-  const [format, setFormat] = useState(() => ({ ...defaults }));
-  const [custom, setCustom] = useState(false);
-  const [scoreText, setScoreText] = useState(() => defaults.scoreValues?.join(', ') ?? '');
+  // The Tournament_Sport Default_Format comes first (Req 10.7); the Official_Preset stays a choice.
+  const formats = { default: match.defaultFormat ?? DEFAULT_FORMATS[match.sport], preset: DEFAULT_FORMATS[match.sport] };
+  const [choice, setChoice] = useState('default');
+  const [format, setFormat] = useState(() => ({ ...formats.default }));
+  const [scoreText, setScoreText] = useState(() => formats.default.scoreValues?.join(', ') ?? '');
   const [error, setError] = useState('');
-  const change = (key, value) => { setCustom(true); setFormat(f => ({ ...f, [key]: value })); setError(''); };
-  const number = (key, label, min, max, extra = {}) => <label className="format-field">{label}<input type="number" min={min} max={max} step="1" required value={Number.isNaN(format[key]) ? '' : format[key] ?? ''} onChange={e => change(key, e.target.value === '' ? NaN : Number(e.target.value))} {...extra} /></label>;
+  const change = (key, value) => { setChoice('custom'); setFormat(f => ({ ...f, [key]: value })); setError(''); };
+  const choose = next => { setChoice(next); if (next !== 'custom') { setFormat({ ...formats[next] }); setScoreText(formats[next].scoreValues?.join(', ') ?? ''); } };
+  const reason = match.canStart ? null : startReasonText(match);
   async function start(e) {
     e.preventDefault();
     try { await onAction('START', { format: validateFormat(match.sport, match.sport === 'basketball' ? { ...format, scoreValues: scoreText.split(',').map(v => Number(v.trim())) } : format) }); }
@@ -26,41 +29,24 @@ function FormatForm({ match, disabled, onAction }) {
   return <form className="format-form" onSubmit={start}>
     <h2>Choose the match format</h2>
     <p>Check the format with the coach before starting. It stays fixed once scoring begins.</p>
-    <label className="format-field">Scoring format<select value={custom ? 'custom' : 'preset'} onChange={e => { const changed = e.target.value === 'custom'; setCustom(changed); if (!changed) { setFormat({ ...defaults }); setScoreText(defaults.scoreValues?.join(', ') ?? ''); } }}><option value="preset">Official scoring preset</option><option value="custom">Custom match format</option></select></label>
+    <label className="format-field">Scoring format<select value={choice} onChange={e => choose(e.target.value)}><option value="default">Tournament default format</option><option value="preset">Official scoring preset</option><option value="custom">Changed for this match</option></select></label>
     <p className="format-source"><a href={RULE_SOURCES[match.sport][1]} target="_blank" rel="noreferrer">{RULE_SOURCES[match.sport][0]}</a>.{match.sport === 'table-tennis' && ' The preset uses best of 5; choose another odd number below.'}</p>
-    <fieldset disabled={disabled}><legend>Match settings</legend><div className="format-grid">
-      {format.model === 'periods' ? <>
-        {number('periodCount', 'Number of periods', 1, 12)}
-        {match.sport === 'basketball' && <label className="format-field">Scoring values (separate with commas)<input value={scoreText} onChange={e => { setScoreText(e.target.value); setCustom(true); }} /></label>}
-      </> : <>
-        {number('bestOf', 'Best of (odd number of sets)', 1, 15)}
-        <label className="format-field">First serving side<select value={format.firstServe} onChange={e => change('firstServe', Number(e.target.value))}>{[0, 1].map(i => <option key={i} value={i}>{sideName(match, i)}</option>)}</select></label>
-        {format.model === 'sets' ? <>
-          {number('target', 'Points to win a set', 1, 999)}
-          {number('winBy', 'Winning margin', 1, 10)}
-          {number('decidingTarget', 'Points in the deciding set', 1, 999)}
-          <label className="format-field">Golden point at a tied score (optional)<input aria-label="Golden point at a tied score (optional)" aria-describedby="golden-point-hint" type="number" min="0" max="9998" value={format.cap == null ? '' : format.cap - 1} placeholder="No golden point" onChange={e => change('cap', e.target.value === '' ? null : Number(e.target.value) + 1)} /><span id="golden-point-hint" className="format-hint">{format.cap == null ? 'Play until the winning margin is reached.' : `At ${format.cap - 1}–${format.cap - 1}, the next point wins.`}</span></label>
-        </> : <>
-          {number('gamesPerSet', 'Games to win a set', 1, 20)}
-          {number('gameWinBy', 'Winning margin in games', 1, 2)}
-          <label className="format-field">Game scoring<select value={String(format.advantage)} onChange={e => change('advantage', e.target.value === 'true')}><option value="true">Advantage</option><option value="false">No-ad (deciding point at deuce)</option></select></label>
-          <label className="format-field">Tie-break at games all (optional)<input type="number" min="1" max="30" value={format.tiebreakAt ?? ''} placeholder="No tie-break" onChange={e => change('tiebreakAt', e.target.value === '' ? null : Number(e.target.value))} /></label>
-          {number('tiebreakTo', 'Tie-break point target', 1, 99)}
-          {number('tiebreakWinBy', 'Tie-break winning margin', 1, 10)}
-        </>}
-      </>}
-    </div></fieldset>
+    <fieldset disabled={disabled}><legend>Match settings</legend>
+      <FormatSettings sport={match.sport} format={format} scoreText={scoreText} onChange={change}
+        onScoreText={text => { setScoreText(text); setChoice('custom'); }} sideName={i => sideName(match, i)} />
+    </fieldset>
     {error && <p className="text-error" role="alert">{error}</p>}
-    {!match.isToday && <p>This match can be started on its scheduled date in India time.</p>}
+    {reason && <p>{reason}</p>}
     {match.validNow === false && <p>The scoring assignment is not valid yet or has expired.</p>}
-    <button className="scoring-action is-primary" type="submit" disabled={disabled || !match.isToday || match.validNow === false}>Start match</button>
+    {/* canStart is the server START rule at load time; the server still decides, and a refusal pauses the queue. */}
+    <button className="scoring-action is-primary" type="submit" disabled={disabled || !match.canStart || match.validNow === false}>Start match</button>
   </form>;
 }
 const eventText = (e, match) => e.type === 'CARD' ? `${e.card === 'red' ? 'Red' : 'Yellow'} card · ${e.player} · ${sideName(match, e.side)}`
   : e.type === 'SUB' ? `${e.on} on for ${e.off} · ${sideName(match, e.side)}` : `Foul · ${sideName(match, e.side)}`;
 
 /** Connected presentation only: every mutation goes through the durable queue in ScoreConsole. */
-export default function ScoringPage({ match, snapshot, accepted, disabled, pending, onAction, undoTarget, status, error, children }) {
+export default function ScoringPage({ match, snapshot, accepted, disabled, pending, onAction, undoTarget, status, notice, error, children }) {
   const [dialog, setDialog] = useState(null);
   const triggerRef = useRef(null);
   const restoreFocus = useCallback(() => triggerRef.current?.focus({ preventScroll: true }), []);
@@ -78,9 +64,10 @@ export default function ScoringPage({ match, snapshot, accepted, disabled, pendi
   const endedPeriods = snapshot?.periods?.filter(p => !p.current).length ?? 0;
   const currentPeriod = snapshot?.periods?.find(p => p.current);
   const waitingExtra = format?.model === 'periods' && !currentPeriod && winner == null;
-  return <main className="scoring-page" data-sport={match.sport}>
-    <header className="scoring-top"><Link className="scoring-back" to="/operator/matches">My Matches</Link><p className="scoring-meta"><span className="scoring-sport"><SportIcon sport={match.sport} className="scoring-sport-icon" />{sportLabel(match.sport)}</span><span>{match.venue}</span></p><p className="scoring-sync console-status" role="status" aria-live="polite">{status}</p></header>
-    <h1 className="scoring-title">{name(0)} vs {name(1)}</h1>
+  // Content of the StaffShell <main>: the shell gives the "<A> vs <B>" h1 and the Back link (ScoreConsole).
+  return <div className="scoring-page" data-sport={match.sport}>
+    {notice}
+    <header className="scoring-top"><p className="scoring-meta"><span className="scoring-sport"><SportIcon sport={match.sport} className="scoring-sport-icon" />{sportLabel(match.sport)}</span><span>{match.venue}</span></p><p className="scoring-sync console-status" role="status" aria-live="polite">{status}</p></header>
     {error && <p className="text-error" role="alert">{error}</p>}
     {!format ? <FormatForm match={match} disabled={disabled} onAction={onAction} /> : <>
       <div className="score-board" style={{ '--board-bg': `url('/assets/${match.sport}-background.webp')` }}>
@@ -117,5 +104,5 @@ export default function ScoringPage({ match, snapshot, accepted, disabled, pendi
         <div className="scoring-dialog-actions"><button type="button" className="scoring-action" onClick={close}>Cancel</button><button type="submit" className="scoring-action is-primary" disabled={disabled}>{dialog === 'final' ? 'Confirm and lock result' : 'Confirm'}</button></div>
       </form>
     </Dialog>}
-  </main>;
+  </div>;
 }

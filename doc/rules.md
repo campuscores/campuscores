@@ -10,7 +10,8 @@
 ## 1. Rule governance
 
 - Use the governing sport body's current rules as the baseline, then apply only explicitly configured competition rules for the relevant tournament and enabled sport.
-- Coaches/admins own tournament defaults. An assigned operator may select an official scoring preset or a validated custom format before starting an eligible match. The accepted start action freezes the match format; later actions cannot change it. Current-day scoring uses Asia/Kolkata and database time, plus the assignment window.
+- Coaches/admins own tournament defaults. An assigned operator may select an official scoring preset or a validated custom format before starting an eligible match. The accepted start action freezes the match format; later actions cannot change it. START is accepted only while the tournament is Ongoing and database time is at or after the scheduled time and before the end of the match's scheduled India_Time day, plus the assignment window. A match not started by the end of that day becomes Not_Scored and can never start; later actions of a Live match have no day check. The event zone is defined once in `shared/time.mjs`. See the [START rule](architecture.md#start-rule).
+- The Score_Console offers the Tournament_Sport Default_Format first, then the Official_Preset, then a format changed for this match. "Start match" is on only when the server reports that START is allowed now (`canStart`); otherwise the console names the reason. My Matches lists a Not_Scored match in Completed as "Not scored". Managers do not set Assignment windows. See [Assignments and the operator list](architecture.md#assignments-and-the-operator-list).
 - Store the governing source URL, edition/version/date checked, and any local overrides with each tournament/sport configuration and match snapshot.
 - Do not silently change a live match's ruleset. A rule configuration change must be recorded and must not reinterpret already accepted actions without a deliberate migration/correction.
 - A Tournament Manager's or Super Admin's decision on a tie, abandonment, forfeit, or unusual circumstance is an official result input; record actor, time, and explanation.
@@ -39,7 +40,7 @@ Each tournament/sport should configure, as applicable:
 - configurable score/point values and operator final confirmation, which locks editing;
 - any local rule variation, its authority, and effective dates.
 
-The bracket is decided. Do not add league/group stages or extra rounds without an approved scope change. Coaches choose event defaults; operators can select the confirmed per-match controls below. Standings columns/points and exceptional outcome policies remain open. Custom matches stay outside the bracket and never advance a team. Their public visibility and effect on statistics or standings must be decided before implementation. Combined cross-sport standings remain deferred.
+The bracket is decided. Do not add league/group stages or extra rounds without an approved scope change. Coaches choose event defaults; operators can select the confirmed per-match controls below. Standings columns/points and exceptional outcome policies remain open. Managers can add Regular_Matches (stored kind `CUSTOM`, shown as "Match") to a tournament sport ([decision 4](memory.md#staff-roles-and-manager-console--decisions), 21 October 2026). This replaces the earlier rule that no league or group matches are added. A Regular_Match has no stage, stays outside the bracket and never advances a team. It is public with its tournament. Its effect on statistics or standings must be decided before standings are implemented. Combined cross-sport standings remain deferred.
 
 ## 4. Sport score models
 
@@ -53,7 +54,7 @@ Record period, scoring team, scoring value, team fouls, substitutions and revers
 
 ### Football
 
-Record the period, scoring team, cards, substitutions and correction reference. The current scope has no running clock or individual goal attribution. Derive team totals, the event feed and result. Configure player count, half duration, stoppage-time display, substitute limits/return substitutions if used, extra time and shootout format for knockout matches, and tie handling for custom matches. Confirm each local condition before implementation.
+Record the period, scoring team, cards, substitutions and correction reference. The current scope has no running clock or individual goal attribution. Derive team totals, the event feed and result. Configure player count, half duration, stoppage-time display, substitute limits/return substitutions if used, extra time and shootout format for knockout matches, and tie handling for Regular_Matches. Confirm each local condition before implementation.
 
 ### Volleyball
 
@@ -112,14 +113,14 @@ Record each confirmed condition here and record its decision date in `memory.md`
 1. **Resolved 20 October 2026:** operator confirmation publishes the final result and locks editing; no separate approval. The bracket shape remains two semifinals and one final. Automatic advancement is separate implementation scope.
 2. Badminton singles/doubles and match format; basketball 5v5/3x3, periods/clock/overtime; football team size/duration/substitutions/tie resolution.
 3. Volleyball set/point/rotation/lineup settings; table tennis singles/doubles, game format and optional team-tie structure; lawn tennis singles/doubles, advantage/no-ad, set and tiebreak formats.
-4. Custom match visibility and whether its result contributes to standings, player match statistics, or neither. Custom matches never advance the bracket.
+4. **Partly resolved 21 October 2026:** a Regular_Match (stored kind `CUSTOM`, display name "Match") is public with its tournament ([Public read API](architecture.md#public-read-api)). It never advances the bracket. Whether its result contributes to standings or player match statistics stays Open.
 5. Team/roster limits, player eligibility, match squads, and substitute movement rules.
 6. Sport standings columns, win/draw/loss points, tie-breaks, and whether knockout-only tournaments need a table.
 7. Team-specific format exceptions, if any, and which point/scoring values managers can configure per tournament sport.
 
 ## 9. Thapar context
 
-TIET's official sports information describes Thaparlympics as inter-branch. The selected initial product scope is football, volleyball, basketball, table tennis, lawn tennis, and badminton, configurable by tournament. [TIET sports overview](https://www.thapar.edu/students/pages/introduction-sports)
+TIET's official sports information describes Thaparlympics as inter-branch. A team's optional `year` is its college year, 1st to 4th (stored 1–4), not a calendar year (confirmed by Arnav, 23 October 2026; contract in [architecture.md](architecture.md#manager-api)). The selected initial product scope is football, volleyball, basketball, table tennis, lawn tennis, and badminton, configurable by tournament. [TIET sports overview](https://www.thapar.edu/students/pages/introduction-sports)
 
 ## 10. Accepted scoring feature and limits
 

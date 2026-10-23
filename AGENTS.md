@@ -71,7 +71,7 @@ Node/npm and Git are setup requirements. App/test dependencies are pinned by `pa
 - Reuse the approved colors, typography, shapes, spacing and breakpoints in `doc/design.md`. No pause control, scrolling arrows or View All controls.
 - Homepage sport tiles filter live matches in place. Header Sports links navigate. Register routes in `frontend/src/app/App.jsx`.
 - Keep native horizontal rails and partial-card emphasis. Card detail fields are temporary; approved shells stay fixed.
-- Sport routes use the shared sport page with display fixtures. Tournament routes stay intentionally blank until their team implements them.
+- Sport routes use the shared sport page with display fixtures.
 - Keep portable local assets, originals, responsive variants and license/source records. Never put clipboard or agent-runtime paths in app/test code.
 
 ## Verify before marking complete
@@ -82,7 +82,14 @@ For frontend changes, run `npm run lint`, `npm run build` and `npm test`. Use fo
 
 Extend tests in the same change as each feature or bug fix. Add applicable acceptance, edge, failure and integration cases. Preserve existing regression coverage unless a confirmed requirement changes the behavior. Add frontend browser specs to `frontend/tests/`; `npm test` discovers them automatically. CI runs Chromium and an emulated Pixel on Ubuntu, Windows and macOS, plus Firefox, WebKit and emulated iPhone and iPad on Ubuntu and macOS. WebKit is the engine behind Safari, not branded Safari, and emulation does not replace physical-device checks.
 
-GitHub Actions runs CI on each push and pull request. The repository is public, so standard GitHub-hosted runners are free. Add every required check that has not passed yet, in CI or locally, to [doc/deferred-tests.md](doc/deferred-tests.md). Do not mark a feature Verified while a row there covers it.
+GitHub Actions runs the backend and frontend CI matrix on release pull requests to `main` and on manual dispatch (`workflow_dispatch`). It does not run on each push. The repository is public, so standard GitHub-hosted runners are free. Add every required check that has not passed yet, in CI or locally, to [doc/deferred-tests.md](doc/deferred-tests.md). Do not mark a feature Verified while a row there covers it.
+
+Development flow (confirmed by Arnav, 20 October 2026; [decision](doc/memory.md#public-repository-and-ci--20-october-2026)):
+
+1. Before each push to `develop`, run locally `npm run lint`, `npm run build` and focused tests for the changed area. Run `npm test` when shared UI or contracts change. Run the backend tests when the backend changes. Review phone and desktop rendering with the `playwright-cli` skill.
+2. Push directly to `develop`. The `deploy.yml` gate (lint, backend database tests, Chromium and Pixel tests, migrations, build, deploy, smoke) deploys staging.
+3. Record each required check that did not run in [doc/deferred-tests.md](doc/deferred-tests.md).
+4. The full backend and frontend matrix runs once on the `develop` → `main` release pull request, or manually through `workflow_dispatch`. A feature is Verified only after the release pull request checks pass.
 
 When a new application layer needs other checks, add its test commands, dependencies, CI jobs and path triggers in the same change. Cover implemented behavior; do not add empty jobs for planned services. Record new coverage and remaining gaps in `doc/tasks.md` before marking the feature Verified.
 

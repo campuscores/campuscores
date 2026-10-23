@@ -1,11 +1,11 @@
+import { VENUES } from './venues.js';
+
 // Display fixtures only. Event identities, dates and venue associations are temporary.
 export const sampleTournaments = [
   {
     "id": "thaparlympics-2026",
     "name": "Thaparlympics 2026",
-    "image": "tournament-field.webp",
-    "alt": "Empty football pitch and stadium seating",
-    "position": "center 85%",
+    ...VENUES.field,
     "start": "2026-10-01",
     "end": "2026-10-12",
     "startLabel": "1 Oct",
@@ -14,9 +14,7 @@ export const sampleTournaments = [
   {
     "id": "inter-hostel-cup",
     "name": "Inter-Hostel Cup",
-    "image": "tournament-stadium.webp",
-    "alt": "Green football pitch beneath blue stadium seating",
-    "position": "center 60%",
+    ...VENUES.stadium,
     "start": "2026-10-15",
     "end": "2026-10-24",
     "startLabel": "15 Oct",
@@ -25,9 +23,7 @@ export const sampleTournaments = [
   {
     "id": "court-championship",
     "name": "Court Championship",
-    "image": "tournament-court.webp",
-    "alt": "Empty indoor basketball court with a wooden floor",
-    "position": "center",
+    ...VENUES.court,
     "start": "2026-10-20",
     "end": "2026-10-30",
     "startLabel": "20 Oct",
@@ -36,9 +32,7 @@ export const sampleTournaments = [
   {
     "id": "racquet-open",
     "name": "Racquet Open",
-    "image": "tournament-tennis.webp",
-    "alt": "Empty blue tennis courts with nets and stadium seating",
-    "position": "center 65%",
+    ...VENUES.tennis,
     "start": "2026-11-02",
     "end": "2026-11-08",
     "startLabel": "2 Nov",
@@ -47,9 +41,7 @@ export const sampleTournaments = [
   {
     "id": "athletics-meet",
     "name": "Athletics Meet",
-    "image": "tournament-track.webp",
-    "alt": "Red athletics track with white lane markings",
-    "position": "center",
+    ...VENUES.track,
     "start": "2026-11-12",
     "end": "2026-11-15",
     "startLabel": "12 Nov",

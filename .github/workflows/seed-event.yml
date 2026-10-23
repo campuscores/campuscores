@@ -1,0 +1,29 @@
+name: Seed THAPARLYMPICS 2026
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment whose database gets the THAPARLYMPICS 2026 event
+        type: choice
+        options: [staging, production]
+        required: true
+permissions:
+  contents: read
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: seed-event-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+      - run: npm ci
+      # One transaction; a second run creates nothing. It fails, writing nothing, if the owner Super Admin is missing.
+      - run: node backend/scripts/seed-thaparlympics-2026.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -16,6 +16,7 @@ function stateLine(match) {
   if (match.status === 'live') return match.clock;
   if (match.status === 'ended') return `Ended · ${match.sides[match.winner].name} won`;
   if (match.status === 'completed') return `${match.dateLabel} · ${match.tournament}`;
+  if (match.status === 'not-scored') return `Not scored · ${match.dateLabel} · ${match.tournament}`;
   return `${match.dateLabel} · ${match.timeLabel} · ${match.tournament}`;
 }
 

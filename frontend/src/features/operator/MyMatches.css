@@ -1,12 +1,6 @@
-.operator-title { margin-bottom: 8px; }
-.operator-title h1 {
-  margin: 40px 0 6px;
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1.06;
-  letter-spacing: -.04em;
-}
-.operator-title p { margin: 0; color: #50688c; font-size: 16px; }
+/* The StaffShell <main> is already the section container, so the sections inside it keep its edges. */
+.staff-main .sport-section { width: auto; padding-inline: 0; }
+.operator-intro { color: #50688c; }
 
 /* Sport label with its outline icon in the card meta row. */
 .operator-sport { display: inline-flex; align-items: center; gap: 6px; }
@@ -50,13 +44,10 @@
 }
 .operator-score-link[data-state="completed"]:hover { background: #d8e8ff; }
 
-@media (max-width: 767px) {
-  .operator-title h1 { margin: 36px 0 6px; font-size: 32px; }
-}
-.operator-page .text-error { color: #d5203e; font-weight: 700; }
-/* Score console: reuses .text-page type, buttons (44px) and actions; these add the score table and notices. */
-.score-console .console-meta { margin: 40px 0 0; color: #50688c; font-size: 12px; font-weight: 600; }
-.score-console h1 { margin-top: 8px; }
+/* Score console: reuses .text-page type, buttons (44px) and actions; these add the score table and notices.
+   StaffShell gives the h1 and the container, so the console column starts at the container edge. */
+.staff-main .score-console { width: auto; max-width: 760px; margin-inline: 0; }
+.score-console .console-meta { margin: 0 0 16px; color: #50688c; font-size: 12px; font-weight: 600; }
 .score-console .console-status { font-weight: 700; }
 .console-score {
   width: 100%;
@@ -75,7 +66,8 @@
 .text-page .console-secondary { color: var(--blue); background: #eaf2ff; }
 .text-page .console-secondary:hover { background: #d8e8ff; }
 .console-notice { margin-top: 24px; }
+/* Lease notice above the scoreboard: the error-summary panel of the Staff_Style. */
+.console-notice.is-top { margin: 0 0 24px; padding: 16px; max-width: 640px; background: #fff; border: 2px solid #d5203e; border-radius: 16px; }
+.console-notice.is-top h2 { margin: 0 0 8px; font-size: 20px; }
+.console-notice.is-top p { margin: 0 0 8px; }
 .console-log { padding-left: 20px; font-variant-numeric: tabular-nums; }
-@media (max-width: 767px) {
-  .score-console .console-meta { margin-top: 36px; }
-}

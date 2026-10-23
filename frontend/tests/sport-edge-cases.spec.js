@@ -72,7 +72,7 @@ test('Back with the dialog open leaves the sport page', async ({ page }) => {
   await expect(page.locator('.date-chip[aria-pressed="true"]')).toHaveText(['All', 'All']);
 });
 
-test('routes: trailing slashes, refresh, unknown sports, blank tournaments and history', async ({ page }) => {
+test('routes: trailing slashes, refresh, unknown sports, tournament pages and history', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const sport of sports) {
     for (const route of [`/sports/${sport.id}`, `/sports/${sport.id}/`]) {
@@ -89,7 +89,7 @@ test('routes: trailing slashes, refresh, unknown sports, blank tournaments and h
   }
   for (const route of ['/tournaments/racquet-open/', '/tournaments/racquet-open']) {
     expect([200, 304], route).toContain((await page.goto(route)).status());
-    await expect(page.locator('#root'), route).toHaveText('');
+    await expect(page.getByRole('heading', { level: 1 }), route).toHaveText('Racquet Open');
   }
   await page.goto('/sports/badminton/');
   await page.locator('.desktop-nav .sports-dropdown summary').click();

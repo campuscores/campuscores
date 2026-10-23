@@ -46,6 +46,8 @@ test('privacy policy names the processors and links to account deletion', async 
   const main = page.getByRole('main');
   for (const name of ['Clerk', 'Google', 'Cloudflare', 'Neon']) await expect(main).toContainText(name);
   await expect(main.getByRole('link', { name: 'account deletion page' })).toHaveAttribute('href', '/account/delete');
+  await expect(main.getByRole('link', { name: 'bhatiaarnav05@gmail.com' })).toHaveAttribute('href', 'mailto:bhatiaarnav05@gmail.com');
+  await expect(main).not.toContainText('to be confirmed');
 });
 
 test('public pages request no Clerk code', async ({ page }) => {

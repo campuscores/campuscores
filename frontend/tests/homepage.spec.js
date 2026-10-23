@@ -74,6 +74,58 @@ test('approved layout, local assets and text fit from phones to large screens', 
   expect(errors).toEqual([]);
 });
 
+test('image skeletons: neutral shimmer blocks while images load, alt text hidden, no layout shift, still with reduced motion', async ({ page }) => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route(/\/assets\/(?!logo).*\.webp$/, async route => { await held; await route.continue(); });
+  await page.goto('/');
+  const state = () => page.evaluate(() => {
+    const style = (el, pseudo) => getComputedStyle(el, pseudo);
+    const image = document.querySelector('.tournament-surface img'), panel = document.querySelector('.athlete-card'), match = document.querySelector('.match-surface');
+    const box = el => { const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+    return {
+      image: style(image).backgroundImage.includes('gradient'), imageColor: style(image).color, alt: Boolean(image.alt), playerColor: style(panel.querySelector('img')).color,
+      panel: style(panel, '::before').backgroundImage.includes('gradient'), match: match ? style(match, '::before').backgroundImage.split('gradient').length > 2 : true,
+      animation: style(image).animationName, boxes: [box(image), box(document.querySelector('.hero')), box(panel)],
+    };
+  });
+  const loading = await state();
+  expect(loading).toMatchObject({ image: true, imageColor: 'rgba(0, 0, 0, 0)', alt: true, playerColor: 'rgba(0, 0, 0, 0)', panel: true, match: true, animation: 'image-shimmer' });
+  release();
+  await page.locator('.tournament-surface img').first().evaluate(image => { image.loading = 'eager'; return image.decode(); });
+  expect((await state()).boxes).toEqual(loading.boxes);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect((await state()).animation).toBe('none');
+});
+
+test('header: logo home link at the left, the decorative name centered without overlap or wrap', async ({ page }) => {
+  await page.goto('/');
+  for (const width of [320, 360, 390, 429, 430, 767, 768, 900, 1023, 1024, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 800 });
+    const header = page.locator(width < 768 ? '.mobile-header' : '.desktop-banner');
+    await expect(header.getByRole('link', { name: 'Campuscores home' }), `${width}px`).toHaveCount(1);
+    await expect(header.locator('.site-title')).toHaveAttribute('aria-hidden', 'true');
+    const box = await header.evaluate(el => {
+      const rect = node => node.getBoundingClientRect();
+      const title = el.querySelector('.site-title'), range = document.createRange();
+      range.selectNodeContents(title);
+      const text = rect(range), logo = rect(el.querySelector('.site-name')), right = rect(el.querySelector('.desktop-nav, .mobile-menu'));
+      return { textLeft: text.left, textRight: text.right, logoRight: logo.right, rightLeft: right.left, logoLeft: logo.left, rightRight: right.right,
+        imageHeight: rect(el.querySelector('.site-name img')).height, rects: range.getClientRects().length, font: parseFloat(getComputedStyle(title).fontSize), header: rect(el).height };
+    });
+    const middle = (box.textLeft + box.textRight) / 2;
+    expect(box.rects, `${width}px one line`).toBe(1);
+    expect(box.textLeft - box.logoRight, `${width}px clear of the logo`).toBeGreaterThanOrEqual(8);
+    expect(box.rightLeft - box.textRight, `${width}px clear of the nav`).toBeGreaterThanOrEqual(8);
+    expect(box.font).toBeGreaterThanOrEqual(15);
+    expect(Math.abs(box.logoLeft - (width - box.rightRight)), `${width}px same inline padding`).toBeLessThan(1);
+    const trueCenter = width >= 1024 || (width >= 430 && width < 768);
+    expect(Math.abs(middle - (trueCenter ? width / 2 : (box.logoRight + box.rightLeft) / 2)), `${width}px centered`).toBeLessThan(1.5);
+    expect(box.imageHeight).toBe(width < 768 ? 26 : 34);
+    expect(box.header).toBeGreaterThanOrEqual(width < 768 ? 64 : 76);
+  }
+});
+
 test('sport filters change only live cards and support keyboard input', async ({ page }) => {
   await page.goto('/');
   const url = page.url();
@@ -188,9 +240,14 @@ test('menus and legacy links navigate and close correctly', async ({ page }) => 
   await expect(page).toHaveURL(/\/tournaments\/racquet-open$/);
   await page.goto('/index.html?preview=rectangular');
   await expect(page).toHaveURL(/\/$/);
-  await page.goto('/missing-page');
-  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  // The Stage 1 layout preview is removed, so /preview is an unknown path (staff roles Req 1.11).
+  for (const path of ['/preview', '/preview/admin-home?state=ready', '/missing-page']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  }
   await page.getByRole('link', { name: 'Return home' }).click();
+  // The public header has no staff link (staff roles Req 4.1).
+  await expect(page.locator('header a[href^="/operator"]')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   const menu = page.locator('.mobile-menu > summary');
   await expect(menu).toHaveText('');
@@ -201,23 +258,23 @@ test('menus and legacy links navigate and close correctly', async ({ page }) => 
   await page.mouse.click(8, 130);
   await expect(page.locator('.mobile-menu')).not.toHaveAttribute('open');
   await menu.click();
-  await page.locator('.mobile-menu-panel a[href="/#tournaments"]').click();
-  await expect(page).toHaveURL(/#tournaments$/);
+  await page.locator('.mobile-menu-panel a[href="/tournaments"]').click();
+  await expect(page).toHaveURL(/\/tournaments$/);
   await expect(page.locator('.mobile-menu')).not.toHaveAttribute('open');
-  await expect(page.locator('#tournaments')).toBeInViewport();
+  await expect(page.getByRole('heading', { level: 1, name: 'Tournaments' })).toBeInViewport();
   expect(errors).toEqual([]);
 });
 
 // Keep each click/refresh/back journey inside its own timeout budget on slower runners.
-const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id }))];
-for (const { destination, sport } of destinations) {
+const destinations = [...sports.map(sport => ({ destination: '/sports/' + sport.id + '/', sport })), ...sampleTournaments.map(event => ({ destination: '/tournaments/' + event.id, title: event.name }))];
+for (const { destination, sport, title } of destinations) {
   test('homepage destination ' + destination + ' opens, refreshes and returns with Back', async ({ page }) => {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto('/');
     if (sport) await page.locator('.desktop-nav .sports-dropdown summary').click();
     await page.locator('a[href="' + destination + '"]').first().click();
     await expect(page).toHaveURL(new RegExp(destination.replace(/\/$/, '') + '/?$'));
-    const ready = () => sport ? expect(page.getByRole('heading', { level: 1, name: sport.label })).toBeVisible() : expect(page.locator('#root')).toHaveText('');
+    const ready = () => expect(page.getByRole('heading', { level: 1, name: sport ? sport.label : title })).toBeVisible();
     await ready(); expect((await page.reload()).status()).toBe(200); await ready();
     await page.goBack(); await expect(page.locator('.hero')).toBeVisible(); expect(errors).toEqual([]);
   });
@@ -234,11 +291,15 @@ test('repeat Home and Tournaments navigation scrolls and closes phone menus', as
       await page.evaluate(() => window.scrollTo(0, 0));
       if (width < 768) await menu.locator(':scope > summary').click();
       await navigation.getByRole('link', { name: 'Tournaments', exact: true }).click();
-      await expect(page).toHaveURL(/\/#tournaments$/);
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
-      await expect(page.locator('#tournaments')).toBeInViewport();
+      await expect(page).toHaveURL(/\/tournaments$/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Tournaments' })).toBeInViewport();
+      await expect(navigation.locator('a[href="/tournaments"]')).toHaveAttribute('aria-current', 'page');
       if (width < 768) await expect(menu).not.toHaveAttribute('open');
     }
+    // The header opens the Tournaments page; the /#tournaments anchor still scrolls to the homepage section.
+    await page.goto('/#tournaments');
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+    await expect(page.locator('#tournaments')).toBeInViewport();
     const home = navigation.getByRole('link', { name: 'Home', exact: true });
     for (let repeat = 0; repeat < 2; repeat++) {
       await page.evaluate(() => window.scrollTo(0, 0));

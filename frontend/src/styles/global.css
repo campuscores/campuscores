@@ -99,3 +99,14 @@
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+/* Image skeleton: a neutral block with a subtle shimmer under the hero panels, match textures and tournament images.
+   The loaded image paints over it, so the box and layout never change. The shimmer runs a few times, then rests;
+   the reduced-motion rule above removes it. `color: transparent` hides alt text while an image loads. */
+@property --shimmer { syntax: '<percentage>'; inherits: false; initial-value: -40%; }
+@keyframes image-shimmer { to { --shimmer: 140%; } }
+.athlete-card::before, .match-surface::before, .tournament-surface img {
+  --skeleton: linear-gradient(100deg, #e4e9f1 calc(var(--shimmer) - 30%), #f1f4f9 var(--shimmer), #e4e9f1 calc(var(--shimmer) + 30%));
+  animation: image-shimmer 1.6s ease-in-out 5;
+}
+.tournament-surface img, .athlete-card img { color: transparent; }
+.tournament-surface img { background: var(--skeleton); }

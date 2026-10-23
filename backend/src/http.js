@@ -60,10 +60,13 @@ const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true
 const MATCH = {
   id: true,
   tournamentId: true,
+  tournamentName: true,
+  tournamentSlug: true,
   sport: true,
   kind: true,
   stage: true,
   status: true,
+  phase: true,
   scheduledAt: true,
   venue: true,
   seq: true,
@@ -73,7 +76,7 @@ const MATCH = {
 const PUBLIC = {
   snapshot: SNAPSHOT,
   match: MATCH,
-  card: { id: true, sport: true, status: true, competition: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
+  card: { id: true, sport: true, status: true, competition: true, tournamentId: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
   tournament: {
     id: true,
     slug: true,
@@ -81,6 +84,8 @@ const PUBLIC = {
     startsOn: true,
     endsOn: true,
     status: true,
+    phase: true,
+    imageKey: true,
     venue: true,
     description: true,
     sports: true,

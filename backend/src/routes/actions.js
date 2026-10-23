@@ -59,7 +59,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
       const format = starting ? (() => { try { return validateFormat(ctx.match.sport, action.payload.format); } catch (e) { throw bad(e.message); } })() : ctx.match.config_snapshot?.format;
       // Only an exact accepted final command may replay a locked result; every other gate still runs.
       const finalReplay = ctx.match.status === 'APPROVED' && action.type === 'FINALIZE' && ctx.existing?.type === 'FINALIZE' && ctx.existing.payloadHash === hash;
-      const denied = evaluateChain(ctx, { starting, finalReplay, requireToday: Boolean(format) && !finalReplay }); // before the idempotency check: a revoked scorer's retry gets 403
+      const denied = evaluateChain(ctx, { starting, finalReplay }); // before the idempotency check: a revoked scorer's retry gets 403
       if (denied) throw new AppError(denied[0], denied[1], 'Scoring not allowed');
 
       const decision = decideAction({ existing: ctx.existing, lease: ctx.lease, lastSeq: ctx.match.last_seq }, { ...action, payloadHash: hash });
@@ -88,11 +88,11 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
       const { seq } = decision;
       const snapshot = toPublic('snapshot', data);
       const card = toPublic('card', {
-        id: match.id, sport: match.sport, status: data.status, competition: match.tournamentName,
+        id: match.id, sport: match.sport, status: data.status, competition: match.tournamentName, tournamentId: String(match.tournamentId),
         sides: snapshot.sides.map(({ name }) => ({ name })), score: snapshot.sides.map(({ points }) => points), clock: null,
         periods: snapshot.periods, winner: snapshot.winner, format: snapshot.format, finalizedAt: snapshot.finalizedAt, events: snapshot.events?.slice(-20), gamePoints: snapshot.gamePoints, serve: snapshot.serve,
       });
-      const privateMatch = Boolean(format) && (match.kind === 'CUSTOM' || match.tournamentStatus === 'DRAFT');
+      const privateMatch = !['ONGOING', 'COMPLETED'].includes(match.tournamentStatus);
       const roomMessage = { type: 'snapshot', room: `match:${match.id}`, seq, data: snapshot, ...(privateMatch ? { private: true } : {}) };
       const audit = { seq, clientSeq: action.clientSeq, deviceId: action.deviceId, type: action.type, payload: action.payload, reversesActionId: action.reversesActionId };
       // One statement: action, sequence, snapshot, lease client seq, audit and outbox commit together.
@@ -100,7 +100,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
         `WITH a AS (
            INSERT INTO score_actions (match_id, action_id, seq, client_seq, device_id, account_id, type, payload, payload_hash, reverses_action_id, result)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)),
-         m AS (UPDATE matches SET last_seq = $3, status = $19, correction_route = CASE WHEN $19 = 'REJECTED' THEN correction_route ELSE NULL END, config_snapshot = COALESCE($20::jsonb, config_snapshot), config_version = CASE WHEN $20::jsonb IS NULL THEN config_version ELSE 1 END WHERE id = $1),
+         m AS (UPDATE matches SET last_seq = $3, status = $19, correction_route = CASE WHEN $19 = 'REJECTED' THEN correction_route ELSE NULL END, config_snapshot = COALESCE($20::jsonb, config_snapshot), config_version = CASE WHEN $20::jsonb IS NULL THEN config_version ELSE $21::int END WHERE id = $1),
          s AS (INSERT INTO match_snapshots (match_id, seq, data) VALUES ($1, $3, $12)
                ON CONFLICT (match_id) DO UPDATE SET seq = $3, data = $12, updated_at = now()),
          l AS (UPDATE scorer_leases SET last_client_seq = $4, updated_at = now() WHERE match_id = $1),
@@ -112,6 +112,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
           action.reversesActionId, { snapshot }, data, action.type === 'FINALIZE' ? 'MATCH_FINALIZED' : action.type === 'START' ? 'MATCH_STARTED' : action.reversesActionId ? 'SCORE_ACTION_REVERSED' : 'SCORE_ACTION',
           action.actionId, c.get('requestId'), audit, roomMessage, card, data.status,
           starting ? { format, source: RULE_SOURCES[match.sport], checkedOn: '2026-10-20' } : null,
+          match.tsConfigVersion, // $21: config_version the START snapshot adopts from the Tournament_Sport
         ],
       );
       return { seq, snapshot, delivery: { outboxId: outbox.id, matchId: match.id, seq, snapshot, card, private: privateMatch } };

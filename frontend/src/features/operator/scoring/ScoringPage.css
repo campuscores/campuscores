@@ -1,24 +1,16 @@
+/* Inside the StaffShell container, which gives the h1 and the Back link: one 760px column at the container edge. */
 .scoring-page {
-  width: min(760px, calc(100% - 32px));
-  margin: 0 auto 64px;
+  max-width: 760px;
   --sport-accent: #526780;
 }
 
-/* Top bar: back, meta, sync chip. */
+/* Top bar: meta, sync chip. */
 .scoring-top {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
-  margin: 24px 0 20px;
-}
-.scoring-back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--blue);
-  font-size: 14px;
-  font-weight: 700;
+  margin: 0 0 20px;
 }
 .scoring-meta { margin: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; color: #50688c; }
 .scoring-sport { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; font-weight: 800; }
@@ -172,7 +164,7 @@
 .scoring-dialog-actions .scoring-action.is-primary { flex-basis: auto; }
 
 @media (max-width: 767px) {
-  .scoring-top { grid-template-columns: auto 1fr; row-gap: 8px; }
+  .scoring-top { grid-template-columns: 1fr; row-gap: 8px; }
   .scoring-sync { grid-column: 1 / -1; justify-self: start; }
   .score-points { font-size: 56px; }
 }
@@ -196,7 +188,6 @@
 .event-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
 .event-btn:disabled { opacity: .5; cursor: not-allowed; }
 
-.scoring-title { margin: 0 0 24px; font-size: clamp(24px, 5vw, 32px); font-weight: 800; line-height: 1.12; letter-spacing: -.03em; overflow-wrap: anywhere; }
 .format-form { margin-block: 24px; }
 .format-form h2, .scoring-detail h2 { margin: 24px 0 12px; font-size: 20px; }
 .format-form p, .scoring-note, .format-summary p { line-height: 1.5; }

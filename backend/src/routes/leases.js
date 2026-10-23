@@ -64,11 +64,18 @@ leaseRoutes.post('/matches/:id/lease', clerkAuth, loadAccount, requireRole('staf
   return c.json({ lease });
 });
 
-// Releases only the caller's own lease; repeating it is harmless.
+// Releases only the caller's own lease; repeating it is harmless. An optional body `{ deviceId }` releases it only
+// when that device holds it, so a device that lost the lease to the same account's other device never drops theirs.
 leaseRoutes.delete('/matches/:id/lease', clerkAuth, loadAccount, requireRole('staff'), async (c) => {
   const matchId = idParam(c);
+  const body = await c.req.json().catch(() => null); // the body is optional
+  const deviceId = body?.deviceId ?? null;
+  if (deviceId !== null && (typeof deviceId !== 'string' || !UUID.test(deviceId))) throw new AppError(400, 'BAD_REQUEST', 'deviceId must be a UUID');
   await uncached(c, (client) =>
-    client.query('DELETE FROM scorer_leases WHERE match_id = $1 AND account_id = $2', [matchId, c.get('account').id]),
+    client.query(
+      'DELETE FROM scorer_leases WHERE match_id = $1 AND account_id = $2 AND ($3::uuid IS NULL OR device_id = $3::uuid)',
+      [matchId, c.get('account').id, deviceId],
+    ),
   );
   return c.body(null, 204);
 });

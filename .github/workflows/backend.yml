@@ -1,9 +1,10 @@
 name: Backend checks
 on:
-  push:
-    paths: ['shared/**', 'backend/**', 'db/**', 'package*.json', '.github/workflows/backend.yml']
+  # Runs once per release PR (develop -> main) or by manual run; deploy.yml gates every develop push.
   pull_request:
+    branches: [main]
     paths: ['shared/**', 'backend/**', 'db/**', 'package*.json', '.github/workflows/backend.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

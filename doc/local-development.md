@@ -123,6 +123,20 @@ Add feature and regression specs to `frontend/tests/` in the same change as the 
 
 [deferred-tests.md](deferred-tests.md) lists the required checks that have not passed yet, their exact commands and which ones a Windows machine can run. CI clears them.
 
+### Before you push to develop
+
+Pushes to `develop` do not run the CI matrix. Run the checks locally first, then push directly to `develop`; `deploy.yml` tests and deploys staging. The full matrix runs on the release pull request to `main`. The rules are in [AGENTS.md](../AGENTS.md#verify-before-marking-complete).
+
+```sh
+npm run lint
+npm run build
+npm test -- tests/<changed-area>.spec.js   # all of npm test when shared UI or contracts change
+npm run lint:backend                      # when the backend changes
+npm run test:backend                      # when the backend changes
+```
+
+To run the full matrix before a release pull request, use **Run workflow** on the Frontend checks or Backend checks workflow in GitHub Actions.
+
 ## Backend (planned)
 
 The backend is planned and not implemented. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).
@@ -130,6 +144,7 @@ The backend is planned and not implemented. The stack is a Cloudflare Worker (Ho
 - No Postgres or Docker is needed on team devices. CI tests migrations on a throwaway Postgres on the GitHub Actions runner.
 - These root commands arrive with the backend scaffold: `npm run dev:backend` (local Worker), `npm run lint:backend` and `npm run test:backend`.
 - Database test suites run only when `TEST_DATABASE_URL` is set; CI sets it to its throwaway Postgres. Without it they skip; with `REQUIRE_DB=1` (set in CI) the run fails instead. The URL must include a password, because Miniflare's Hyperdrive binding rejects a URL without one. The database must be migrated and loaded with `db/seed/fake.sql`. A developer may point it at a personal Neon branch of the staging project.
+- Database test files run in parallel on one database. Do not change shared seed rows; create throwaway rows, or change state inside a transaction that rolls back. Do not commit a second ACTIVE `SUPER_ADMIN`: the last-Super-Admin cases in `auth.spec.js`, `accounts.spec.js` and `bootstrap.spec.js` need the seed `test_super_admin` to be the only one. A test that needs a Super Admin uses `test_super_admin`.
 - Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
 - Only GitHub Actions applies migrations and deploys. Do not run them from a laptop.
 
@@ -149,7 +164,13 @@ cd output/load && npx wrangler dev --config wrangler.jsonc --port 8788 --ip 127.
 BASE=http://127.0.0.1:8788 CLIENTS=120 RAMP_S=15 HOLD_S=30 BURST=40 SETTLE_S=10 node output/load/harness.mjs
 ```
 
-The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Engine `POINT` actions to `/api/matches/:id/actions`. It needs a deployed staging Worker and a test operator; see the exact command and preconditions in [tasks.md](tasks.md#capacity-results-simulated-clients). Never put the secret key in a committed file or shell history that others can read.
+The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Engine `POINT` actions to `/api/matches/:id/actions`. It needs a deployed staging Worker and a test operator; the preconditions are in [tasks.md](tasks.md#capacity-results-simulated-clients). Full run (all values default to the thresholds):
+
+```sh
+BASE=https://thaparlympics-staging.bhatiaarnav05.workers.dev PUBLISH=api MATCH_IDS=<4 live match ids> \
+  CLERK_SECRET_KEY=<staging secret> CLERK_SESSION_ID=<test operator session> node output/load/harness.mjs
+```
+ Never put the secret key in a committed file or shell history that others can read.
 
 ## Common problems
 
@@ -163,7 +184,7 @@ The staging run uses `PUBLISH=api`: it takes the scorer lease and posts Test_Eng
 | Browser executable missing | Install the browsers as above, or select installed Chrome for the Chromium projects. |
 | WebKit fails with "Host system is missing dependencies" | Run `sudo npx playwright install-deps webkit`. The message names the missing libraries, for example `libavif16`. Until then, run the other projects: `npm test -- --project=chromium --project=firefox --project=pixel`. |
 | Preview shows old source | Run `npm run build` again, then refresh. |
-| Tournament detail is blank | Tournament routes are reserved; their UI is not implemented yet. |
+| Tournament pages show sample tournaments | The build has no `VITE_API_BASE`, so the public pages show display fixtures. Set it to read the API. |
 | A teammate cannot open your localhost URL | They must pull the same branch and start their own server. The address refers to their machine. |
 
 ## Generated files and deployment
@@ -178,7 +199,7 @@ They solve different problems:
 
 | Tool | Purpose | This project |
 | --- | --- | --- |
-| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium` and `pixel` on Windows. It runs on pushes/pull requests affecting `frontend/**`, `shared/**`, root package files or the workflow. It does not deploy. |
+| GitHub Actions | Runs automated jobs after configured repository events. | The frontend workflow installs dependencies, lints, builds and runs the browser suite on Ubuntu, Windows and macOS: all six projects on Ubuntu and macOS, and `chromium` and `pixel` on Windows. It runs on pull requests to `main` that affect `frontend/**`, `shared/**`, root package files or the workflow, and on manual dispatch. It does not deploy. |
 | Docker | Packages and runs software with its dependencies in a container. | No Docker setup is required for the current frontend. |
 
 An Actions job can run Docker containers. They can work together; neither replaces the other. Backend CI (`backend.yml`) and the deploy workflow run a temporary `postgres:18` service container on the runner. Team devices do not need local Postgres.

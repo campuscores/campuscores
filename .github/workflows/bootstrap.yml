@@ -29,7 +29,9 @@ jobs:
       - run: npm ci
       # Inputs pass through env, never inline in the shell, so a crafted ID cannot inject commands.
       # The script refuses (exit 1, no row changed) when an active Super Admin already exists.
+      # On staging only, it ignores the fake seed accounts (clerk_user_id test_...).
       - run: node backend/scripts/bootstrap-super-admin.js --clerk-user-id "$CLERK_USER_ID"
         env:
           CLERK_USER_ID: ${{ inputs.clerk_user_id }}
+          BOOTSTRAP_ENV: ${{ inputs.environment }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

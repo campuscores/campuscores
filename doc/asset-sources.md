@@ -1,18 +1,32 @@
 # Asset sources
 
-Retrieved and inspected on 8 October 2026. These photographs illustrate the demonstration tournament cards; they do not identify the campus or event venues. Event names and dates are display content for the current frontend.
+## Venue_Library
 
-All five selected photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`.
+Retrieved and inspected on 8 October 2026. These photographs illustrate tournament cards; they do not identify the campus or event venues.
+
+The `stadium` file is an owner-supplied Thaparlympics 2026 image (see its row). The other four photos are free under the [Unsplash License](https://unsplash.com/license). Attribution is appreciated but not required. Files are locally hosted WebP images supplied by Unsplash's image CDN at 1000px width and quality 85. Only the displayed crop changes through CSS `object-fit` and `object-position`.
+
+These five photos are the Venue_Library. [`venues.js`](../frontend/src/features/tournaments/venues.js) (`VENUES`) is the only frontend mapping: it maps the keys `field`, `stadium`, `court`, `tennis` and `track` to the files below, with alt text and crop (`position`). Its users:
+
+- `toEventProp` in `venues.js` gives public tournament cards their photo from the API `imageKey`.
+- [`TournamentDetailsView.jsx`](../frontend/src/features/manage/TournamentDetailsView.jsx) shows the five photos and "Automatic" as the Tournament details photo choice.
+- [`sampleTournaments.js`](../frontend/src/features/tournaments/sampleTournaments.js) (display fixtures) spreads `VENUES.<key>` into each fixture.
+
+The backend keeps the same five keys, in the same order, as `VENUE_KEYS` in [`routes/public.js`](../backend/src/routes/public.js) and [`routes/manage.js`](../backend/src/routes/manage.js). The `tournaments.image_key` CHECK in `db/migrations/20261022090000_manager_scope.sql` allows only these keys. A tournament with no stored key shows `VENUE_KEYS[(id − 1) mod 5]`. To add or replace a photo, change `venues.js`, both `VENUE_KEYS` lists, the CHECK (in a new migration) and the table below together.
 
 | Local asset | Original photo and creator | Delivery URL |
 |---|---|---|
 | [tournament-field.webp](../frontend/public/assets/tournament-field.webp) | [Eliézer Fernandes (@lii_raw)](https://unsplash.com/photos/empty-stadium-with-green-field-and-blue-sky-FcI9d7Yw4CU) | [1000px WebP](https://images.unsplash.com/photo-1771344166393-52fe1c1721ce?auto=format&fit=crop&fm=webp&q=85&w=1000) |
-| [tournament-stadium.webp](../frontend/public/assets/tournament-stadium.webp) | [Eddie Pipocas](https://unsplash.com/photos/empty-football-stadium-with-green-field-and-blue-seats-a5xOeMXAYX8) | [1000px WebP](https://images.unsplash.com/photo-1755408218980-e52e151a92f8?auto=format&fit=crop&fm=webp&q=85&w=1000) |
+| [tournament-stadium.webp](../frontend/public/assets/tournament-stadium.webp) | Owner-supplied Thaparlympics 2026 image (Arnav, 23 October 2026): red-clad Thapar campus buildings around a courtyard, 1600 × 900 WebP. Used as supplied; no other license or source was recorded. It replaced the earlier Unsplash photo for the `stadium` key. | None (local file) |
 | [tournament-court.webp](../frontend/public/assets/tournament-court.webp) | [Griest Projects / Mitchell Griest](https://unsplash.com/photos/indoor-photography-of-basketball-court-EKXCGy4Zsbg) | [1000px WebP](https://images.unsplash.com/photo-1530232288631-63b79b9126b0?auto=format&fit=crop&fm=webp&q=85&w=1000) |
 | [tournament-tennis.webp](../frontend/public/assets/tournament-tennis.webp) | [Marius Kriz (@marius241001)](https://unsplash.com/photos/empty-tennis-courts-with-blue-seating-and-nets-sEEHYiMuHtc) | [1000px WebP](https://images.unsplash.com/photo-1758544919719-8aa318a82b36?auto=format&fit=crop&fm=webp&q=85&w=1000) |
 | [tournament-track.webp](../frontend/public/assets/tournament-track.webp) | [Nino Steffen](https://unsplash.com/photos/a-red-running-track-with-white-lines-on-it-Ai0yZfnQJII) | [1000px WebP](https://images.unsplash.com/photo-1717071817841-97c0b2c6723c?auto=format&fit=crop&fm=webp&q=85&w=1000) |
 
 The trophy icon uses [Hugeicons TrophyIcon](https://cdn.jsdelivr.net/npm/@hugeicons/core-free-icons@4.3.5/dist/esm/TrophyIcon.js) from the same MIT-licensed package as the existing sport icons. Its license notice is preserved in [Hugeicons-LICENSE.txt](../frontend/public/assets/Hugeicons-LICENSE.txt). The small card chevron follows the incumbent navigation's outline style.
+
+## Header logo
+
+Arnav supplied `logo.webp` (1600 × 533, red "jfc x ti" mark) on 23 October 2026 for the site header. It is used as he supplied it; no license or source beyond that was recorded. `logo-320.webp` (320 × 107) is a downscaled copy for phones and 1× screens. Both are in `frontend/public/assets/`. [`SiteHeader.jsx`](../frontend/src/components/SiteHeader.jsx) shows them as the one home link (alt "Campuscores home"), 26px high on phones and 34px from 768px.
 
 ## Hero artwork and favicon
 
