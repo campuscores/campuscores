@@ -46,7 +46,10 @@ export function replaceLiteral(text, from, to) {
  * modal) only counts its calls in `window.__openSignInCalls`.
  */
 export function stubClerk(arg) {
-  const { token, signedOut } = arg && typeof arg === 'object' ? arg : { token: arg };
+  const { token, signedOut: startSignedOut } = arg && typeof arg === 'object' ? arg : { token: arg };
+  // `signOut(options)` counts calls in sessionStorage `__signOutCalls`, stays signed out for the tab and loads
+  // `options.redirectUrl` (default '/'), like Clerk with afterSignOutUrl="/".
+  const signedOut = startSignedOut || sessionStorage.getItem('__stubSignedOut') === '1';
   const user = signedOut ? null : { id: 'user_operator', organizationMemberships: [] };
   const session = signedOut ? null : { id: 'sess_operator', status: 'active', user, actor: null, factorVerificationAge: null, lastActiveToken: { jwt: { claims: { sub: user.id, sid: 'sess_operator' } } }, getToken: async () => token };
   const sessions = session ? [session] : [];
@@ -57,6 +60,11 @@ export function stubClerk(arg) {
     __internal_lastEmittedResources: resources,
     addListener(listener, options) { if (!options?.skipInitialEmit) listener(resources); return () => {}; },
     openSignIn() { window.__openSignInCalls += 1; },
+    async signOut(options) {
+      sessionStorage.setItem('__signOutCalls', String(Number(sessionStorage.getItem('__signOutCalls') ?? 0) + 1));
+      sessionStorage.setItem('__stubSignedOut', '1');
+      window.location.assign(options?.redirectUrl ?? '/');
+    },
   };
 }
 

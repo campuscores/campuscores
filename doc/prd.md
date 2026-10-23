@@ -2,7 +2,7 @@
 
 **Status:** Homepage, sport pages, public tournament pages, live delivery, real scoring and the staff area (manager console and Super Admin staff management) are implemented. Validated rosters, bracket advancement, standings and match detail pages remain planned. See `handoff.md` for the current implementation and route boundaries, and `tasks.md` for published state.
 **Product name:** Thaparlympics (working event name; product name undecided)  
-**Initial users:** Public spectators (anonymous, or with an optional Viewer account), Super Admins, Tournament Managers, and Match Operators  
+**Initial users:** Public spectators (anonymous; sign-in is for staff only), Super Admins, Tournament Managers, and Match Operators  
 **Initial sports:** Football, volleyball, basketball, table tennis, lawn tennis, and badminton  
 **Expected live audience:** approximately 1,000 concurrent viewers
 
@@ -51,7 +51,7 @@ Roles are explicit (`SUPER_ADMIN`, `TOURNAMENT_MANAGER`, `MATCH_OPERATOR`); spec
 
 ### Spectator
 
-- Visits without signing in. Can optionally create a Viewer account with a verified email or Google. A Viewer account adds no rights for now.
+- Visits without signing in. Spectators do not sign in; an account without staff access is signed out ([decision](memory.md#staff-only-sign-in--24-october-2026)).
 - Views public event, sport, team, match, score, player contribution, and sport-standing information.
 - Sees whether a match is scheduled, live, paused, completed, or otherwise ended according to the configured status model.
 - Show accepted live scores as provisional and operator-confirmed results as final and locked.
@@ -237,7 +237,7 @@ Implemented 23 October 2026 (change 8). Before this change, a Super Admin could 
 
 ### Authentication and authorization
 
-- Anyone can create an account through Clerk with a verified email or Google. Clerk challenges suspicious sign-ups. Sign-up alone gives only the Viewer role, with public read access.
+- Sign-in is for staff only (Arnav, 24 October 2026; [decision](memory.md#staff-only-sign-in--24-october-2026)). After sign-in, `/start` accepts a pending invitation. An account without an `ACTIVE` staff role (`GET /api/me` Viewer) is signed out at once and sees `/sign-in?no-access` with the reason. Every staff screen has a Sign out button in the staff navigation.
 - Staff roles come only from invitations recorded in our database. Super Admins invite managers and Super Admins. Managers and Super Admins invite Match Operators. The backend sends invitations through the Clerk Invitations API.
 - Spectator endpoints and data are read-only and need no account.
 - Every protected request verifies the token and reads the active account and role from the database. Every scoring request also checks the match assignment, server-time window, `SCORE` permission, match state and device lease.
