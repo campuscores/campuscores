@@ -1,8 +1,14 @@
 name: Reset staging demo
 on:
   workflow_dispatch:
+  # A dispatch-only workflow is registered only from the default branch (main). This push trigger runs the reset
+  # from develop when this file changes, after the staging Deploy of the same commit finishes (its fake seed runs first).
+  push:
+    branches: [develop]
+    paths: ['.github/workflows/reset-staging-demo.yml']
 permissions:
   contents: read
+  actions: read
 jobs:
   reset:
     runs-on: ubuntu-latest
@@ -13,6 +19,18 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for the staging Deploy of this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$GITHUB_SHA" --json status --jq '.[0].status // "none"')
+            echo "deploy: $state"
+            if [ "$state" = "completed" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Deploy did not finish in 30 minutes"; exit 1
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22'
