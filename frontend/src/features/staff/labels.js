@@ -81,6 +81,8 @@ const MESSAGES = {
   SCORER_NOT_FOUND: 'No scorer account uses this email.',
   NOT_A_SCORER: 'This email belongs to an account that is not a Match Scorer.',
   INVITE_PENDING: 'An invitation to this email is waiting to be accepted.',
+  STAFF_EXISTS: 'This email already has a staff account, so it needs no invitation.',
+  STAFF_DISABLED: 'This email has a disabled staff account. A Super Admin can re-enable it on the Staff list.',
   MANAGER_NOT_ELIGIBLE: 'Enter the email of an active Tournament Manager who is not already on this sport.',
   DUPLICATE_NAME: 'This name is already used in this sport.',
   STAGE_TAKEN: 'This stage is already used in this sport.',
@@ -106,7 +108,7 @@ const MESSAGES = {
 // A 409 with these codes is about the account being changed, not the caller's own access (403), e.g. a role change
 // of a disabled account (backend accounts.js).
 const CONFLICTS = { ACCOUNT_DISABLED: 'This account is disabled. Re-enable it before you change its role.' };
-const FIELDS = { SCORER_NOT_FOUND: 'email', NOT_A_SCORER: 'email', INVITE_PENDING: 'email', MANAGER_NOT_ELIGIBLE: 'email', DUPLICATE_NAME: 'name', STAGE_TAKEN: 'stage', SPORT_EXISTS: 'sport', REASON_REQUIRED: 'reason' };
+const FIELDS = { SCORER_NOT_FOUND: 'email', NOT_A_SCORER: 'email', INVITE_PENDING: 'email', STAFF_EXISTS: 'email', STAFF_DISABLED: 'email', MANAGER_NOT_ELIGIBLE: 'email', DUPLICATE_NAME: 'name', STAGE_TAKEN: 'stage', SPORT_EXISTS: 'sport', REASON_REQUIRED: 'reason' };
 const BY_STATUS = { 400: 'Check your entries and try again.', 403: MESSAGES.NOT_STAFF, 404: MESSAGES.NOT_FOUND, 409: 'This changed since you opened the page. Reload to see the latest.' };
 
 /** Field and fix of an error: `BAD_REQUEST` messages read "<field>: <fix>" (backend validate.js). */
