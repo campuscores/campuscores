@@ -66,6 +66,7 @@ export function validateSportAction(sport, format, action) {
     case 'POINT':
       keys(['side', 'value']); requireValue(side(p.side), 'Choose a scoring side.');
       requireValue(format.model === 'periods' ? format.scoreValues.includes(p.value ?? 1) : (p.value == null || p.value === 1), 'This scoring value is not in the match format.'); break;
+    case 'END_MATCH': keys(['winner']); requireValue(side(p.winner), 'Choose the match winner.'); break;
     case 'END_SET': keys(['winner']); requireValue(format.model !== 'periods' && side(p.winner), 'Choose the early set winner.'); break;
     case 'END_PERIOD': keys([]); requireValue(format.model === 'periods', 'Only period sports use this command.'); break;
     case 'EXTRA_PERIOD': keys([]); requireValue(sport === 'basketball', 'The football tie policy must be agreed before a deciding period.'); break;
@@ -86,7 +87,7 @@ export function scoreMatch({ matchId, sport, sides, format: input, actions = [],
   const format = validateFormat(sport, input);
   const periods = [];
   let current = [0, 0], games = [0, 0], wins = [0, 0], totals = [0, 0];
-  let serve = format.firstServe ?? null, winner = null, finalized = false;
+  let serve = format.firstServe ?? null, winner = null, finalized = false, endedEarly = false;
   let tiebreak = false, tbFirst = null, periodOpen = true;
   const events = [], fouls = [0, 0];
   const finishSet = (won, manual = false, breaker = null) => {
@@ -137,6 +138,11 @@ export function scoreMatch({ matchId, sport, sides, format: input, actions = [],
           }
         } else if (winsPoints(current[s], current[1 - s], 4, format.advantage ? 2 : 1)) finishGame(s);
       }
+    } else if (action.type === 'END_MATCH') {
+      requireValue(periodOpen, 'This match has already ended. Undo the last period to correct it.');
+      if (format.model === 'periods') totals = totals.map((n, i) => n - current[i]);
+      current = [0, 0]; games = [0, 0]; tiebreak = false;
+      winner = p.winner; endedEarly = true; periodOpen = false;
     } else if (action.type === 'END_SET') finishSet(p.winner, true);
     else if (action.type === 'END_PERIOD') {
       requireValue(periodOpen, 'This period has already ended.');
@@ -160,7 +166,7 @@ export function scoreMatch({ matchId, sport, sides, format: input, actions = [],
     return ['0', '15', '30', '40'][Math.min(n, 3)];
   }) : current.map(String);
   const total = format.model === 'periods' ? totals : wins;
-  return { matchId, sport, status: finalized ? 'APPROVED' : status, format, sides: sides.map((name, i) => ({ name: name?.name ?? name, points: total[i] })), periods: rows, currentPoints: [...current], gamePoints: labels, serve, winner, finalized, tiebreak, fouls, events, corrected: false };
+  return { matchId, sport, status: finalized ? 'APPROVED' : status, format, sides: sides.map((name, i) => ({ name: name?.name ?? name, points: total[i] })), periods: rows, currentPoints: [...current], gamePoints: labels, serve, winner, finalized, ...(endedEarly ? { endedEarly: true } : {}), tiebreak, fouls, events, corrected: false };
 }
 /** A reversal compensates a durable action; START, FINALIZE and reversals themselves are immutable. */
 export function checkReversal(actions, action) {

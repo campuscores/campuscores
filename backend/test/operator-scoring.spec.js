@@ -180,3 +180,47 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('real sport scoring transactions', () 
     expect((await api('GET', `/api/matches/${f.matchId}`)).status).toBe(404);
   });
 });
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('early whole-match results', () => {
+  it.each(Object.keys(DEFAULT_FORMATS))('%s persists an early finish, replays it once, and locks it after final confirmation', async sport => {
+    const f = await fixture(sport);
+    await f.send('START', { format: DEFAULT_FORMATS[sport] });
+    await f.send('POINT', { side: 0 });
+    await f.send(DEFAULT_FORMATS[sport].model === 'periods' ? 'END_PERIOD' : 'END_SET', DEFAULT_FORMATS[sport].model === 'periods' ? {} : { winner: 0 });
+    await f.send('POINT', { side: 1 });
+    const early = await f.send('END_MATCH', { winner: 1 });
+    expect(early.status).toBe(200);
+    expect(early.data.snapshot).toMatchObject({ winner: 1, endedEarly: true, finalized: false, sides: [{ points: 1 }, { points: 0 }] });
+    expect(early.data.snapshot.periods).toHaveLength(1);
+    expect(early.data.snapshot.periods[0].current).toBe(false);
+    const rows = await f.rows();
+    const replay = await f.send('END_MATCH', { winner: 1 }, early.body);
+    expect(replay.data).toEqual(early.data); expect(await f.rows()).toEqual(rows);
+    const outbox = await one('SELECT card FROM outbox_events WHERE match_id=$1 ORDER BY seq DESC LIMIT 1', [f.matchId]);
+    expect(outbox.card).toMatchObject({ kind: 'BRACKET', stage: 'SF1', winner: 1, endedEarly: true, score: [1, 0] });
+    const undone = await f.send('REVERSE', {}, { reversesActionId: early.body.actionId });
+    expect(undone.status).toBe(200);
+    expect(undone.data.snapshot.winner).toBeNull();
+    expect(undone.data.snapshot.currentPoints).toEqual([0, 1]);
+    expect(undone.data.snapshot.periods).toHaveLength(2);
+    expect(undone.data.snapshot).not.toHaveProperty('endedEarly');
+    const repeated = await f.send('END_MATCH', { winner: 1 }); expect(repeated.status).toBe(200);
+    const final = await f.send('FINALIZE'); expect(final.status).toBe(200);
+    expect(final.data.snapshot).toMatchObject({ winner: 1, endedEarly: true, finalized: true });
+    expect((await f.send('REVERSE', {}, { reversesActionId: early.body.actionId })).data.error.code).toBe('SCORING_LOCKED');
+    expect((await f.send('FINALIZE', {}, final.body)).data).toEqual(final.data);
+  });
+});
+
+
+it.skipIf(!env.HYPERDRIVE_UNCACHED)('early finish rejects another device and invalid winners without writing a result', async () => {
+  const f = await fixture();
+  await f.send('START', { format: DEFAULT_FORMATS.badminton });
+  const before = await f.rows();
+  const wrongDevice = await f.send('END_MATCH', { winner: 1 }, { deviceId: crypto.randomUUID() });
+  expect(wrongDevice.status).toBe(409); expect(wrongDevice.data.error.code).toBe('LEASE_REQUIRED');
+  expect(await f.rows()).toEqual(before);
+  const invalid = await f.send('END_MATCH', { winner: 2 });
+  expect(invalid.status).toBe(422); expect(invalid.data.error.code).toBe('ACTION_INVALID');
+  expect(await f.rows()).toEqual(before);
+});

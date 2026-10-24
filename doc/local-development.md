@@ -137,12 +137,12 @@ npm run test:backend                      # when the backend changes
 
 To run the full matrix before a release pull request, use **Run workflow** on the Frontend checks or Backend checks workflow in GitHub Actions.
 
-## Backend (planned)
+## Backend
 
-The backend is planned and not implemented. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).
+The backend is implemented in `backend/`. The stack is a Cloudflare Worker (Hono) with Durable Object live rooms, Neon Postgres through Hyperdrive, and Clerk sign-in. See [architecture.md](architecture.md#technology).
 
 - No Postgres or Docker is needed on team devices. CI tests migrations on a throwaway Postgres on the GitHub Actions runner.
-- These root commands arrive with the backend scaffold: `npm run dev:backend` (local Worker), `npm run lint:backend` and `npm run test:backend`.
+- The root commands are: `npm run dev:backend` (local Worker), `npm run lint:backend` and `npm run test:backend`.
 - Database test suites run only when `TEST_DATABASE_URL` is set; CI sets it to its throwaway Postgres. Without it they skip; with `REQUIRE_DB=1` (set in CI) the run fails instead. The URL must include a password, because Miniflare's Hyperdrive binding rejects a URL without one. The database must be migrated and loaded with `db/seed/fake.sql`. A developer may point it at a personal Neon branch of the staging project.
 - Database test files run in parallel on one database. Do not change shared seed rows; create throwaway rows, or change state inside a transaction that rolls back. Do not commit a second ACTIVE `SUPER_ADMIN`: the last-Super-Admin cases in `auth.spec.js`, `accounts.spec.js` and `bootstrap.spec.js` need the seed `test_super_admin` to be the only one. A test that needs a Super Admin uses `test_super_admin`.
 - Local Worker secrets go in `backend/.dev.vars`. Git ignores `.dev.vars*` and `.wrangler/`. Never commit secrets, and never put server secrets in `VITE_*` variables: Vite sends those to the browser.
@@ -234,3 +234,15 @@ On each sport page, check:
 Record the device, OS version, browser version and results in [tasks.md](tasks.md).
 
 Cloud device farms, such as BrowserStack or LambdaTest through Playwright `connect`, are a possible future option. They need an account and CI secrets. They are not set up.
+
+## Connection recovery and local backend checks
+
+API requests have a 15-second limit, including the response body. Public and staff lists still read once on entry and on Try again. Score delivery and temporary lease failures retry with the existing random backoff, capped at 30 seconds. A score retry keeps its action ID and sequence within the lease. A loaded scorer can keep saving pending actions offline. Initial access needs an online assignment read and lease; keep the console open during a match. Browser restart with no connection is not supported.
+
+One login can score different assigned matches on different devices. A lease belongs to a match, not to the login. A second device on the same match needs Take over scoring, which discards its unsent actions and reloads the accepted result.
+
+Backend database tests can use an isolated local Postgres 18 container with the migrations and `db/seed/fake.sql`. Set `REQUIRE_DB=1` and `TEST_DATABASE_URL` to that disposable database, then run `npm run test:backend`. Never use an event database for these tests. On a constrained Windows machine, `npm run test:backend -- --maxWorkers=2` limits test-pool load. A Workers pool `bad port` startup error means that suite did not run: rerun it separately and require the full CI result. Only CI migrates a hosted environment. The phone browser projects now also run `scoring-flow.spec.js` and `operator-console.spec.js`.
+
+Neon, Clerk and Cloudflare skills are development aids. A skill does not grant account access. Read-only live inspection needs a separately authorized connection. Do not install global tools or change personal connector settings as part of a repository-only task.
+
+For Neon staging inspection, select the project named `Campuscores-staging`, then verify its branch and database. Its current default branch is named `production`; that branch name does not identify the production application. The staging and production applications use separate projects. Pass the verified project and branch IDs explicitly. The connected Neon tools expose write operations; this handoff permits diagnostic reads and SELECT statements only. Hosted changes still use CI.

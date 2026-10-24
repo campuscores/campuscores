@@ -1,3 +1,4 @@
+import EmptyState from '../../components/EmptyState.jsx';
 import HorizontalRail from '../../components/HorizontalRail.jsx';
 import SiteHeader from '../../components/SiteHeader.jsx';
 import SportIcon from '../../components/SportIcon.jsx';
@@ -8,9 +9,9 @@ import '../sports/SportPage.css';
 import './TournamentPages.css';
 
 const SECTIONS = [
-  { phase: 'live', title: 'Live Tournaments' },
-  { phase: 'upcoming', title: 'Upcoming Tournaments' },
-  { phase: 'past', title: 'Past Tournaments' },
+  { phase: 'live', title: 'Live Tournaments', asset: 'tournaments-live-empty', empty: 'The arena is quiet for now', description: 'Live tournaments will appear here once play begins.' },
+  { phase: 'upcoming', title: 'Upcoming Tournaments', asset: 'upcoming-tournaments-empty', empty: 'Nothing on the calendar yet', description: 'New tournaments will appear here when announced.' },
+  { phase: 'past', title: 'Past Tournaments', asset: 'past-tournaments-empty', empty: 'History is waiting to be made', description: 'Completed tournaments will appear right here.' },
 ];
 
 /**
@@ -24,7 +25,7 @@ export default function TournamentsView({ tournaments = [], status = 'ready', on
       <SiteHeader />
       <main>
         <header className="sport-section sport-title"><h1><SportIcon sport="trophy" className="tournament-trophy" />Tournaments</h1></header>
-        {SECTIONS.map(({ phase, title }) => {
+        {SECTIONS.map(({ phase, title, asset, empty, description }) => {
           const events = tournaments.filter(tournament => tournament.phase === phase).map(toEventProp);
           return (
             <section key={phase} className="tournaments" id={`${phase}-tournaments`} aria-labelledby={`${phase}-tournaments-title`}>
@@ -35,7 +36,7 @@ export default function TournamentsView({ tournaments = [], status = 'ready', on
                   ? <HorizontalRail className="tournament-scroll" label={`${title}, scroll horizontally`}>
                       {events.map(event => <TournamentCard key={event.id} event={event} />)}
                     </HorizontalRail>
-                  : <p className="sport-empty">No {title.toLowerCase()} right now.</p>}
+                  : <EmptyState asset={`empty/tournaments/${asset}`} title={empty}>{description}</EmptyState>}
             </section>
           );
         })}

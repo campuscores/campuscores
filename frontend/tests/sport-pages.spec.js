@@ -315,9 +315,12 @@ for (const sport of built) {
       const result = card(page, past.id);
       await expect(result.locator('.is-winner')).toHaveText(`${winner} (winner)`);
       expect(await weight(result.locator('.is-winner'))).toBe('800');
-      await expect(result.locator('.match-clock')).toHaveText(`${past.dateLabel} · ${past.tournament}`);
+      await expect(result.locator('.match-clock')).toHaveText(`${winner} won`);
+      await expect(result.locator('.match-meta > span').last()).toHaveText(past.tournament);
+      await expect(result).toHaveAttribute('data-date', past.date);
       await result.locator('button').click();
-      await expect(dialog(page).locator('.sport-dialog-status')).toHaveText(`Final · ${winner} won ${past.score[past.winner]}–${past.score[1 - past.winner]}`);
+      await expect(dialog(page).locator('.sport-dialog-status')).toHaveText(`${winner} won`);
+      await expect(dialog(page).locator('.match-overview > strong')).toHaveText(past.score.join('–'));
       await expect(dialog(page).locator('.sport-info dt')).toHaveText(['Date', 'Time', 'Tournament', 'Round', 'Venue']);
       await page.keyboard.press('Escape');
       await expect(page.locator('dialog[open]')).toHaveCount(0);
@@ -410,7 +413,8 @@ test.describe('lawn tennis scoring', () => {
     await open(page, 'past-ms-rao-kumar');
     await expect(cell(page, 1, 0)).toHaveText('6, tiebreak 6');
     await expect(cell(page, 0, 0).locator('strong')).toHaveText('7');
-    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Final · Rao won 2–0');
+    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Rao won');
+    await expect(dialog(page).locator('.match-overview > strong')).toHaveText('2–0');
   });
 });
 
@@ -545,7 +549,8 @@ test.describe('football scoring', () => {
     await open(page, 'past-m-cse-mech');
     await expect(cell(page, 0, 0).locator('strong')).toHaveText('2');
     for (const side of [0, 1]) await expect(cell(page, side, 1).locator('strong')).toHaveCount(0);
-    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Final · CSE Y3 won 3–1');
+    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('CSE Y3 won');
+    await expect(dialog(page).locator('.match-overview > strong')).toHaveText('3–1');
   });
 });
 
@@ -596,7 +601,8 @@ test.describe('basketball scoring', () => {
     await expect(columns(page).nth(4)).toHaveText('OT');
     await expect(columns(page).nth(4)).toHaveAttribute('aria-label', 'Overtime');
     await expect(cell(page, 0, 4).locator('strong')).toHaveText('9');
-    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Final · ECE Y2 won 73–70');
+    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('ECE Y2 won');
+    await expect(dialog(page).locator('.match-overview > strong')).toHaveText('73–70');
   });
 });
 
@@ -791,9 +797,12 @@ test.describe('badminton', () => {
     const result = card(page, 'past-wd-kaur-jain');
     await expect(result.locator('.is-winner')).toHaveText('Rao / Sen (winner)');
     expect(await weight(result.locator('.is-winner'))).toBe('800');
-    await expect(result.locator('.match-clock')).toHaveText('3 Oct · Thaparlympics 2026');
+    await expect(result.locator('.match-clock')).toHaveText('Rao / Sen won');
+    await expect(result.locator('.match-meta > span').last()).toHaveText('Thaparlympics 2026');
+    await expect(result).toHaveAttribute('data-date', '2026-10-03');
     await result.locator('button').click();
-    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Final · Rao / Sen won 2–1');
+    await expect(dialog(page).locator('.sport-dialog-status')).toHaveText('Rao / Sen won');
+    await expect(dialog(page).locator('.match-overview > strong')).toHaveText('1–2');
     await expect(dialog(page).locator('tbody tr').nth(1).locator('.winner-tag')).toHaveText('Winner');
     await expect(dialog(page).locator('table')).toHaveCount(1);
     await expect(dialog(page).locator('.sport-info dt')).toHaveText(['Date', 'Time', 'Tournament', 'Round', 'Venue']);

@@ -5,7 +5,7 @@
 // outside India time, so the invitation expiry proves the IST text.
 import { test, expect } from '@playwright/test';
 import { istDate, timeText } from '../../shared/time.mjs';
-import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabTo } from './helpers.js';
+import { apiError, expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabKey, tabTo } from './helpers.js';
 import { assignApi, matchRow, ME } from './manage-fakes.js';
 
 test.use({ locale: 'en-GB', timezoneId: 'America/Los_Angeles' });
@@ -27,8 +27,6 @@ async function expectFieldError(input, message) {
 }
 const ASSIGN_21 = '/matches/21/assignments'; // Falcons vs Hawks: Upcoming, no scorer
 const ASSIGN_22 = '/matches/22/assignments'; // Eagles vs Owls: Live, scored by Ravi (assignment 91)
-// macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
-const tabKey = browserName => (browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
 
 test.beforeEach(async ({ page }) => {
   page.errors = [];
@@ -36,10 +34,10 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => { expect(page.errors).toEqual([]); });
 
-test('Assign by keyboard only from Matches: the email is normalised, no window is sent, and focus moves to the h1 after the save', async ({ page, browserName }) => {
+test('Assign by keyboard only from Matches: the email is normalised, no window is sent, and focus moves to the h1 after the save', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.manager });
   const api = await assignApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   await page.goto(`${APP}/manage/matches`);
   await tabTo(page, link(page, 'Assign scorer for Falcons vs Hawks'), tab);
   await page.keyboard.press('Enter');

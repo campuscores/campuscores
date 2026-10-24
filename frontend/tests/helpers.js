@@ -143,11 +143,12 @@ export function held() {
 }
 
 /**
- * The key that moves focus like `key` ('Tab' or 'Shift+Tab'). macOS WebKit (the webkit, iphone and ipad projects on a
- * Mac) follows Safari: plain Tab skips buttons and links, and Option+Tab reaches every control. Other keys pass through.
+ * The key that moves focus like `key` ('Tab' or 'Shift+Tab'). Use it for every Tab press that must reach a link or
+ * button. WebKit on macOS and Windows (the webkit, iphone and ipad projects) follows Safari: plain Tab skips buttons
+ * and links, and Option+Tab reaches every control. Linux WebKit reaches them on plain Tab. Other keys pass through.
  */
 export function tabKey(page, key = 'Tab') {
-  if (process.platform !== 'darwin' || page.context().browser()?.browserType().name() !== 'webkit') return key;
+  if (process.platform === 'linux' || page.context().browser()?.browserType().name() !== 'webkit') return key;
   return { Tab: 'Alt+Tab', 'Shift+Tab': 'Alt+Shift+Tab' }[key] ?? key;
 }
 

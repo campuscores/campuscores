@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
 import SiteHeader from '../../components/SiteHeader.jsx';
-import SportIcon from '../../components/SportIcon.jsx';
 import { sports } from '../../data/sports.js';
 import { toEventProp } from './venues.js';
 import '../home/HomePage.css';
@@ -51,8 +50,8 @@ export default function TournamentView({ tournament, status = 'ready', onRetry }
               ? <ul className="tournament-sports">
                   {tournamentSports.map(sport => (
                     <li key={sport.id}>
-                      <Link className="sport-link" to={`/tournaments/${tournament.slug}/${sport.id}`} style={{ '--sport-color': sport.color }}>
-                        <SportIcon sport={sport.id} /><span>{sport.label}</span>
+                      <Link className={`tournament-sport-link ${sport.id}`} to={`/tournaments/${tournament.slug}/${sport.id}`} style={{ '--sport-color': sport.color }}>
+                        <img src={`/assets/tournament-sports/${sport.id}.webp`} srcSet={`/assets/tournament-sports/${sport.id}-320.webp 320w, /assets/tournament-sports/${sport.id}-640.webp 640w, /assets/tournament-sports/${sport.id}.webp 1254w`} sizes="(max-width: 767px) calc((100vw - 44px) / 2), (max-width: 1023px) calc((100vw - 80px) / 3), 390px" width="1254" height="1254" alt="" loading="lazy" decoding="async" /><span>{sport.label}</span>
                       </Link>
                     </li>
                   ))}

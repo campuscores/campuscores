@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="128" viewBox="0 0 240 128" fill="none" role="img" aria-labelledby="past-title past-desc">
+  <title id="past-title">Tournament history is waiting to be written</title>
+  <desc id="past-desc">A blue archive box holding tournament records, framed by pale blue clouds and trees.</desc>
+  <defs>
+    <linearGradient id="past-cloud" x1="120" y1="16" x2="120" y2="115" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2EEFF"/><stop offset="1" stop-color="#C9E1FF"/>
+    </linearGradient>
+    <linearGradient id="past-blue" x1="120" y1="68" x2="120" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4D678C"/><stop offset="1" stop-color="#334D72"/>
+    </linearGradient>
+  </defs>
+  <path d="M22 107C9 97 13 80 28 71C29 54 39 47 46 44C50 23 69 13 86 18C99 21 108 33 112 39C124 27 145 17 162 20C182 20 198 33 202 49C219 51 226 64 219 77C234 88 232 104 218 111H28Z" fill="url(#past-cloud)"/>
+  <path d="M24 98C39 83 57 85 66 96C79 80 101 85 110 100C125 86 145 90 150 101C170 89 187 91 196 101C205 97 217 100 224 109H22Z" fill="#D8E9FF"/>
+  <ellipse cx="120" cy="113" rx="102" ry="5" fill="#A9CDFB" fill-opacity=".7"/>
+  <g stroke="#263D5B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M110 24L107 19M120 22V15M130 24L133 19"/>
+    <path d="M87 42L153 32L160 77L94 87Z" fill="#AECBEF"/>
+    <path d="M80 36H141L155 50V83H80Z" fill="#F1F7FF"/>
+    <path d="M141 36V50H155" fill="#D1E3FA"/>
+    <path d="M94 53H128M94 62H139M94 71H119" stroke="#9BB7DA" stroke-width="2.7"/>
+    <path d="M69 73H173V106C173 108.2 171.2 110 169 110H73C70.8 110 69 108.2 69 106Z" fill="url(#past-blue)"/>
+    <rect x="65" y="66" width="112" height="10" rx="2" fill="#AECBEF"/>
+  </g>
+  <path d="M72 79H81V107H73C72.4 107 72 106.6 72 106Z" fill="#6D8FB9" fill-opacity=".32"/>
+  <path d="M69 69H173" stroke="#EAF4FF" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="104" y="82" width="34" height="20" rx="2.5" fill="#D2E6FF" stroke="#263D5B" stroke-width="1.4"/>
+  <g fill="none" stroke="#406898" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M116 86H126V90C126 94 124 95 121 95C118 95 116 94 116 90ZM116 88H113V90C113 92 115 93 117 93M126 88H129V90C129 92 127 93 125 93M121 95V98M118 98H124"/>
+  </g>
+  <g>
+    <path d="M28 94C23 90 25 84 29 81C28 72 37 68 40 78C45 80 47 86 43 90C44 95 38 99 34 98Z" fill="#7DB5FA"/>
+    <path d="M30 90C27 88 29 83 32 81C32 77 34 75 36 75C35 83 36 92 37 98C33 98 30 95 30 90Z" fill="#5C9EEB"/>
+    <path d="M35 84V109M35 98L30 94M35 93L40 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+    <path d="M199 94C194 90 196 84 200 81C199 72 208 68 211 78C216 80 218 86 214 90C215 95 209 99 205 98Z" fill="#7DB5FA"/>
+    <path d="M201 90C198 88 200 83 203 81C203 77 205 75 207 75C206 83 207 92 208 98C204 98 201 95 201 90Z" fill="#5C9EEB"/>
+    <path d="M206 84V109M206 98L201 94M206 93L211 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+  </g>
+  <path d="M48 109L51 103L55 109M183 109L187 104L191 109" fill="#78AAF0"/>
+  <path d="M14 110H226" stroke="#263D5B" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

@@ -88,8 +88,12 @@
       position: absolute;
       z-index: 2;
       top: calc(100% + 10px);
-      right: -12px;
-      width: 210px;
+      /* Open leftward so the last navigation item cannot clip the sport names. */
+      right: 0;
+      left: auto;
+      width: max-content;
+      min-width: 210px;
+      max-width: calc(100vw - 32px);
       padding: 7px;
       background: #fff;
       border: 1px solid #e7edf7;
@@ -103,6 +107,7 @@
       padding: 0 14px;
       border-radius: 9px;
       font-size: 13px;
+      white-space: nowrap;
     }
     .sports-options a:hover, .sports-options a:focus-visible {
       color: var(--blue);
@@ -156,6 +161,8 @@
     .mobile-menu-panel .sports-options {
       position: static;
       width: auto;
+      min-width: 0;
+      max-width: none;
       margin: 0 6px 4px;
       padding: 0 0 0 8px;
       border: 0;

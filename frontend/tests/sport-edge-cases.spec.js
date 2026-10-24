@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { sports } from '../src/data/sports.js';
 import { sportFixtures } from '../src/features/sports/sportFixtures.js';
 import { upcomingDates, pastDates } from '../src/features/sports/sportCalendar.js';
-import { bundle, serveBundle, replaceLiteral } from './helpers.js';
+import { bundle, serveBundle, replaceLiteral, tabKey } from './helpers.js';
 
 const card = (page, id) => page.locator(`[data-match-id="${id}"]`);
 const chip = (section, label) => section.locator('.date-chip', { hasText: new RegExp(`^${label}$`) });
@@ -40,7 +40,7 @@ test('an empty Live section shows its empty state on every sport', async ({ page
     const { upcomingMatches, pastMatches } = sportFixtures[sport.id];
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/sports/${sport.id}/`);
-    await expect(page.locator('#live .sport-empty')).toHaveText('No live matches right now.');
+    await expect(page.locator('#live .public-empty')).toBeVisible();
     await expect(page.locator('#live [role=status]')).toHaveText('Live Matches: 0 matches.');
     await expect(page.locator('#live .sport-card')).toHaveCount(0);
     await expect(page.locator('#live .live-dot')).toHaveCount(1);
@@ -216,7 +216,7 @@ for (const sport of sports) {
       await expect(page.locator('dialog[open]')).toHaveCount(1);
       await expect(close).toBeFocused();
       for (const key of ['Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
-        await page.keyboard.press(key);
+        await page.keyboard.press(tabKey(page, key));
         expect(await page.evaluate(() => {
           const el = document.activeElement;
           return !el || el === document.body || el === document.documentElement || Boolean(el.closest('dialog[open]'));
@@ -242,9 +242,12 @@ for (const sport of sports) {
       await expect(dialog(page)).toBeEmpty();
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe('hidden');
       expect(Math.abs(await page.evaluate(() => window.scrollY) - scrollY)).toBeLessThanOrEqual(1);
-      // Wheel up: the page may already be at its bottom.
-      await page.mouse.wheel(0, -300);
-      await expect.poll(() => page.evaluate(() => window.scrollY)).not.toBe(scrollY);
+      // Wheel up: the page may already be at its bottom. WebKit updates its scrolling tree after the lock lifts, so
+      // a wheel sent in the same frame can be dropped; the page must scroll for a wheel within the timeout.
+      await expect(async () => {
+        await page.mouse.wheel(0, -300);
+        expect(await page.evaluate(() => window.scrollY)).not.toBe(scrollY);
+      }).toPass({ timeout: 5000 });
     });
 
     test('reduced motion, no console errors and no failed or external requests', async ({ page }) => {
@@ -296,9 +299,8 @@ for (const sport of sports) {
       }
     });
 
-    test('keyboard-only flow through chips, rails and cards', async ({ page, browserName }) => {
-      // macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
-      const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
+    test('keyboard-only flow through chips, rails and cards', async ({ page }) => {
+      const tab = tabKey(page);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(route);
       const describe = () => page.evaluate(() => {
@@ -313,13 +315,15 @@ for (const sport of sports) {
       const last = expected.at(-1);
       for (let press = 0; press < 60 && seen.at(-1) !== last; press++) {
         await page.keyboard.press(tab);
+        // Focus left the page (past the last item): stop, so the order check below names where it diverged.
+        if (!(await page.evaluate(() => document.activeElement && document.activeElement !== document.body))) break;
         const focused = page.locator(':focus');
         expect(await focused.evaluate(el => getComputedStyle(el).outlineStyle), await describe()).not.toBe('none');
         await expect(focused).toBeInViewport();
         seen.push(await describe());
       }
       expect(seen).toEqual(expected);
-      await page.keyboard.press(`Shift+${tab}`);
+      await page.keyboard.press(tabKey(page, 'Shift+Tab'));
       expect(await describe()).toBe(expected.at(-2));
       await page.keyboard.press(tab);
       await page.keyboard.press('Enter');

@@ -2,7 +2,7 @@
 
 A mobile-first sports homepage built with React, Vite and JavaScript. It includes the header, responsive athlete gallery and dot animation, live-match sport filters, native horizontal scorecards and tournament cards. All artwork is local.
 
-The Hono Worker, Neon database, Clerk sign-in, operator assignments and live delivery are implemented. With `VITE_API_BASE`, homepage and sport pages show accepted live scores and final results. Without it, they use display fixtures. Tournament detail and management pages remain unbuilt. See [tasks](doc/tasks.md) for publication and verification status.
+The Hono Worker, Neon database, Clerk sign-in, operator assignments and live delivery are implemented. With `VITE_API_BASE`, homepage and sport pages show accepted live scores and final results. Without it, they use display fixtures. Public tournament pages, the Tournament Manager console and Super Admin staff management are implemented. Validated rosters, bracket advancement and standings remain planned. See [tasks](doc/tasks.md) for publication and verification status.
 
 ## Start locally
 

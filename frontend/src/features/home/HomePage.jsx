@@ -3,7 +3,6 @@ import HorizontalRail from '../../components/HorizontalRail.jsx';
 import LiveMatchCard from '../matches/LiveMatchCard.jsx';
 import { useRef, useState } from 'react';
 import { sports } from '../../data/sports.js';
-import { toSportMatch } from '../sports/liveSportMatches.js';
 import SportMatchDialog from '../sports/SportMatchDialog.jsx';
 import '../sports/SportPage.css';
 import SiteHeader from '../../components/SiteHeader.jsx';
@@ -14,7 +13,7 @@ import Tournaments from '../tournaments/Tournaments.jsx';
 import { sampleMatches } from '../matches/sampleMatches.js';
 import { toMatchProp } from '../matches/liveCards.js';
 import { sampleTournaments } from '../tournaments/sampleTournaments.js';
-import { usePublicRead } from '../tournaments/publicTournaments.js';
+import { forDisplay, sportPageMatches, usePublicRead } from '../tournaments/publicTournaments.js';
 import { UNAVAILABLE } from '../tournaments/TournamentView.jsx';
 import { toEventProp } from '../tournaments/venues.js';
 import { apiBase } from '../../services/api.js';
@@ -36,12 +35,13 @@ export default function HomePage() {
   // Real home-room cards open the sport-page match dialog; the latest snapshot keeps it current. Fixtures stay static.
   const [openCard, setOpenCard] = useState(null);
   const triggerRef = useRef(null);
+  const matchRead = usePublicRead(apiBase && openCard ? `/matches/${encodeURIComponent(openCard.id)}` : null);
   const onOpen = apiBase ? (match, trigger) => { triggerRef.current = trigger; setOpenCard(homeCards?.find(c => c.id === match.id) ?? null); } : undefined;
   // Explicit focus return: Safari does not focus a clicked button, so the dialog cannot restore it.
   function close() { setOpenCard(null); triggerRef.current?.focus(); }
   const selectedCard = openCard ? homeCards?.find(c => c.id === openCard.id) ?? openCard : null;
   const selectedSportObj = selectedCard ? sports.find(s => s.id === selectedCard.sport) : null;
-  const selectedMatch = selectedSportObj ? toSportMatch(selectedCard) : null;
+  const selectedMatch = selectedSportObj ? forDisplay(sportPageMatches(matchRead.data?.match ? [matchRead.data.match] : [], selectedSportObj.id, [selectedCard])[0]) : null;
   const dialogTheme = selectedSportObj ? { '--match-background': `url('/assets/${selectedSportObj.id}-background.webp')`, '--match-background-phone': `url('/assets/${selectedSportObj.id}-background-640.webp')`, '--sport-color': selectedSportObj.color } : undefined;
   const dialog = apiBase && <div style={dialogTheme}><SportMatchDialog sport={selectedSportObj ?? sports[0]} scoring={selectedMatch?.scoring} match={selectedMatch} onClose={close} /></div>;
   const tournamentsRow = <Tournaments tournaments={tournaments} empty={apiBase ? 'No tournaments are live right now.' : undefined} notice={tournamentNotice} onRetry={tournamentNotice === UNAVAILABLE ? tournamentsRead.reload : undefined} />;

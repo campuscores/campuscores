@@ -48,7 +48,7 @@ test.describe('homepage live row', () => {
     sockets[0].send(snapshot(2, [{ ...match, status: 'APPROVED', score: [2, 0], winner: 0, periods: [match.periods[0], { points: [21, 10], winner: 0, current: false }] }]));
     await expect(live.locator('.match-card')).toHaveCount(0);
     const finals = page.getByRole('region', { name: 'Final Results', exact: true });
-    await expect(finals.locator('.match-clock')).toHaveText('Final · Alpha won');
+    await expect(finals.locator('.match-clock')).toHaveText('Alpha won');
     await expect(finals.locator('tbody tr').first().locator('td')).toHaveText(['21', '21', '2']);
     await page.locator('.sports-nav [data-sport="basketball"]').click();
     await expect(finals.locator('.match-card')).toHaveCount(1);
@@ -106,7 +106,7 @@ test.describe('homepage tournament row', () => {
     await page.route('http://api.test/api/tournaments', route => route.fulfill(json({ tournaments: [{ ...cup, phase: 'past' }] })));
     await page.goto(`${LIVE}/`);
     await expect(row(page).getByRole('heading', { level: 2, name: 'Tournaments' })).toBeVisible();
-    await expect(row(page)).toContainText('No tournaments are live right now.');
+    await expect(row(page)).toContainText('No tournaments just yet');
     await expect(row(page).locator('.tournament-card')).toHaveCount(0);
   });
   test('a failed read shows the unavailable message in the row only and Try again reads once more', async ({ page }) => {
@@ -129,4 +129,30 @@ test('fixture mode makes no API or live socket request', async ({ page }) => {
   await expect(page.locator('#match-filter-status')).not.toHaveText(/Connecting|unavailable/);
   await page.waitForLoadState('networkidle');
   expect(urls.filter(url => /\/(api|live)(\/|$)/.test(new URL(url).pathname))).toEqual([]);
+});
+
+
+test('the homepage dialog reads match facts once and keeps live scores current', async ({ page }) => {
+  const calls = [];
+  await page.route('http://api.test/api/matches/71', route => {
+    calls.push(route.request().url());
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify({ match: { id: '71', tournamentId: '5', sport: 'badminton', status: 'LIVE', stage: 'SF1', scheduledAt: '2026-10-25T09:00:00.000Z', venue: 'Court 2', sides: [{ name: 'Ana' }, { name: 'Ben' }] } }) });
+  });
+  let socket;
+  await page.routeWebSocket('ws://api.test/live/home', ws => { socket = ws; });
+  await page.goto(`${LIVE}/`);
+  await expect.poll(() => Boolean(socket)).toBe(true);
+  const match = { ...card('71', 'Ana', 'Ben', [1, 0]), sport: 'badminton', format: { model: 'sets', bestOf: 3 }, periods: [{ points: [21, 18], winner: 0 }, { points: [19, 17], current: true }] };
+  socket.send(snapshot(1, [match]));
+  await page.getByRole('button', { name: 'Open match details: Ana vs Ben' }).click();
+  const details = page.getByRole('dialog');
+  await expect.poll(() => calls.length).toBe(1);
+  await expect(details.locator('.sport-info dd')).toHaveText(['25 Oct', '14:30 IST', 'Spring Cup', 'Semifinal 1', 'Court 2']);
+  await expect(details.locator('.sport-dialog-status')).toHaveText('Live · Game 2 · 19–17');
+  await expect(details.locator('thead th')).toHaveText(['Team and players', 'G1', 'G2', 'Games']);
+  socket.send(snapshot(2, [{ ...match, periods: [match.periods[0], { points: [20, 17], current: true }] }]));
+  await expect(details.locator('.sport-dialog-status')).toHaveText('Live · Game 2 · 20–17');
+  expect(calls).toHaveLength(1);
+  await page.keyboard.press('Escape');
+  await expect(details).toBeHidden();
 });

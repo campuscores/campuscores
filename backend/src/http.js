@@ -56,7 +56,7 @@ export function redact(value) {
 const SIDE = { name: true };
 const FORMAT = { model: true, bestOf: true, target: true, winBy: true, cap: true, decidingTarget: true, firstServe: true, gamesPerSet: true, gameWinBy: true, advantage: true, tiebreakAt: true, tiebreakTo: true, tiebreakWinBy: true, periodCount: true, scoreValues: true };
 const PERIOD = { points: true, winner: true, current: true, manual: true, tiebreak: true };
-const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true, points: true }, corrected: true, format: FORMAT, periods: PERIOD, currentPoints: true, gamePoints: true, serve: true, winner: true, finalized: true, finalizedAt: true, tiebreak: true, fouls: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } };
+const SNAPSHOT = { matchId: true, sport: true, status: true, sides: { name: true, points: true }, corrected: true, format: FORMAT, periods: PERIOD, currentPoints: true, gamePoints: true, serve: true, winner: true, finalized: true, endedEarly: true, finalizedAt: true, tiebreak: true, fouls: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } };
 const MATCH = {
   id: true,
   tournamentId: true,
@@ -76,7 +76,7 @@ const MATCH = {
 const PUBLIC = {
   snapshot: SNAPSHOT,
   match: MATCH,
-  card: { id: true, sport: true, status: true, competition: true, tournamentId: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
+  card: { id: true, sport: true, kind: true, stage: true, endedEarly: true, status: true, competition: true, tournamentId: true, sides: SIDE, score: true, clock: true, seq: true, periods: PERIOD, winner: true, format: FORMAT, finalizedAt: true, gamePoints: true, serve: true, events: { type: true, side: true, player: true, card: true, off: true, on: true, period: true } },
   tournament: {
     id: true,
     slug: true,

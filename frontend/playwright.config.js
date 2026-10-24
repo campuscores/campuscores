@@ -7,7 +7,7 @@ const desktop = { testIgnore: /mobile\.spec\.js/ };
 const otherDesktop = { testIgnore: /(mobile|staff-layout)\.spec\.js/ };
 // sign-in-choice, staff-shell and the manager and Super Admin screen specs also run on phones, the main staff device.
 // public-tournaments also runs on phones, the main viewer device.
-const phone = { testMatch: /(mobile|sign-in-choice|staff-shell|manage-setup|manage-matches|manage-assign|admin|public-tournaments)\.spec\.js/ };
+const phone = { testMatch: /(mobile|sign-in-choice|staff-shell|manage-setup|manage-matches|manage-assign|admin|public-tournaments|scoring-flow|operator-console)\.spec\.js/ };
 
 export default defineConfig({
   testDir: './tests',

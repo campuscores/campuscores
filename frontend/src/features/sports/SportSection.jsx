@@ -1,8 +1,11 @@
+import EmptyState from '../../components/EmptyState.jsx';
+import { sportEmptyStates } from './sportEmptyStates.js';
 import HorizontalRail from '../../components/HorizontalRail.jsx';
 import SportMatchCard from './SportMatchCard.jsx';
 
 /** One match section; optional date chips filter its cards in place. `notice` (loading or failed read) replaces chips and cards. */
 export default function SportSection({ sport, id, title, live, matches, dates, selectedDate = 'all', onSelectDate, onOpen, notice, onRetry }) {
+  const [emptyTitle, emptyDescription] = sportEmptyStates[sport.id][id];
   const dateLabel = dates?.find(day => day.date === selectedDate)?.label;
   const count = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`;
   return (
@@ -24,7 +27,7 @@ export default function SportSection({ sport, id, title, live, matches, dates, s
           ? <HorizontalRail id={`${id}-results`} className="match-scroll" label={`${title}, scroll horizontally`} resetKey={selectedDate}>
               {matches.map(match => <SportMatchCard key={match.id} sport={sport} match={match} onOpen={onOpen} />)}
             </HorizontalRail>
-          : <p className="sport-empty" id={`${id}-results`}>No {title.toLowerCase()} {dateLabel ? `on ${dateLabel}` : 'right now'}.</p>}
+          : dateLabel ? <p className="sport-empty" id={`${id}-results`}>No {title.toLowerCase()} on {dateLabel}.</p> : <EmptyState id={`${id}-results`} asset={`empty/sports/${sport.id}-${id}-empty`} title={emptyTitle}>{emptyDescription}</EmptyState>}
       </>}
     </section>
   );

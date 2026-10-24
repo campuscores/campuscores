@@ -1,8 +1,10 @@
 import { activeActions, checkReversal, scoreMatch, validateFormat } from '../../../../shared/scoring.mjs';
 import ScoringPage from './scoring/ScoringPage.jsx';
 import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from 'react';
+import { backoffDelay } from '../../services/live.js';
 import { apiBase, apiFetch } from '../../services/api.js';
 import StaffShell from '../staff/StaffShell.jsx';
+import ScreenState from '../staff/ScreenState.jsx';
 import { emptyQueue, nextClientSeq, nextToSend, queueReducer, restoreQueue, retryDelay } from './queue.js';
 import { deleteActions, deviceId, loadActions, saveAction } from './queueStore.js';
 import { isClosed, sideName, sportLabel, stageLabel } from './operatorMatches.js';
@@ -58,6 +60,9 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [queue, dispatch] = useReducer(reducer, emptyQueue);
   const saving = useRef(false);
+  const sending = useRef(false);
+  const leaseAttempts = useRef(0);
+  const wireSequences = useRef(new Map());
   const held = useRef(null); // { token, deviceId } while this device holds the lease
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -116,6 +121,8 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   })().then(
     data => {
       setLeaseError(null);
+      leaseAttempts.current = 0;
+      if (data.lease.decision !== 'KEEP') wireSequences.current.clear();
       // KEEP (a re-check) may answer before a send that is already accepted, so never lower the number.
       const last = data.lease.lastClientSeq;
       setLease(l => ({ lastClientSeq: data.lease.decision === 'KEEP' ? Math.max(l?.lastClientSeq ?? 0, last) : last }));
@@ -124,6 +131,7 @@ export default function ScoreConsole({ matchId, getToken, role }) {
     err => {
       // Another device holds the lease: stop sending and scoring here until "Take over scoring".
       if (err.code === 'LEASE_HELD') { held.current = null; setLease(null); }
+      leaseAttempts.current += 1;
       setLeaseError(err);
       return false;
     },
@@ -187,7 +195,9 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   }
   const scoring = match && !isClosed(match);
   useEffect(() => {
-    if (scoring && device && online && !lease && !leaseError) acquire(false);
+    if (!scoring || !device || !online || lease || (leaseError?.status < 500 && leaseError.status !== 429)) return undefined;
+    const timer = setTimeout(() => acquire(false), leaseError ? backoffDelay(leaseAttempts.current - 1) : 0);
+    return () => clearTimeout(timer);
   }, [scoring, device, online, lease, leaseError, acquire]);
   // While this device scores, re-check the lease every 15 seconds and when the tab is shown again, so a takeover by
   // another device shows here at once, before the next tap. KEEP changes nothing; LEASE_HELD stops scoring here.
@@ -205,33 +215,42 @@ export default function ScoreConsole({ matchId, getToken, role }) {
     const item = online && lease && scoringLoaded && !takingOver ? nextToSend(queue) : null;
     if (!item) return;
     const timer = setTimeout(async () => {
-      dispatch({ type: 'SEND_START', actionId: item.actionId });
-      const { actionId, deviceId: sentFrom, type, payload, reversesActionId } = item;
-      // A GRANT or TAKEOVER resets the server lease to 0, so the wire clientSeq follows the lease, not the stored
-      // item.clientSeq (the local order). A retry under the same lease sends the same number, so a replay still matches.
-      const clientSeq = lease.lastClientSeq + 1;
-      let result;
+      if (sending.current) return;
+      sending.current = true;
       try {
-        const token = await getToken();
-        result = await apiFetch(`/matches/${matchId}/actions`, {
-          method: 'POST', token, body: { actionId, clientSeq, deviceId: sentFrom, type, payload, reversesActionId },
-        });
-        if (held.current) held.current = { ...held.current, token }; // fresher token for a pagehide release
-      } catch (err) {
-        if (!err.status) dispatch({ type: 'SEND_NETWORK_ERROR' });
-        else if (err.status >= 500 || err.status === 429) dispatch({ type: 'SEND_5XX' }); // 429: rate limit, retry with backoff
-        else {
-          if (err.code === 'LEASE_REQUIRED') held.current = null; // another device holds it now; never release theirs
-          dispatch({ type: 'SEND_REJECTED', status: err.status, code: err.code });
+        dispatch({ type: 'SEND_START', actionId: item.actionId });
+        const { actionId, deviceId: sentFrom, type, payload, reversesActionId } = item;
+        // A GRANT or TAKEOVER resets the server lease to 0, so the wire clientSeq follows the lease, not the stored
+        // item.clientSeq (the local order). A retry under the same lease sends the same number, so a replay still matches.
+        // A lease recheck can see an accepted action whose response was lost. Its retry must keep the original hash.
+        const clientSeq = wireSequences.current.get(actionId) ?? lease.lastClientSeq + 1;
+        wireSequences.current.set(actionId, clientSeq);
+        let result;
+        try {
+          const token = await getToken();
+          result = await apiFetch(`/matches/${matchId}/actions`, {
+            method: 'POST', token, body: { actionId, clientSeq, deviceId: sentFrom, type, payload, reversesActionId },
+          });
+          if (held.current) held.current = { ...held.current, token }; // fresher token for a pagehide release
+        } catch (err) {
+          if (!err.status) dispatch({ type: 'SEND_NETWORK_ERROR' });
+          else if (err.status >= 500 || err.status === 429) dispatch({ type: 'SEND_5XX' }); // 429: rate limit, retry with backoff
+          else {
+            if (err.code === 'LEASE_REQUIRED') held.current = null; // another device holds it now; never release theirs
+            dispatch({ type: 'SEND_REJECTED', status: err.status, code: err.code });
+          }
+          return;
         }
-        return;
+        wireSequences.current.delete(actionId);
+        dispatch({ type: 'SEND_OK', seq: result.seq });
+        setLease(l => ({ ...l, lastClientSeq: Math.max(l?.lastClientSeq ?? 0, clientSeq) })); // mirrors the server lease
+        setAccepted(a => newer(a, { ...result.snapshot, seq: result.seq, actions: [...(a?.actions ?? []), { ...item, seq: result.seq }] }));
+        if (result.snapshot.format) setMatch(m => ({ ...m, status: result.snapshot.status, format: result.snapshot.format }));
+        // A failed write only means a reload resends this action; the server replays the same seq.
+        saveAction({ ...item, status: 'synced', seq: result.seq, snapshot: result.snapshot }).catch(() => {});
+      } finally {
+        sending.current = false;
       }
-      dispatch({ type: 'SEND_OK', seq: result.seq });
-      setLease(l => ({ ...l, lastClientSeq: Math.max(l?.lastClientSeq ?? 0, clientSeq) })); // mirrors the server lease
-      setAccepted(a => newer(a, { ...result.snapshot, seq: result.seq, actions: [...(a?.actions ?? []), { ...item, seq: result.seq }] }));
-      if (result.snapshot.format) setMatch(m => ({ ...m, status: result.snapshot.status, format: result.snapshot.format }));
-      // A failed write only means a reload resends this action; the server replays the same seq.
-      saveAction({ ...item, status: 'synced', seq: result.seq, snapshot: result.snapshot }).catch(() => {});
     }, retryDelay(queue));
     return () => clearTimeout(timer);
   }, [queue, online, lease, scoringLoaded, takingOver, matchId, getToken]);
@@ -265,7 +284,7 @@ export default function ScoreConsole({ matchId, getToken, role }) {
       setBusy(false);
     }
   }
-  if (loadError) return shell('Score console', <p className="screen-error" role="alert">{loadError.status === 403 ? 'Only event staff can score matches.' : `Could not load this match: ${loadError.message}`}</p>);
+  if (loadError) return shell('Score console', loadError.status === 403 ? <p className="screen-error" role="alert">Only event staff can score matches.</p> : <ScreenState state="error" what="this match" onRetry={() => window.location.reload()} />);
   if (!match) return shell('Score console', <p role="status">Loading the match…</p>);
   const title = `${sideName(match, 0)} vs ${sideName(match, 1)}`;
   // Another device holds the lease (refused at load, or taken over later): only a takeover lets this device sync.

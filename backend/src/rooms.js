@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { toPublic } from './http.js';
+import { withClient } from './db.js';
 
 export const ROOM_PATTERN = /^(home|match:[1-9][0-9]{0,17})$/;
 export const parseRoom = (s) => (typeof s === 'string' && ROOM_PATTERN.test(s) ? s : null);
@@ -9,7 +10,7 @@ export const shouldAccept = (storedSeq, seq) => Number.isSafeInteger(seq) && seq
 export const LIVE_STATUSES = new Set(['LIVE', 'APPROVED']);
 export function applyCard(state, matchId, card, seq) {
   if (!shouldAccept(state.cards[matchId]?.seq, seq)) return null;
-  return { seq: state.seq + 1, cards: { ...state.cards, [matchId]: { ...card, seq } } };
+  return { ...state, seq: state.seq + 1, cards: { ...state.cards, [matchId]: { ...card, seq } } };
 }
 export const liveCards = (state) => Object.values(state.cards).filter((card) => LIVE_STATUSES.has(card.status));
 
@@ -26,6 +27,35 @@ export class MatchRoom extends DurableObject {
     // An empty home room still answers, so viewers leave "Connecting" before the first score.
     else if (this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Repair old withdrawals or a demo reset; concurrent viewers share one presence check per minute.
+  async pruneDeletedCards() {
+    if (!this.env.HYPERDRIVE_UNCACHED) return;
+    if (this.pruning) return this.pruning;
+    this.pruning = this.#pruneDeletedCards().finally(() => { this.pruning = null; });
+    return this.pruning;
+  }
+
+  async #pruneDeletedCards() {
+    const now = Date.now();
+    const check = await this.ctx.storage.get('cardsCheck');
+    if (check && now - check.at < 60000) {
+      if (!check.ok) throw new Error('Home cache check is unavailable');
+      return;
+    }
+    await this.ctx.storage.put('cardsCheck', { at: now, ok: false });
+    const home = await this.ctx.storage.get('home');
+    const ids = Object.keys(home?.cards ?? {});
+    if (ids.length) {
+      const { rows } = await withClient(this.env.HYPERDRIVE_UNCACHED, this.ctx, client =>
+        client.query('SELECT id::text FROM matches WHERE id = ANY($1::bigint[])', [ids]));
+      const existing = new Set(rows.map(row => row.id));
+      const deleted = ids.filter(id => !existing.has(id));
+      // removeCards reads the latest state, so a card added during the database read stays intact.
+      if (deleted.length) await this.removeCards(deleted);
+    }
+    await this.ctx.storage.put('cardsCheck', { at: now, ok: true });
   }
 
   webSocketMessage() {} // receive-only: ignore content, change nothing

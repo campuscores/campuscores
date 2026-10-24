@@ -1,3 +1,4 @@
+import EmptyState from '../../components/EmptyState.jsx';
 import HorizontalRail from '../../components/HorizontalRail.jsx';
 import SportIcon from '../../components/SportIcon.jsx';
 import TournamentCard from './TournamentCard.jsx';
@@ -17,7 +18,7 @@ export default function Tournaments({ tournaments, empty, notice, onRetry }) {
           ? <HorizontalRail className="tournament-scroll" label="Tournaments, scroll horizontally">
               {tournaments.map(event => <TournamentCard key={event.id} event={event} />)}
             </HorizontalRail>
-          : <p className="live-notice">{empty}</p>}
+          : <EmptyState asset="empty/home/tournaments-empty" title="No tournaments just yet">The next big showdown will appear right here.</EmptyState>}
     </section>
   );
 }

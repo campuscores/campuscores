@@ -5,7 +5,7 @@ function statusText(match) {
   const winner = match.winner == null ? '' : `${match.sides[match.winner].name} won ${match.score[match.winner]}–${match.score[1 - match.winner]}`;
   if (match.status === 'live') return `Live · ${match.clock}`;
   if (match.status === 'ended') return `Match ended · ${winner} · Provisional result`;
-  if (match.status === 'completed') return `Final · ${winner}`;
+  if (match.status === 'completed') return match.winner == null ? 'Result recorded' : `${match.sides[match.winner].name} won`;
   if (match.status === 'not-scored') return `Not scored · ${match.dateLabel} · ${match.timeLabel}`;
   return `Scheduled · ${match.dateLabel} · ${match.timeLabel}`;
 }
@@ -101,27 +101,29 @@ function Scorers({ scoring, match }) {
 /** Fullscreen (phone) or centered (wider screens) match details in a native modal dialog. */
 export default function SportMatchDialog({ sport, scoring, match, onClose }) {
   const ref = useRef(null);
-  useEffect(() => { if (match && !ref.current.open) ref.current.showModal(); }, [match]);
+  const open = Boolean(match);
+  useEffect(() => { if (open && !ref.current.open) ref.current.showModal(); }, [open]);
   function closeOnBackdrop(event) {
     const box = ref.current.getBoundingClientRect();
     const outside = event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
     if (event.target === ref.current && outside) ref.current.close();
   }
   return (
-    <dialog ref={ref} className="sport-dialog" aria-labelledby="sport-dialog-title" onClose={onClose} onClick={closeOnBackdrop}>
+    <dialog ref={ref} className="sport-dialog" aria-labelledby="sport-dialog-title" onClose={() => { if (!ref.current.open) onClose(); }} onClick={closeOnBackdrop}>
       {match && <>
         <header className="match-header sport-dialog-hero">
           <div className="sport-dialog-top">
-            <p className="match-meta"><span>{sport.label}</span><span>{match.category}</span></p>
+            <p className="match-meta"><span>{sport.label}</span><span className="sport-dialog-category">{match.category}</span><span className="sport-dialog-round">{match.round || match.category}</span></p>
             <button type="button" className="sport-dialog-close" aria-label="Close match details" onClick={() => ref.current.close()}>Close</button>
           </div>
           <h2 id="sport-dialog-title" className="match-overview"><Overview match={match} /></h2>
           <p className="match-clock sport-dialog-status">{statusText(match)}</p>
+          {match.endedEarly && <p className="match-finish-note">Ended early · completed scores only</p>}
         </header>
         <div className="match-details sport-dialog-details">
           {match.periods
             ? <>
-                <div className={match.periods.length > 5 ? "sport-score-scroll" : undefined} {...(match.periods.length > 5 ? { tabIndex: 0, role: "region", "aria-label": "Score by set or period, scroll horizontally" } : {})}><ScoreTable sport={sport} scoring={scoring} match={match} /></div>
+                <div className={`sport-score-table${match.periods.length > 5 ? ' sport-score-scroll' : ''}`} tabIndex={0} role="region" aria-label="Score by set or period, scroll horizontally"><ScoreTable sport={sport} scoring={scoring} match={match} /></div>
                 <Legend scoring={scoring} match={match} />
                 {match.scorers && <Scorers scoring={scoring} match={match} />}
                 {scoring.team && scoring.showLineups !== false && <div className="sport-extra"><h3>Lineups</h3><Participants match={match} /></div>}
@@ -129,11 +131,11 @@ export default function SportMatchDialog({ sport, scoring, match, onClose }) {
             : <Participants match={match} />}
           {match.events?.length > 0 && <div className="sport-extra"><h3>Match events</h3><ul className="sport-scorers">{match.events.map((e, i) => <li key={i}>{e.type === 'CARD' ? `${e.card === 'red' ? 'Red' : 'Yellow'} card · ${e.player}` : e.type === 'SUB' ? `${e.on} on for ${e.off}` : 'Foul'} · {match.sides[e.side].name}</li>)}</ul></div>}
           <dl className="sport-info">
-            <div><dt>Date</dt><dd>{match.dateLabel}</dd></div>
-            <div><dt>Time</dt><dd>{match.timeLabel}</dd></div>
-            <div><dt>Tournament</dt><dd>{match.tournament}</dd></div>
-            <div><dt>Round</dt><dd>{match.round}</dd></div>
-            <div><dt>Venue</dt><dd>{match.venue}</dd></div>
+            <div><dt>Date</dt><dd>{match.dateLabel || 'Not listed'}</dd></div>
+            <div><dt>Time</dt><dd>{match.timeLabel || 'Not listed'}</dd></div>
+            <div><dt>Tournament</dt><dd>{match.tournament || 'Not listed'}</dd></div>
+            <div><dt>Round</dt><dd>{match.round || 'Not listed'}</dd></div>
+            <div><dt>Venue</dt><dd>{match.venue || 'Not listed'}</dd></div>
           </dl>
         </div>
       </>}

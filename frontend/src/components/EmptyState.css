@@ -1,0 +1,10 @@
+.public-empty { display: flex; align-items: center; gap: 24px; padding: 8px 0 16px; }
+.public-empty img { display: block; flex: 0 0 240px; width: 240px; height: auto; }
+.public-empty > div { min-width: 0; max-width: 70ch; }
+.public-empty h3 { margin: 0 0 8px; color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.public-empty p { margin: 0; color: #50688c; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .public-empty { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .public-empty img { flex-basis: auto; width: 180px; max-width: 100%; }
+  .public-empty h3 { font-size: 18px; }
+}

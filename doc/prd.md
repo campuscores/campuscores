@@ -169,7 +169,7 @@ Implemented 23 October 2026 (change 8). Before this change, a Super Admin could 
 5. Manager opens the match, chooses Assign scorer and enters the scorer's email (for example Football SF1 → `rahul@example.test` → SCORE). An email with no account offers "Invite as Match Scorer"; the scorer accepts the invitation, signs in, the manager assigns the match, and the scorer sees only Football SF1 in My Matches.
 6. Operator starts scoring and records sport events, undoing mistakes freely while live. Score events update the score, match state, player contributions, and sport standings; connected spectators receive the accepted update.
 7. If the operator loses connectivity, queued events remain visibly pending and are submitted in their original order after reconnection, validated against the assignment by server time.
-8. Operator checks the computed winner, corrects any live mistake, then confirms the final result. The server atomically finalizes and locks it. Viewers receive the final result; no manager review is required.
+8. Operator checks the computed or manually selected early winner, corrects any live mistake, then confirms the final result. The server atomically finalizes and locks it. Viewers receive the final result; no manager review is required.
 9. If the operator is unavailable, the manager revokes the assignment and assigns a different operator; the change is audited.
 10. A finalized result cannot be edited or reopened. Bracket advancement and standings remain separate work.
 
@@ -268,7 +268,7 @@ Implemented 23 October 2026 (change 8). Before this change, a Super Admin could 
 - Unauthorized users cannot mutate a score or access admin routes.
 - An operator receives 403 when scoring or opening an unassigned match.
 - A revoked or expired operator is blocked on their next scoring command.
-- The assigned operator can confirm the computed winner once; duplicate retries do not create another result.
+- The assigned operator can confirm the computed or manually selected early winner once; duplicate retries do not create another result.
 - A Tournament Manager cannot create Tournament Managers or Super Admins.
 - Every new scoring, undo and format command is refused after final confirmation, including after reload and from another device.
 - A complete first edition can be configured without code changes for its team list, match schedule, and chosen formats.
@@ -280,3 +280,7 @@ Implemented 23 October 2026 (change 8). Before this change, a Super Admin could 
 See `memory.md` for the complete question register. The bracket is decided: exactly two semifinals and one final. Per-match format controls are confirmed in rules.md; coaches still decide event defaults. Football tie/shoot-out policy, exceptional whole-match awards, standings and Regular_Match statistics remain open. Other open items include roster limits, squad rules, schedule, venue, brand assets and the match detail URL. Backend open items (Facebook sign-in, static pages at the daily cap, campus DNS filter) and the staff-area items for Arnav are in `memory.md`.
 
 Before work that depends on an open item, record the user's decision in `memory.md`. Update the affected requirement, rule or architecture contract and task acceptance checks. Do not infer a rule from the homepage's sample data. Independent work can continue when it does not depend on that decision. Record a feature as verified only after its required checks pass; name untested cases and limits in `tasks.md`.
+
+### Scoring finish and public result clarity — 24 October 2026
+
+An assigned scorer can end an ongoing match early, choose its winner and review completed sets/periods only. The unfinished unit and unplayed slots do not count or display. Ending play can be undone before a separate permanent lock. Final review names the winner, shows the recorded score, explains the loss of scoring/Undo and requires acknowledgement. Show distinct queued and accepted lock states. Public card headers centre the match stage between sport and tournament; centre “<winner> won” below the score without a Final prefix. Preserve readable long names, keyboard focus, 44px controls and layouts from 320px phones to large screens. See the [decision](memory.md#early-match-finish-and-result-clarity--24-october-2026).

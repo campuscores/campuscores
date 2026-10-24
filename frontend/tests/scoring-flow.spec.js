@@ -11,11 +11,11 @@ const START_STATUS = { START_TOO_EARLY: 403, TOURNAMENT_NOT_ONGOING: 409, MATCH_
 // Row shape of GET /api/operator/matches (backend/src/routes/assignments.js): canStart/startReason only for SCHEDULED.
 // `refuseStart` is the code POST /actions gives a START although the list said canStart (database time moved on).
 async function mockScoring(page, sport, { scheduled = false, custom = {}, isToday = true, startReason = null, refuseStart = null, scheduledAt = new Date().toISOString(),
-  defaultFormat = DEFAULT_FORMATS[sport], validNow = true, dropFinal = false, leaseHeld = false } = {}) {
+  defaultFormat = DEFAULT_FORMATS[sport], validNow = true, dropFinal = false, stallPoint = false, leaseHeld = false } = {}) {
   const format = validateFormat(sport, { ...DEFAULT_FORMATS[sport], ...custom });
   const match = { id: '7', sport, kind: 'BRACKET', status: scheduled ? 'SCHEDULED' : 'LIVE', sides: [{ name: 'Alpha' }, { name: 'Bravo' }], venue: 'Court 1', stage: 'SF1', scheduledAt, isToday, validNow,
     canStart: scheduled && !startReason, startReason: scheduled ? startReason : null, notScored: false, defaultFormat, ...(scheduled ? {} : { format }) };
-  const server = { match, actions: [], requests: [], clientSeq: 0, responses: new Map(), seq: 0, snapshot: scheduled ? null : scoreMatch({ matchId: '7', sport, sides: match.sides, format }), dropped: false };
+  const server = { match, actions: [], requests: [], clientSeq: 0, responses: new Map(), seq: 0, snapshot: scheduled ? null : scoreMatch({ matchId: '7', sport, sides: match.sides, format }), dropped: false, stalled: false, leaseCalls: 0 };
   const reply = (route, body, status = 200) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
   await page.addInitScript(stubClerk, 'operator-token');
   await page.route('https://clerk.operator.test/**', route => route.abort());
@@ -28,7 +28,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
     if (path === '/api/matches/7') return reply(route, { match: { ...match, seq: server.seq, snapshot: server.snapshot } });
     // `leaseHeld`: another device holds the lease until this one takes over (backend leases.js LEASE_HELD).
     if (path.endsWith('/lease') && leaseHeld && req.method() === 'POST' && !req.postDataJSON().takeover) return reply(route, { error: { code: 'LEASE_HELD', message: 'held', requestId: 'req-test' } }, 409);
-    if (path.endsWith('/lease')) return reply(route, { lease: { lastClientSeq: server.clientSeq } });
+    if (path.endsWith('/lease')) { server.leaseCalls++; return reply(route, { lease: { lastClientSeq: server.clientSeq, decision: server.leaseCalls === 1 ? 'GRANT' : 'KEEP' } }); }
     if (!path.endsWith('/actions')) return reply(route, { error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
     expect(req.headers().authorization).toBe('Bearer operator-token');
     const body = req.postDataJSON(); server.requests.push(body);
@@ -42,6 +42,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
     server.seq++; server.clientSeq = body.clientSeq; server.snapshot = next; match.status = next.status;
     server.actions.push({ ...body, seq: server.seq });
     const result = { actionId: body.actionId, seq: server.seq, snapshot: next }; server.responses.set(body.actionId, result);
+    if (stallPoint && body.type === 'POINT' && !server.stalled) { server.stalled = true; return; }
     if (dropFinal && body.type === 'FINALIZE' && !server.dropped) { server.dropped = true; return route.abort('failed'); }
     return reply(route, result);
   });
@@ -87,7 +88,7 @@ test('early set winner keeps actual points; cancelling final confirmation keeps 
   const dialog = page.getByRole('dialog', { name: 'End set early' });
   await dialog.getByRole('radio', { name: 'Bravo' }).check(); await dialog.getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 2);
   expect(server.snapshot.periods[0]).toMatchObject({ points: [1, 0], winner: 1, manual: true });
-  await page.getByRole('button', { name: 'Confirm final result', exact: true }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 3);
   expect(server.snapshot.winner).toBe(null); await expect(point(page)).toBeEnabled();
 });
@@ -96,12 +97,14 @@ test('deciding score can be undone; final acceptance is retry-safe, read-only af
   await point(page).click(); await accepted(page, 1);
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); expect(server.snapshot.winner).toBe(null);
   await point(page).click(); await accepted(page, 3);
-  await page.getByRole('button', { name: 'Confirm final result', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm and lock result', exact: true }).click(); await accepted(page, 4);
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lock result permanently', exact: true })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'I understand that this permanently locks the result and removes Undo.' }).check();
+  await page.getByRole('button', { name: 'Lock result permanently', exact: true }).click(); await accepted(page, 4);
   expect(server.actions.filter(a => a.type === 'FINALIZE')).toHaveLength(1);
   const finals = server.requests.filter(a => a.type === 'FINALIZE'); expect(finals.length).toBeGreaterThan(1); expect(finals[0].actionId).toBe(finals[1].actionId);
-  await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible(); await expect(point(page)).toHaveCount(0);
-  await page.reload(); await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible();
+  await expect(page.getByText('Alpha won. Scoring and Undo are no longer available.')).toBeVisible(); await expect(point(page)).toHaveCount(0);
+  await page.reload(); await expect(page.getByText('Alpha won. Scoring and Undo are no longer available.')).toBeVisible();
   await page.getByRole('main').getByRole('link', { name: 'Back to My Matches', exact: true }).click(); // StaffShell Back (Req 4.10)
   await expect(page.locator('#op-completed [data-match-id="7"]')).toBeVisible();
 });
@@ -237,6 +240,140 @@ test('a tied football match keeps undo but offers no unapproved deciding period 
   await page.getByRole('button', { name: 'End period', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 1);
   await expect(page.getByText('Scores are tied. The organizer must agree the football tie policy before this result can be finalized.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start extra period', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Confirm final result', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Review final result', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); await expect(point(page)).toBeEnabled();
+});
+
+
+test('a stalled accepted point times out and retries the same action and sequence after a lease recheck', async ({ page }) => {
+  await page.clock.install();
+  const server = await mockScoring(page, 'badminton', { stallPoint: true });
+  await open(page);
+  await point(page).click();
+  await expect.poll(() => server.requests.length).toBe(1);
+  await expect(page.locator('.console-status')).toHaveText('Syncing · 1 queued');
+  await page.clock.runFor(16000);
+  await expect.poll(() => server.leaseCalls).toBeGreaterThanOrEqual(2);
+  await page.clock.runFor(2000);
+  await accepted(page, 1);
+  expect(server.requests.length).toBeGreaterThanOrEqual(2);
+  expect(server.requests.every(request => JSON.stringify(request) === JSON.stringify(server.requests[0]))).toBe(true);
+  expect(server.actions).toHaveLength(1);
+  await point(page, 1, 'Bravo').click();
+  await accepted(page, 2);
+  expect(server.requests.at(-1).clientSeq).toBe(2);
+});
+
+test('a transient lease failure retries automatically and still prevents scoring before access is held', async ({ page }) => {
+  await page.clock.install();
+  const server = await mockScoring(page, 'badminton');
+  let calls = 0;
+  await page.route(`${API}/matches/7/lease`, route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    calls++;
+    return calls === 1 ? route.abort() : route.fallback();
+  });
+  await page.goto(`${APP}/operator/matches/7/score`);
+  await expect.poll(() => calls).toBeGreaterThanOrEqual(1);
+  await page.clock.runFor(2000);
+  await expect(point(page)).toBeEnabled();
+  await point(page).click(); await accepted(page, 1);
+  expect(server.actions).toHaveLength(1);
+});
+
+
+test('an interrupted initial read offers recovery and leaves stored actions intact', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton');
+  let reads = 0;
+  await page.route(`${API}/operator/matches`, route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    reads++;
+    return reads === 1 ? route.abort() : route.fallback();
+  });
+  await page.goto(`${APP}/operator/matches/7/score`);
+  await expect(page.getByText('Could not load this match.')).toBeVisible();
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(point(page)).toBeEnabled();
+  await point(page).click(); await accepted(page, 1);
+  expect(server.actions).toHaveLength(1);
+});
+
+
+for (const sport of Object.keys(DEFAULT_FORMATS)) {
+  test(sport + ': end the whole match early with completed scores only, then undo', async ({ page }) => {
+    const server = await mockScoring(page, sport); await open(page);
+    await point(page).click(); await accepted(page, 1);
+    const periodSport = DEFAULT_FORMATS[sport].model === 'periods';
+    await page.getByRole('button', { name: periodSport ? 'End period' : 'End set early', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 2);
+    const completed = server.snapshot.periods.filter(p => !p.current);
+    await point(page, 1, 'Bravo').click(); await accepted(page, 3);
+    await page.getByRole('button', { name: 'End match early', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'End match early', exact: true });
+    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'End match early', exact: true })).toBeDisabled();
+    await dialog.getByRole('radio', { name: 'Bravo', exact: true }).check();
+    await dialog.getByRole('button', { name: 'End match early', exact: true }).click(); await accepted(page, 4);
+    expect(server.snapshot).toMatchObject({ winner: 1, endedEarly: true, finalized: false });
+    expect(server.snapshot.periods).toEqual(completed);
+    await expect(page.locator('.score-table thead th')).toHaveCount(3);
+    await expect(page.locator('.result-review')).toContainText('Undo is still available');
+    await expect(page.locator('#result-review-title')).toBeFocused();
+    await page.reload(); await accepted(page, 4);
+    await expect(page.locator('.result-review')).toContainText('Winner: Bravo');
+    await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 5);
+    expect(server.snapshot.winner).toBeNull();
+    expect(server.snapshot.currentPoints).toEqual([0, 1]);
+    await expect(point(page)).toBeEnabled();
+  });
+}
+
+test('permanent lock requires acknowledgement, defaults to Cancel and remains clear when queued offline', async ({ page, context }) => {
+  const server = await mockScoring(page, 'badminton'); await open(page);
+  await point(page).click(); await accepted(page, 1);
+  await context.setOffline(true); await page.evaluate(() => dispatchEvent(new Event('offline')));
+  await page.getByRole('button', { name: 'End match early', exact: true }).click();
+  await page.getByRole('dialog').getByRole('radio', { name: 'Bravo' }).check();
+  await page.getByRole('dialog').getByRole('button', { name: 'End match early', exact: true }).click();
+  await expect(page.locator('.result-review')).toContainText('Winner: Bravo');
+  await page.getByRole('button', { name: 'Review final result' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Lock result permanently' })).toBeDisabled();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Review final result' }).click();
+  await page.getByRole('checkbox', { name: 'I understand that this permanently locks the result and removes Undo.' }).check();
+  await page.getByRole('button', { name: 'Lock result permanently' }).click();
+  await expect(page.locator('.scoring-result')).toContainText('Result lock saved on this device');
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toHaveCount(0);
+  expect(server.actions).toHaveLength(1);
+  await page.evaluate(() => addEventListener('online', event => event.stopImmediatePropagation(), { capture: true }));
+  await context.setOffline(false); await page.reload(); await accepted(page, 3);
+  expect(server.snapshot).toMatchObject({ endedEarly: true, winner: 1, finalized: true, periods: [] });
+  await expect(page.locator('.scoring-result')).toContainText('Result permanently locked');
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toHaveCount(0);
+});
+
+
+test('early-finish and permanent-lock dialogs contain long unbroken team names at phone through desktop widths', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton');
+  server.match.sides = [{ name: 'A'.repeat(80) }, { name: 'B'.repeat(80) }];
+  await page.goto(APP + '/operator/matches/7/score');
+  await expect(page.getByRole('button', { name: 'End match early', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'End match early', exact: true }).click();
+  const check = async () => {
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 640 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+      expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth > el.clientWidth + 1)).toBe(false);
+    }
+  };
+  await check();
+  await page.getByRole('dialog').getByRole('radio', { name: 'B'.repeat(80), exact: true }).check();
+  await page.getByRole('dialog').getByRole('button', { name: 'End match early', exact: true }).click();
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click();
+  await check();
+  await expect(page.getByRole('button', { name: 'Lock result permanently' })).toBeDisabled();
 });

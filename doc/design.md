@@ -305,3 +305,17 @@ Staff screens (Manager console, Admin console and Match Scorer pages) are work s
 Rules: exactly one Primary_Action per screen and per open dialog, after the content it acts on, and at the top of list screens. A dialog with a destructive confirm has no Primary_Action. The sign-in choice page (`SignInChoiceView.css`) has three equal full-width secondary links in a 400px column, 16px apart, under a 40px / 800 `h1` (32px at <=767px), and no Primary_Action. `#607697` is not used for text on the tint, because it measures 4.4:1 on `#f6faff`. Measured contrast: `#50688c` on white 5.7:1 and on `#f6faff` 5.4:1; `#0755ff` on white and white on `#0755ff` 5.6:1; white on `#d5203e` and `#d5203e` on white 5.1:1.
 
 Shared components in `frontend/src/features/staff/`: `StaffShell` (header, staff navigation, Back link, `h1`, live regions), `ScreenState` (loading, error with "Try again", empty) and `NoAccess`, `Field`, `ErrorSummary`, `ConfirmDialog` (native modal), `labels.js` (display names and error sentences) and `formatSummary.js` (Default_Format summary).
+
+## 13. Larger phone match details and public illustrations
+
+Approved by Arnav in the 24 October 2026 handoff. Up to 767px, match details use 18–24px side names, a 40–52px score, 16px status and table values, 15px player lines and 14px table headers, labels and legend. Show sport and round in the hero. Date/Time and Tournament/Round form two columns; Venue spans both. Use safe-area padding. Longer custom tables scroll inside their labelled region. Wider layouts keep their previous sizing.
+
+Public empty results use `components/EmptyState.jsx`: a decorative local illustration, an HTML `h3` (20px desktop, 18px phone) and 16px body copy. Desktop places the 240px image beside the text with a 24px gap. Phones place the 180px image above left-aligned text with a 16px gap. Keep the section heading. A loading or failed read shows its status and recovery control instead of an empty illustration. A selected day with no match retains its date-specific sentence.
+
+Tournament sport links use the supplied square illustrations in three columns from 768px and two columns on phones. Each card keeps the sport name clear of the image and navigates to that tournament sport. From 1201px, the Table Tennis illustration ends 8px above the label box so the table and net cannot cover the name. It is a link, not a filter. Use the source preview's image position and established site typography and spacing. Assets and derivation are in [asset-sources.md](asset-sources.md#public-illustrations--24-october-2026).
+
+## 14. Scoring finish and card stage — 24 October 2026
+
+Preserve the approved card shells, textures and staff typography. Public card metadata has three columns: sport at left, stage centred and tournament at right. Side columns have equal width so the stage stays centred with different label lengths. Wrap long text inside its column. Centre the winner sentence below the score; omit its Final prefix. Early results have a separate completed-scores-only note.
+
+After play ends, focus the result-review heading. Keep Undo and review separate from permanent locking. Final review shows both recorded totals and the selected winner, an immediate-loss-of-Undo warning, an acknowledgement checkbox and a clearly labelled permanent-lock button. Start dialog focus on Cancel. Dialogs scroll inside the viewport and controls wrap on narrow screens. Keep pending-lock and accepted-lock states distinct.

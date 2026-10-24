@@ -21,7 +21,7 @@ test('sport route receives real team scores/events, updates its open dialog and 
   await expect(dialog).toContainText('Yellow card · Kabir'); await expect(dialog).toContainText('Rohit on for Aman');
   await expect(dialog.getByRole('heading', { name: 'Lineups' })).toHaveCount(0);
   socket.send(JSON.stringify({ type: 'snapshot', seq: 2, data: [{ ...card, status: 'APPROVED', winner: 0, score: [2, 0], finalizedAt: '2026-10-20T18:35:00Z', periods: [{ points: [1, 0], winner: 0, current: false }, { points: [1, 0], winner: 0, current: false }] }] }));
-  await expect(dialog).toContainText('Final · Alpha won 2–0'); await expect(dialog.locator('td strong')).toHaveText(['1', '1']);
+  await expect(dialog).toContainText('Alpha won'); await expect(dialog.locator('td strong')).toHaveText(['1', '1']);
   await page.keyboard.press('Escape'); await expect(live.locator('.sport-card')).toHaveCount(0); await expect(page.locator('#past .sport-card')).toHaveCount(1);
   expect(requests.filter(u => u.includes('clerk.'))).toEqual([]); expect(errors).toEqual([]);
 });
@@ -43,7 +43,7 @@ test('tournament routes read the API once on entry, group by phase, merge only t
   await expect(page).toHaveTitle('Tournaments | Campuscores');
   await expect(page.locator('#live-tournaments .tournament-card')).toHaveCount(1);
   await expect(page.locator('#past-tournaments .tournament-card')).toHaveCount(1);
-  await expect(page.locator('#upcoming-tournaments')).toContainText('No upcoming tournaments right now.');
+  await expect(page.locator('#upcoming-tournaments')).toContainText('Nothing on the calendar yet');
   await page.locator('#live-tournaments .tournament-card').click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cup');
   await expect(page.locator('.tournament-facts')).toContainText('Main ground');
@@ -141,7 +141,7 @@ test('sport page read failure marks only Upcoming and Past and Try again reads o
   socket.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [{ ...card, sport: 'volleyball' }] }));
   await expect(page.locator('#live .sport-card')).toHaveCount(1);
   await page.locator('#upcoming').getByRole('button', { name: 'Try again' }).click();
-  await expect(page.locator('#upcoming')).toContainText('No upcoming matches right now.');
-  await expect(page.locator('#past')).toContainText('No past matches right now.');
+  await expect(page.locator('#upcoming .public-empty')).toBeVisible();
+  await expect(page.locator('#past .public-empty')).toBeVisible();
   expect(reads).toBe(2);
 });
