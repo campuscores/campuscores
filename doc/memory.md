@@ -44,6 +44,10 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 8. **Closed (18 October 2026) — package details.** The Clerk React SDK is `@clerk/react`, pinned at 6.17.8 in `frontend/package.json`; `@clerk/clerk-react` is deprecated. Sign-in against a real Clerk instance is not yet verified. Earlier part (17 October 2026): `@cloudflare/vitest-pool-workers` is deprecated and renamed to `@cloudflare/vitest-plugin`; the backend pins `@cloudflare/vitest-plugin` and configures it with `cloudflareTest()` in `backend/vitest.config.js`.
 9. **Open — campus DNS filter risk (21 October 2026).** The campus Fortinet DNS filter returned its block address for some Clerk hostname lookups, but sign-in on campus Wi-Fi works now. Details: [architecture.md](architecture.md#sign-in-setup). Mitigation: ask campus IT to allow `campuscores.live` and `*.campuscores.live`. Owner: Arnav. Affects: staff and Viewer sign-in on event day; public viewing needs no sign-in. Accept when campus IT allows the domains, or when sign-in passes again on campus Wi-Fi shortly before the event.
 
+## Staging-only continuation — 24 October 2026
+
+Work continues on `develop` and staging. Arnav requires `main` and production to stay as they are until he explicitly authorizes a release. Do not open a release pull request, merge to `main` or deploy production under the staging task. Passing staging checks does not grant release authorization.
+
 ## Public repository and CI — 20 October 2026
 
 Confirmed by Arnav, 20 October 2026:

@@ -4,8 +4,8 @@ Updated 24 October 2026. This is the register of required checks that have not p
 
 ## Rules
 
-- Latest full frontend matrix: `8fd941c` on `develop`, 24 October 2026. Latest backend CI: `b95222a`, 383 cases. The frontend and shared trees are unchanged between those commits. The later Table Tennis tile fix needs the matrix in row 12. Exact runs, retry/skip counts and staging evidence are in [tasks.md](tasks.md#current-task-claims). A later commit stays unverified until its applicable CI checks pass. This is staging evidence; it is not a production release.
-- Rows keep their numbers after a row is cleared, so references stay valid. Rows 1–4 (backend and frontend CI on Ubuntu, macOS and Windows), rows 5–6 (earlier staging and production deploys), and row 9 (24 October frontend matrix and backend CI) are cleared.
+- Latest full frontend matrix: `675b9f8` on `develop`, 24 October 2026. Latest backend CI: `b95222a`, 383 cases. Application source is unchanged since the applicable runs. The matrix covers the Table Tennis fix and clears row 12. Exact runs, retry/skip counts and staging evidence are in [tasks.md](tasks.md#current-task-claims). A later code change needs its applicable checks. These results cover staging; they do not authorize a production release.
+- Rows keep their numbers after a row is cleared, so references stay valid. Rows 1–4 (backend and frontend CI on Ubuntu, macOS and Windows), rows 5–6 (earlier staging and production deploys), row 9 (24 October frontend matrix and backend CI), and row 12 (Table Tennis matrix) are cleared.
 - Before you push, add a row for each required check that did not run. Update **Covers** when a new commit adds to an open row.
 - Clear a row only when its check passes in GitHub Actions or in a full local end-to-end run. Then remove the row and record the result, date, revision and limits in [tasks.md](tasks.md), as [AGENTS.md](../AGENTS.md#verify-before-marking-complete) requires.
 - Do not mark a feature Verified while a row covers it.
@@ -23,7 +23,7 @@ Commands are copied from the workflow files. Run them from the repository root.
 
 ### Risk for the release pull request
 
-The current matrix passed Ubuntu and macOS WebKit, including iPhone and iPad emulation. The shared keyboard helper uses plain Tab on Linux and Option+Tab on macOS WebKit. Three WebKit cases passed on retry; exact cases and counts are in [tasks.md](tasks.md#current-task-claims). Windows WebKit still has a local DPI/viewport mismatch and is not CI evidence. Physical-device checks and the wider staff-layout checks on other engines remain open in rows 10–11.
+The latest matrix on `675b9f8` passed Ubuntu and macOS WebKit, including iPhone and iPad emulation. One macOS Firefox hero-motion case passed on retry; counts and the run link are in [tasks.md](tasks.md#current-task-claims). The shared keyboard helper uses plain Tab on Linux and Option+Tab on macOS WebKit. Windows WebKit has a local DPI/viewport mismatch and is not CI evidence. Physical-device checks and the wider staff-layout checks on other engines remain open in rows 10–11.
 
 ## Deploy merges
 
