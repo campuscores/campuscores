@@ -4,7 +4,7 @@ Updated 24 October 2026. This is the register of required checks that have not p
 
 ## Rules
 
-- Latest full frontend matrix and backend CI: `b334691` on `develop`, 24 October 2026. All 402 backend cases passed. These runs cover early match completion, result locking and public card labels, and clear row 13. Exact runs, retry/skip counts and staging evidence are in [tasks.md](tasks.md#current-task-claims). A later code change needs its applicable checks. These results cover staging; they do not authorize a production release.
+- Latest full frontend matrix and backend CI: release PR #13 on `d428fa7`, 24 October 2026. All 402 backend cases passed. `main` release `8113f6d` deployed to production; deployment attempt 2 passed backend, Chromium/Pixel and all smoke checks. Exact runs, retries, skips and unchanged-data evidence are in [tasks.md](tasks.md#current-task-claims). A later code change needs its applicable checks. Release authorization is recorded in [memory.md](memory.md#staging-only-continuation--24-october-2026).
 - Rows keep their numbers after a row is cleared, so references stay valid. Rows 1–4 (backend and frontend CI on Ubuntu, macOS and Windows), rows 5–6 (earlier staging and production deploys), row 9 (24 October frontend matrix and backend CI), row 12 (Table Tennis matrix), and row 13 (early match completion and result UI) are cleared.
 - Before you push, add a row for each required check that did not run. Update **Covers** when a new commit adds to an open row.
 - Clear a row only when its check passes in GitHub Actions or in a full local end-to-end run. Then remove the row and record the result, date, revision and limits in [tasks.md](tasks.md), as [AGENTS.md](../AGENTS.md#verify-before-marking-complete) requires.
@@ -23,7 +23,7 @@ Commands are copied from the workflow files. Run them from the repository root.
 
 ### Risk for the release pull request
 
-The latest matrix on `b334691` passed Ubuntu and macOS WebKit, including iPhone and iPad emulation. Three macOS sign-out cases (WebKit, iPhone and iPad) passed on retry after mocked API access-control errors; the new scoring and card cases passed on their first attempts. Counts and the run link are in [tasks.md](tasks.md#current-task-claims). The shared keyboard helper uses plain Tab on Linux and Option+Tab on macOS WebKit. Windows WebKit has a local DPI/viewport mismatch and is not CI evidence. Physical-device checks and the wider staff-layout checks on other engines remain open in rows 10–11.
+The release matrix on `d428fa7` passed Ubuntu and macOS WebKit, including iPhone and iPad emulation. Two Ubuntu mocked sign-out cases passed on retry (iPhone admin and iPad manager); macOS needed no retry. The initial production home WebSocket 500 recovered, and manual smoke plus the deployment retry passed; diagnosis remains Open under F5 in [tasks.md](tasks.md#follow-up-tasks). The shared keyboard helper uses plain Tab on Linux and Option+Tab on macOS WebKit. Windows WebKit has a local DPI/viewport mismatch and is not CI evidence. Physical-device checks and wider staff-layout checks on other engines remain open in rows 10–11.
 
 ## Deploy merges
 
