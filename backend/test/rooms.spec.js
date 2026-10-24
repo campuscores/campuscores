@@ -1,5 +1,7 @@
 import { env, exports as workerExports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
+import { runInDurableObject } from 'cloudflare:test';
+import { db, one } from './helpers.js';
 
 const live = (room, headers = {}) => workerExports.default.fetch(`http://example.com/live/${room}`, { headers });
 const stub = (room) => env.ROOMS.get(env.ROOMS.idFromName(room));
@@ -15,8 +17,9 @@ const snap = (matchId, a, b) => ({
 });
 
 // Opens a viewer socket; next() resolves with the next parsed message, or null after `ms` of silence.
-async function connect(room) {
-  const res = await live(room, { Upgrade: 'websocket' });
+async function connect(room, publicEntry = false) {
+  // Transport cases use fake card IDs; the public-entry cases below check database-backed cleanup.
+  const res = await (publicEntry ? live(room, { Upgrade: 'websocket' }) : stub(room).fetch('http://room/', { headers: { Upgrade: 'websocket' } }));
   expect(res.status).toBe(101);
   const ws = res.webSocket;
   const queue = [];
@@ -192,5 +195,75 @@ describe('deleted match delivery', () => {
     expect(message.data.some(card => String(card.id) === deleted)).toBe(false);
     expect(message.data.some(card => String(card.id) === other)).toBe(true);
     viewer.ws.close(1000);
+  });
+});
+
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('home cache repair', () => {
+  it('removes old deleted cards before the public snapshot, keeps valid cards and blocks delayed republishing', async () => {
+    const home = stub('home');
+    await runInDurableObject(home, (_, state) => state.storage.deleteAll());
+    await home.publishCard('1', { id: '1', status: 'LIVE', score: [2, 0] }, 1);
+    await home.publishCard('999999991', { id: '999999991', status: 'LIVE', score: [1, 0] }, 1);
+    const viewer = await connect('home', true);
+    expect((await viewer.next()).data.map(card => String(card.id))).toEqual(['1']);
+    expect(await home.publishCard('999999991', { id: '999999991', status: 'LIVE', score: [3, 0] }, 2)).toBe(false);
+    viewer.ws.close(1000);
+  });
+
+  it('checks at most once per minute and checks again after the boundary', async () => {
+    const home = stub('home');
+    await runInDurableObject(home, (_, state) => state.storage.deleteAll());
+    await home.publishCard('1', { id: '1', status: 'LIVE', score: [2, 0] }, 1);
+    const first = await connect('home', true);
+    await first.next(); first.ws.close(1000);
+    await home.publishCard('999999992', { id: '999999992', status: 'LIVE', score: [1, 0] }, 1);
+    const cached = await connect('home', true);
+    expect((await cached.next()).data.map(card => String(card.id))).toContain('999999992');
+    cached.ws.close(1000);
+    await runInDurableObject(home, (_, state) => state.storage.put('cardsCheck', { at: Date.now() - 60000, ok: true }));
+    const refreshed = await connect('home', true);
+    expect((await refreshed.next()).data.map(card => String(card.id))).toEqual(['1']);
+    refreshed.ws.close(1000);
+  });
+
+  it('shares a blocked check between concurrent viewers and preserves a card added during the query', async () => {
+    const home = stub('home');
+    await runInDurableObject(home, (_, state) => state.storage.deleteAll());
+    await home.publishCard('1', { id: '1', status: 'LIVE', score: [2, 0] }, 1);
+    await home.publishCard('999999993', { id: '999999993', status: 'LIVE', score: [1, 0] }, 1);
+    let viewers;
+    await db(async client => {
+      await client.query('BEGIN');
+      await client.query('LOCK TABLE matches IN ACCESS EXCLUSIVE MODE');
+      try {
+        viewers = [connect('home', true), connect('home', true)];
+        const blocked = () => one("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE 'SELECT id::text FROM matches WHERE id = ANY(%'");
+        await expect.poll(async () => (await blocked()).n).toBe(1);
+        await home.publishCard('2', { id: '2', status: 'LIVE', score: [0, 2] }, 1);
+      } finally {
+        await client.query('ROLLBACK');
+      }
+    });
+    for (const viewer of await Promise.all(viewers)) {
+      expect((await viewer.next()).data.map(card => String(card.id))).toEqual(['1', '2']);
+      viewer.ws.close(1000);
+    }
+  });
+
+  it('keeps cached cards after a failed check, refuses a stale snapshot and cools down before retrying', async () => {
+    const home = stub('home');
+    await runInDurableObject(home, (_, state) => state.storage.deleteAll());
+    await home.publishCard('invalid', { id: 'invalid', status: 'LIVE', score: [1, 0] }, 1);
+    const failed = await live('home', { Upgrade: 'websocket' });
+    expect(failed.status).toBe(500);
+    expect((await failed.json()).error.code).toBe('INTERNAL');
+    expect(await runInDurableObject(home, (_, state) => state.storage.get('home'))).toMatchObject({ cards: { invalid: { score: [1, 0] } } });
+    await home.removeCards(['invalid']);
+    // The data now permits a successful check, but the failed attempt still has its one-minute cooldown.
+    expect((await live('home', { Upgrade: 'websocket' })).status).toBe(500);
+    await runInDurableObject(home, (_, state) => state.storage.put('cardsCheck', { at: Date.now() - 60000, ok: false }));
+    const recovered = await connect('home', true);
+    expect((await recovered.next()).data).toEqual([]);
+    recovered.ws.close(1000);
   });
 });

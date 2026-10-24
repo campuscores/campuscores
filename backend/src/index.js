@@ -17,13 +17,15 @@ app.use('*', requestId);
 app.use('/api/*', async (c, next) => { c.header('Cache-Control', 'no-store'); await next(); });
 app.onError(onError);
 app.get('/health', (c) => c.json({ ok: true }));
-app.get('/live/:room', (c) => {
+app.get('/live/:room', async (c) => {
   if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
     throw new AppError(426, 'UPGRADE_REQUIRED', 'WebSocket upgrade required');
   }
   const room = parseRoom(c.req.param('room'));
   if (!room) throw new AppError(404, 'NOT_FOUND', 'Room not found');
-  return c.env.ROOMS.get(c.env.ROOMS.idFromName(room)).fetch(c.req.raw);
+  const stub = c.env.ROOMS.get(c.env.ROOMS.idFromName(room));
+  if (room === 'home') await stub.pruneDeletedCards();
+  return stub.fetch(c.req.raw);
 });
 app.route('/api', publicRoutes); // cached pool, no auth
 app.route('/api', meRoutes); // clerkAuth + loadAccount, uncached pool
