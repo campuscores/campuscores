@@ -19,13 +19,16 @@ const WRITE_SIGNAL_MS = 60 * 1000;
 // One class for every Live_Room: `home` and `match:<id>`. Viewer sockets are receive-only.
 // Every Room_Message carries only Public_DTO fields (toPublic), whatever the caller passes.
 export class MatchRoom extends DurableObject {
-  async fetch() {
+  async fetch(request) {
+    const home = decodeURIComponent(new URL(request.url).pathname) === '/live/home';
+    // Keep the upgrade on the existing fetch contract while old and new room code coexist.
+    if (home) await this.pruneDeletedCards();
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server); // Hibernation API
     const message = await this.ctx.storage.get('message');
     if (message) server.send(message); // stored snapshot first, no database query
     // An empty home room still answers, so viewers leave "Connecting" before the first score.
-    else if (this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
+    else if (home || this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
     return new Response(null, { status: 101, webSocket: client });
   }
 

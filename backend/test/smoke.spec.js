@@ -46,3 +46,21 @@ describe('Smoke_Script runChecks', () => {
     expect(err.message).toBe('Smoke check failed: GET /health: expected 200 {ok:true}, got 503');
   });
 });
+
+it.each(['error', 'close'])('smoke fails once when %s re-enters close during a failed handshake', async first => {
+  let closeCalls = 0;
+  class ReentrantSocket {
+    constructor() {
+      this.listeners = {};
+      queueMicrotask(() => this.listeners[first]({ code: 500 }));
+    }
+    addEventListener(type, listener) { this.listeners[type] = listener; }
+    close() {
+      closeCalls++;
+      this.listeners.close({ code: 500 });
+    }
+  }
+  const fetch = input => Promise.resolve(Response.json(new URL(input).pathname === '/health' ? { ok: true } : { tournaments: [] }));
+  await expect(runChecks(BASE, fetch, ReentrantSocket)).rejects.toMatchObject({ check: '/live/home first message' });
+  expect(closeCalls).toBe(1);
+});

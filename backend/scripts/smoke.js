@@ -13,7 +13,10 @@ function firstHomeMessage(WebSocketImpl, baseUrl) {
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   return new Promise((resolve, reject) => {
     const ws = new WebSocketImpl(url.href);
+    let finished = false;
     const done = (fn, value) => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
       try {
         ws.close();

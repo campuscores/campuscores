@@ -194,6 +194,12 @@ BASE=https://thaparlympics-staging.bhatiaarnav05.workers.dev PUBLISH=api MATCH_I
 
 Hosting must serve `frontend/dist/` and return `index.html` for app routes such as `/sports/football`. This is the single-page application (SPA) fallback. The host is Cloudflare Workers static assets: staging `https://thaparlympics-staging.bhatiaarnav05.workers.dev`, production `https://campuscores.live`, both deployed by `deploy.yml`. Local preview is not a deployment.
 
+## Worker error logs
+
+`backend/wrangler.jsonc` enables custom application logs and runtime exceptions separately for staging and production. It redacts query strings and disables invocation logs and traces. Staging applies this configuration with its next deploy; production applies it with the next approved release ([decision](memory.md#worker-error-logging--24-october-2026)). Log events use full sampling. Existing application errors emit fixed metadata; never add tokens, request bodies, email addresses or connection strings to logs. Retention and quotas depend on the Cloudflare plan; paid overage can add charges ([Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)).
+
+After deployment, open Cloudflare **Workers & Pages**, select the correct environment's Worker, then open **Observability → Logs**. Filter to the failure time and, when available, the response's `X-Request-Id`. A live-feed failure needs the `/live/home` exception and time. Share the error text and request ID without credentials. Logs start after enabling them; the earlier production failure has no retained exception. CLI access requires a separate Cloudflare sign-in and is optional.
+
 ## GitHub Actions and Docker
 
 They solve different problems:
@@ -222,7 +228,7 @@ On each sport page, check:
 
 - Tap a card. The details open fullscreen, and Close is clear of the notch and safe areas.
 - Close and the area outside the details close them. The page does not scroll behind the open details.
-- Swipe the card rails and the date chips with a finger.
+- Swipe the card rails and the date chips with a finger. On the homepage, use short slow and quick swipes in both directions: one card stays highlighted during a drag, and each phone rail settles on a card after release. Check inner score-table panning separately.
 - Rotate between portrait and landscape.
 - Use the system Back gesture or button with the details open. Record the actual result. Android Chrome can close the details first; the automated tests pin Back as leaving the page.
 - Use large system text and 200% pinch zoom.

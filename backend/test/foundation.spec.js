@@ -1,5 +1,6 @@
 import { exports as workerExports } from 'cloudflare:workers';
 import { Hono } from 'hono';
+import appWorker from '../src/index.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppError, onError, requestId } from '../src/http.js';
 
@@ -74,4 +75,13 @@ it('API errors and protected replies cannot be stored in browser or shared cache
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect([401, 404]).toContain(response.status);
   }
+});
+
+it.each(['home', '%68ome'])('forwards %s using the legacy room fetch contract during a mixed-version rollout', async room => {
+  const fetchRoom = vi.fn(() => new Response('legacy room'));
+  const request = new Request(`http://example.com/live/${room}`, { headers: { Upgrade: 'websocket' } });
+  const response = await appWorker.fetch(request, { ROOMS: { idFromName: name => name, get: () => ({ fetch: fetchRoom }) } });
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe('legacy room');
+  expect(fetchRoom).toHaveBeenCalledExactlyOnceWith(request);
 });

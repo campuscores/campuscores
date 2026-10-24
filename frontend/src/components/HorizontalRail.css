@@ -41,7 +41,7 @@
     }
     .match-card.is-peek .match-surface, .tournament-card.is-peek .tournament-surface { transform: scale(.9); opacity: .66; }
     
-@media (max-width: 767px) { .match-scroll, .tournament-scroll { gap: 16px; } }
+@media (max-width: 767px) { .match-scroll, .tournament-scroll { gap: 16px; scroll-snap-type: x mandatory; } }
 @media (prefers-reduced-motion: reduce) {
   .match-card.is-peek .match-surface, .tournament-card.is-peek .tournament-surface { transform: none; }
 }

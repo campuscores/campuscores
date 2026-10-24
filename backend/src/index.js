@@ -24,7 +24,6 @@ app.get('/live/:room', async (c) => {
   const room = parseRoom(c.req.param('room'));
   if (!room) throw new AppError(404, 'NOT_FOUND', 'Room not found');
   const stub = c.env.ROOMS.get(c.env.ROOMS.idFromName(room));
-  if (room === 'home') await stub.pruneDeletedCards();
   return stub.fetch(c.req.raw);
 });
 app.route('/api', publicRoutes); // cached pool, no auth

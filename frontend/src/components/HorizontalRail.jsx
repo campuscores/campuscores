@@ -6,9 +6,15 @@ export default function HorizontalRail({ children, label, className, id, resetKe
   const railRef = useRef(null);
   useEffect(() => {
     const rail = railRef.current;
+    const visibility = new Map();
     const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => entry.target.classList.toggle('is-peek', entry.intersectionRatio < .9));
-    }, { root: rail, threshold: .9 });
+      entries.forEach(entry => visibility.set(entry.target, entry.intersectionRatio));
+      let prominent, mostVisible = 0;
+      for (const [card, ratio] of visibility) {
+        if (ratio > mostVisible) { prominent = card; mostVisible = ratio; }
+      }
+      for (const [card, ratio] of visibility) card.classList.toggle('is-peek', ratio < .9 && card !== prominent);
+    }, { root: rail, threshold: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1] });
     [...rail.children].forEach(card => observer.observe(card));
     return () => observer.disconnect();
   }, [children]);

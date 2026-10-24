@@ -152,3 +152,41 @@ test('phone match details use the larger score and readable table, with facts in
   expect(await details.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
   await page.screenshot({ path: test.info().outputPath('larger-phone-match.png') });
 });
+
+test('phone rails keep a spotlight throughout short drags instead of dimming both cards', async ({ page }) => {
+  await page.goto('/');
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const selector of ['.match-scroll', '.tournament-scroll']) {
+      const rail = page.locator(selector).first();
+      await rail.scrollIntoViewIfNeeded();
+      const step = await rail.evaluate(el => {
+        el.style.scrollSnapType = 'none'; // Inspect the in-gesture positions before native snapping starts.
+        return el.children[1].offsetLeft - el.children[0].offsetLeft;
+      });
+      for (const fraction of [.2, .35, .49, .65, .35, .2, 0]) {
+        await rail.evaluate((el, left) => { el.scrollLeft = left; }, step * fraction);
+        await expect.poll(() => rail.locator(':scope > :not(.is-peek)').count(), `${selector} at ${width}px / ${fraction}`).toBe(1);
+        if (fraction === .49 || fraction === .65) await expect(rail.locator(':scope > :nth-child(2)')).not.toHaveClass(/is-peek/);
+      }
+      await rail.evaluate(el => { el.style.scrollSnapType = ''; });
+    }
+  }
+});
+
+test('a short phone swipe advances the rail and settles on a card', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Real touch dragging uses Chromium CDP; WebKit still needs a physical-phone check');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  for (const selector of ['.match-scroll', '.tournament-scroll']) {
+    const rail = page.locator(selector).first();
+    await swipe(page, rail, 90);
+    await expect.poll(() => rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+    await expect.poll(() => rail.evaluate(el => {
+      const anchors = [...el.children].slice(0, -1).map(card => card.offsetLeft);
+      anchors.push(el.scrollWidth - el.clientWidth);
+      return Math.min(...anchors.map(left => Math.abs(el.scrollLeft - left)));
+    })).toBeLessThan(2);
+    await expect(rail.locator(':scope > :not(.is-peek)')).toHaveCount(1);
+  }
+});

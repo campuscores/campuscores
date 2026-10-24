@@ -18,6 +18,12 @@
   // Clerk publishable keys are public. CLERK_SECRET_KEY and CLERK_JWT_KEY stay Worker secrets (`wrangler secret put --env <env>`).
   "env": {
     "staging": {
+      "observability": {
+        "enabled": true,
+        "redact_query_string": true,
+        "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false },
+        "traces": { "enabled": false }
+      },
       "workers_dev": true, // Clerk development instance; Clerk production refuses *.workers.dev
       "vars": {
         "ENABLE_TEST_ENGINE": "true", // staging scores with the Test_Engine; production must not set it
@@ -33,6 +39,12 @@
       ]
     },
     "production": {
+      "observability": {
+        "enabled": true,
+        "redact_query_string": true,
+        "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false },
+        "traces": { "enabled": false }
+      },
       "workers_dev": false,
       // Set the fail-closed request-limit failure mode on this route in the Cloudflare dashboard (Requirement 20.2).
       "routes": [{ "pattern": "campuscores.live/*", "zone_name": "campuscores.live" }],
