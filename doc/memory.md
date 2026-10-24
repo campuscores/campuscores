@@ -46,7 +46,7 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 ## Staging-only continuation — 24 October 2026
 
-Work continues on `develop` and staging. Arnav requires `main` and production to stay as they are until he explicitly authorizes a release. Do not open a release pull request, merge to `main` or deploy production under the staging task. Passing staging checks does not grant release authorization.
+Superseded for the current release by Arnav on 24 October 2026. He requested the tested changes on the main website before the expected 17:30 IST traffic, with existing tournaments, scheduled matches, final results and scorer access preserved. Promote `develop` through a release pull request to `main` after its checks pass. Keep the production database and Clerk bindings. Do not seed, reset, import staging data, run test score actions or change hosted data outside the normal application flow. Inspect production records before and after deployment. The private backup, physical-device and wider staff-layout checks remain separate deferred work; this request does not start the backup workflow.
 
 ## Public repository and CI — 20 October 2026
 
