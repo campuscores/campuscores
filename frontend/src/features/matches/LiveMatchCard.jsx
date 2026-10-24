@@ -7,9 +7,10 @@ export default function LiveMatchCard({ match, onOpen }) {
     <article className="match-card" data-sport={match.sport} style={{ '--match-background': `url('/assets/${match.sport}-background.webp')`, '--match-background-phone': `url('/assets/${match.sport}-background-640.webp')` }} aria-labelledby={headingId}>
       <div className="match-surface">
         <header className="match-header">
-          <div className="match-meta"><span>{match.sportLabel}</span><span>{match.competition}</span></div>
+          <div className="match-meta has-stage"><span>{match.sportLabel}</span><span className="match-stage">{match.round || 'Match'}</span><span>{match.competition}</span></div>
           <h3 className="match-overview" id={headingId}><span>{match.sides[0].name}</span><strong>{match.score}</strong><span>{match.sides[1].name}</span></h3>
           <p className="match-clock">{match.clock}</p>
+          {match.endedEarly && <p className="match-finish-note">Ended early · completed scores only</p>}
         </header>
         <div className="match-details" tabIndex={match.columns.length > 5 ? 0 : undefined} role={match.columns.length > 5 ? "region" : undefined} aria-label={match.columns.length > 5 ? "Score details, scroll horizontally" : undefined}>
           <table aria-label={`${match.sportLabel} score breakdown`}>

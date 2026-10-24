@@ -76,7 +76,7 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
           l AS (SELECT * FROM scorer_leases WHERE match_id = $1 FOR UPDATE)
      SELECT m.id, m.tournament_sport_id, m.status, m.correction_route, m.config_snapshot, m.config_version, m.last_seq,
             ts.sport, ts.config_version AS ts_config_version, t.id AS tournament_id, t.name AS tournament_name, t.status AS tournament_status, m.kind,
-            m.scheduled_at,
+            m.scheduled_at, m.stage,
             sa.label AS side_a, sb.label AS side_b,
             a.id AS account_id, a.status AS account_status, a.role,
             moa.valid_from, moa.valid_until, moa.permission,
@@ -119,6 +119,7 @@ export async function loadScoringContext(tx, matchId, clerkUserId, deviceId, act
       tournamentName: r.tournament_name,
       tournamentStatus: r.tournament_status,
       kind: r.kind,
+      stage: r.stage,
       scheduledAt: r.scheduled_at,
       sides: [r.side_a, r.side_b],
     },

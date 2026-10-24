@@ -21,7 +21,7 @@ test('sport route receives real team scores/events, updates its open dialog and 
   await expect(dialog).toContainText('Yellow card · Kabir'); await expect(dialog).toContainText('Rohit on for Aman');
   await expect(dialog.getByRole('heading', { name: 'Lineups' })).toHaveCount(0);
   socket.send(JSON.stringify({ type: 'snapshot', seq: 2, data: [{ ...card, status: 'APPROVED', winner: 0, score: [2, 0], finalizedAt: '2026-10-20T18:35:00Z', periods: [{ points: [1, 0], winner: 0, current: false }, { points: [1, 0], winner: 0, current: false }] }] }));
-  await expect(dialog).toContainText('Final · Alpha won 2–0'); await expect(dialog.locator('td strong')).toHaveText(['1', '1']);
+  await expect(dialog).toContainText('Alpha won'); await expect(dialog.locator('td strong')).toHaveText(['1', '1']);
   await page.keyboard.press('Escape'); await expect(live.locator('.sport-card')).toHaveCount(0); await expect(page.locator('#past .sport-card')).toHaveCount(1);
   expect(requests.filter(u => u.includes('clerk.'))).toEqual([]); expect(errors).toEqual([]);
 });

@@ -5,7 +5,7 @@ function statusText(match) {
   const winner = match.winner == null ? '' : `${match.sides[match.winner].name} won ${match.score[match.winner]}–${match.score[1 - match.winner]}`;
   if (match.status === 'live') return `Live · ${match.clock}`;
   if (match.status === 'ended') return `Match ended · ${winner} · Provisional result`;
-  if (match.status === 'completed') return `Final · ${winner}`;
+  if (match.status === 'completed') return match.winner == null ? 'Result recorded' : `${match.sides[match.winner].name} won`;
   if (match.status === 'not-scored') return `Not scored · ${match.dateLabel} · ${match.timeLabel}`;
   return `Scheduled · ${match.dateLabel} · ${match.timeLabel}`;
 }
@@ -118,6 +118,7 @@ export default function SportMatchDialog({ sport, scoring, match, onClose }) {
           </div>
           <h2 id="sport-dialog-title" className="match-overview"><Overview match={match} /></h2>
           <p className="match-clock sport-dialog-status">{statusText(match)}</p>
+          {match.endedEarly && <p className="match-finish-note">Ended early · completed scores only</p>}
         </header>
         <div className="match-details sport-dialog-details">
           {match.periods

@@ -97,3 +97,37 @@ it('football ties wait for the event policy and cannot be finalized or resolved 
   expect(() => score('football', [...actions, action('EXTRA_PERIOD')])).toThrow(/football tie policy/);
   expect(() => score('football', [...actions, action('FINALIZE')])).toThrow(/tied/);
 });
+
+
+describe('manual early match completion', () => {
+  it.each(Object.keys(DEFAULT_FORMATS))('%s keeps only completed units, with the explicit winner and reversible history', sport => {
+    const periodSport = DEFAULT_FORMATS[sport].model === 'periods';
+    const completed = [point(0), periodSport ? action('END_PERIOD') : action('END_SET', { winner: 0 })];
+    const live = [...completed, point(1)];
+    const end = action('END_MATCH', { winner: 1 });
+    const state = score(sport, [...live, end]);
+    expect(state.periods).toEqual(score(sport, completed).periods.filter(p => !p.current));
+    expect(state.periods.every(p => !p.current)).toBe(true);
+    expect(state.sides.map(s => s.points)).toEqual([1, 0]);
+    expect(state).toMatchObject({ winner: 1, endedEarly: true, finalized: false });
+    expect(() => score(sport, [...live, end, point(0)])).toThrow(/Correct the deciding/);
+    const undo = action('REVERSE', {}, { reversesActionId: end.actionId });
+    checkReversal([...live, end], undo);
+    expect(score(sport, [...live, end, undo])).toEqual(score(sport, live));
+    const final = score(sport, [...live, end, action('FINALIZE')]);
+    expect(final).toMatchObject({ status: 'APPROVED', winner: 1, endedEarly: true, finalized: true });
+    expect(() => score(sport, [...live, end, action('FINALIZE'), point(0)])).toThrow(/locked/);
+  });
+  it('can choose a winner before a unit is completed without fabricating scores', () => {
+    const state = score('lawn-tennis', [...points(0, 6), action('END_MATCH', { winner: 1 })]);
+    expect(state.periods).toEqual([]);
+    expect(state.sides.map(s => s.points)).toEqual([0, 0]);
+    expect(state.winner).toBe(1);
+  });
+  it.each([{}, { winner: 2 }, { winner: '0' }, { winner: 0, points: 99 }])('rejects an invalid manual winner %j', payload => {
+    expect(() => score('badminton', [action('END_MATCH', payload)])).toThrow();
+  });
+  it('does not bypass the football policy after tied play has already ended', () => {
+    expect(() => score('football', [action('END_PERIOD'), action('END_PERIOD'), action('END_MATCH', { winner: 1 })])).toThrow(/already ended/);
+  });
+});

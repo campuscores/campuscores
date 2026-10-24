@@ -88,7 +88,7 @@ test('early set winner keeps actual points; cancelling final confirmation keeps 
   const dialog = page.getByRole('dialog', { name: 'End set early' });
   await dialog.getByRole('radio', { name: 'Bravo' }).check(); await dialog.getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 2);
   expect(server.snapshot.periods[0]).toMatchObject({ points: [1, 0], winner: 1, manual: true });
-  await page.getByRole('button', { name: 'Confirm final result', exact: true }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 3);
   expect(server.snapshot.winner).toBe(null); await expect(point(page)).toBeEnabled();
 });
@@ -97,12 +97,14 @@ test('deciding score can be undone; final acceptance is retry-safe, read-only af
   await point(page).click(); await accepted(page, 1);
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); expect(server.snapshot.winner).toBe(null);
   await point(page).click(); await accepted(page, 3);
-  await page.getByRole('button', { name: 'Confirm final result', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm and lock result', exact: true }).click(); await accepted(page, 4);
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lock result permanently', exact: true })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'I understand that this permanently locks the result and removes Undo.' }).check();
+  await page.getByRole('button', { name: 'Lock result permanently', exact: true }).click(); await accepted(page, 4);
   expect(server.actions.filter(a => a.type === 'FINALIZE')).toHaveLength(1);
   const finals = server.requests.filter(a => a.type === 'FINALIZE'); expect(finals.length).toBeGreaterThan(1); expect(finals[0].actionId).toBe(finals[1].actionId);
-  await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible(); await expect(point(page)).toHaveCount(0);
-  await page.reload(); await expect(page.getByText('Alpha won. Final result · editing locked.')).toBeVisible();
+  await expect(page.getByText('Alpha won. Scoring and Undo are no longer available.')).toBeVisible(); await expect(point(page)).toHaveCount(0);
+  await page.reload(); await expect(page.getByText('Alpha won. Scoring and Undo are no longer available.')).toBeVisible();
   await page.getByRole('main').getByRole('link', { name: 'Back to My Matches', exact: true }).click(); // StaffShell Back (Req 4.10)
   await expect(page.locator('#op-completed [data-match-id="7"]')).toBeVisible();
 });
@@ -238,7 +240,7 @@ test('a tied football match keeps undo but offers no unapproved deciding period 
   await page.getByRole('button', { name: 'End period', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 1);
   await expect(page.getByText('Scores are tied. The organizer must agree the football tie policy before this result can be finalized.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start extra period', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Confirm final result', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Review final result', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); await expect(point(page)).toBeEnabled();
 });
 
@@ -294,4 +296,84 @@ test('an interrupted initial read offers recovery and leaves stored actions inta
   await expect(point(page)).toBeEnabled();
   await point(page).click(); await accepted(page, 1);
   expect(server.actions).toHaveLength(1);
+});
+
+
+for (const sport of Object.keys(DEFAULT_FORMATS)) {
+  test(sport + ': end the whole match early with completed scores only, then undo', async ({ page }) => {
+    const server = await mockScoring(page, sport); await open(page);
+    await point(page).click(); await accepted(page, 1);
+    const periodSport = DEFAULT_FORMATS[sport].model === 'periods';
+    await page.getByRole('button', { name: periodSport ? 'End period' : 'End set early', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click(); await accepted(page, 2);
+    const completed = server.snapshot.periods.filter(p => !p.current);
+    await point(page, 1, 'Bravo').click(); await accepted(page, 3);
+    await page.getByRole('button', { name: 'End match early', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'End match early', exact: true });
+    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'End match early', exact: true })).toBeDisabled();
+    await dialog.getByRole('radio', { name: 'Bravo', exact: true }).check();
+    await dialog.getByRole('button', { name: 'End match early', exact: true }).click(); await accepted(page, 4);
+    expect(server.snapshot).toMatchObject({ winner: 1, endedEarly: true, finalized: false });
+    expect(server.snapshot.periods).toEqual(completed);
+    await expect(page.locator('.score-table thead th')).toHaveCount(3);
+    await expect(page.locator('.result-review')).toContainText('Undo is still available');
+    await expect(page.locator('#result-review-title')).toBeFocused();
+    await page.reload(); await accepted(page, 4);
+    await expect(page.locator('.result-review')).toContainText('Winner: Bravo');
+    await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 5);
+    expect(server.snapshot.winner).toBeNull();
+    expect(server.snapshot.currentPoints).toEqual([0, 1]);
+    await expect(point(page)).toBeEnabled();
+  });
+}
+
+test('permanent lock requires acknowledgement, defaults to Cancel and remains clear when queued offline', async ({ page, context }) => {
+  const server = await mockScoring(page, 'badminton'); await open(page);
+  await point(page).click(); await accepted(page, 1);
+  await context.setOffline(true); await page.evaluate(() => dispatchEvent(new Event('offline')));
+  await page.getByRole('button', { name: 'End match early', exact: true }).click();
+  await page.getByRole('dialog').getByRole('radio', { name: 'Bravo' }).check();
+  await page.getByRole('dialog').getByRole('button', { name: 'End match early', exact: true }).click();
+  await expect(page.locator('.result-review')).toContainText('Winner: Bravo');
+  await page.getByRole('button', { name: 'Review final result' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Lock result permanently' })).toBeDisabled();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Review final result' }).click();
+  await page.getByRole('checkbox', { name: 'I understand that this permanently locks the result and removes Undo.' }).check();
+  await page.getByRole('button', { name: 'Lock result permanently' }).click();
+  await expect(page.locator('.scoring-result')).toContainText('Result lock saved on this device');
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toHaveCount(0);
+  expect(server.actions).toHaveLength(1);
+  await page.evaluate(() => addEventListener('online', event => event.stopImmediatePropagation(), { capture: true }));
+  await context.setOffline(false); await page.reload(); await accepted(page, 3);
+  expect(server.snapshot).toMatchObject({ endedEarly: true, winner: 1, finalized: true, periods: [] });
+  await expect(page.locator('.scoring-result')).toContainText('Result permanently locked');
+  await expect(page.getByRole('button', { name: 'Undo last action' })).toHaveCount(0);
+});
+
+
+test('early-finish and permanent-lock dialogs contain long unbroken team names at phone through desktop widths', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton');
+  server.match.sides = [{ name: 'A'.repeat(80) }, { name: 'B'.repeat(80) }];
+  await page.goto(APP + '/operator/matches/7/score');
+  await expect(page.getByRole('button', { name: 'End match early', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'End match early', exact: true }).click();
+  const check = async () => {
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 640 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+      expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth > el.clientWidth + 1)).toBe(false);
+    }
+  };
+  await check();
+  await page.getByRole('dialog').getByRole('radio', { name: 'B'.repeat(80), exact: true }).check();
+  await page.getByRole('dialog').getByRole('button', { name: 'End match early', exact: true }).click();
+  await page.getByRole('button', { name: 'Review final result', exact: true }).click();
+  await check();
+  await expect(page.getByRole('button', { name: 'Lock result permanently' })).toBeDisabled();
 });

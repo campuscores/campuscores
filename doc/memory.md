@@ -176,7 +176,7 @@ The product and service decisions below are confirmed requirements. Implementati
 - Player statistics: visible as contributions on match/sport views, without an individual profile or login in first release.
 - Scoring: detailed sport-specific scoring in the first release; scoring, match outcomes, and sport standings update as dependent data.
 - Live undo: while a match is `LIVE`, the assigned operator can undo/correct as many times as needed without extra permission or a reason prompt. Each undo is stored as a linked reversal action with actor and server time; spectators see no correction marker for live undos. Operator final confirmation permanently locks further edits.
-- Exceptional whole-match outcomes beyond early set endings remain Open with Arnav/coaches. No outcome may bypass the final lock.
+- Manual early match finish is confirmed in [the 24 October decision](#early-match-finish-and-result-clarity--24-october-2026). Other exceptional outcomes remain Open with Arnav/coaches. No outcome may bypass the final lock.
 - Match creation: both from a schedule and on the spot, by Tournament Managers/Super Admins only.
 - Offline behavior: an operator can keep scoring locally; actions sync in order with the same action ID on retry. The server validates each action against the operator's assignment by server receipt time (device clock untrusted). If actions arrive after `valid_until` or after revocation, sync pauses until a manager extends the window or resolves the conflict. One primary scoring device per match.
 - Sport formats: each tournament sport has its own configurable format and point/scoring values. Format defaults/limits remain to be confirmed. The bracket itself is fixed to semifinal-semifinal-final in this release.
@@ -276,6 +276,12 @@ Each open question needs a decision owner, affected tasks and acceptance criteri
 
 Current confirmed decisions take precedence over older proposals. An authorized stack, role or deployment change must update affected contracts, callers, tests and this decision record together before dependent work.
 
+## Early match finish and result clarity — 24 October 2026
+
+Arnav confirmed a manual early match finish for an ongoing match. The scorer selects the match winner. Keep only completed sets or periods in the finished breakdown; omit the unfinished unit and unplayed slots. Do not award an extra set or invent points. Period totals use completed periods only. Keep all accepted actions so Undo restores the unfinished play before final confirmation. Normal football draw/shoot-out rules remain Open; a completed tied match cannot use an early finish to bypass them.
+
+Ending play is reversible. Permanent final confirmation is a separate action with a visible lock warning, score review, explicit acknowledgement and a safe Cancel focus. A queued final confirmation stops local scoring and Undo; server acceptance publishes and locks the result. Public cards centre the match stage (Match, Semifinal 1, Semifinal 2 or Final) between sport and tournament, and show only “<winner> won” in the centred result line.
+
 ## Operator scoring decisions — 20 October 2026
 
 - Arnav confirmed real scoring, not a fixture preview. Preserve the existing sign-in, assignment, device lease, persistent queue, transactional acceptance and live delivery. Develop/staging is the integration target; main/production stays untouched.
@@ -284,7 +290,7 @@ Current confirmed decisions take precedence over older proposals. An authorized 
 - Operator final confirmation publishes and permanently locks the result, without manager approval. Keep actor/time/action records. An automatic match-winning point remains correctable until final confirmation.
 - START eligibility uses database time and the India_Time day, in addition to the assignment window. The START rule of 21 October 2026 replaces the earlier "scheduled date is today" rule ([decision 6](#staff-roles-and-manager-console--decisions)). A match with no scheduled time cannot start.
 - Coaches/admins own tournament/match creation and assignment, through the manager console ([decisions](#staff-roles-and-manager-console--decisions)). Validated rosters, standings and automatic bracket advancement are separate scope.
-- Open: football shoot-out/draw policies and exceptional whole-match awards beyond an early set end. No tied or undecided match may be finalized by inventing a winner. Decision owner: Arnav/coaches; affects tied-match finalization only. Acceptance: a recorded event policy before enabling that result.
+- Open: normal football shoot-out/draw policies and exceptional outcomes other than the [confirmed manual early finish](#early-match-finish-and-result-clarity--24-october-2026). A completed tied match cannot be finalized by inventing a winner. Decision owner: Arnav/coaches; acceptance needs a recorded event policy.
 
 Publication naming and authorship, confirmed by Arnav on 20 October 2026: use neutral branch/commit descriptions and the requesting contributor’s verified Git identity. Follow [AGENTS.md](../AGENTS.md#git-naming-and-authorship).
 

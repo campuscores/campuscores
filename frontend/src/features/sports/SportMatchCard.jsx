@@ -15,7 +15,7 @@ export function Overview({ match }) {
 function stateLine(match) {
   if (match.status === 'live') return match.clock;
   if (match.status === 'ended') return `Ended · ${match.sides[match.winner].name} won`;
-  if (match.status === 'completed') return `${match.dateLabel} · ${match.tournament}`;
+  if (match.status === 'completed') return match.winner == null ? 'Result recorded' : `${match.sides[match.winner].name} won`;
   if (match.status === 'not-scored') return `Not scored · ${match.dateLabel} · ${match.tournament}`;
   return `${match.dateLabel} · ${match.timeLabel} · ${match.tournament}`;
 }
@@ -29,7 +29,7 @@ export default function SportMatchCard({ sport, match, onOpen }) {
         <h3 id={headingId}>
           <button type="button" className="sport-card-open" aria-haspopup="dialog" onClick={event => onOpen(match, event.currentTarget)}>
             <span className="match-header">
-              <span className="match-meta"><span>{sport.label}</span><span>{match.category}</span></span>
+              <span className="match-meta has-stage"><span>{sport.label}</span><span className="match-stage">{match.round || 'Match'}</span><span>{match.tournament}</span></span>
               <span className="match-overview"><Overview match={match} /></span>
               <span className="match-clock">{stateLine(match)}</span>
             </span>

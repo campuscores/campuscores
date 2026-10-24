@@ -87,3 +87,12 @@
 .match-card-open:focus-visible { outline-offset: -3px; }
 .match-details[role="region"] { z-index: 2; }
 .match-card:has(.match-card-open:focus-visible) .match-surface { transform: none; opacity: 1; }
+
+/* Keep stage centred independently of sport and tournament text lengths. */
+.match-meta.has-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr); align-items: start; }
+.match-meta.has-stage > span { min-width: 0; overflow-wrap: anywhere; }
+.match-meta.has-stage > span:last-child { text-align: right; }
+.match-stage { text-align: center; max-width: 12ch; }
+.match-overview > span, .match-clock, .match-details th { min-width: 0; overflow-wrap: anywhere; }
+.match-clock { line-height: 1.4; }
+.match-finish-note { margin: 6px 0 0; text-align: center; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }

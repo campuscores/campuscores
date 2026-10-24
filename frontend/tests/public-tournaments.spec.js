@@ -265,7 +265,7 @@ test('live cards merge into the Tournament sport page in place, before and after
   await expect(live.locator('.public-empty')).toBeVisible();
   expect(await ids(past)).toEqual(['71']);
   await expect(past.locator('[data-match-id="71"] .match-overview')).toContainText('3–1');
-  await expect(past.locator('[data-match-id="71"] .match-clock')).toHaveText(`${dayText('2026-10-25T09:00:00.000Z')} · Cup`);
+  await expect(past.locator('[data-match-id="71"] .match-clock')).toHaveText('Alpha won');
   expect(await ids(upcoming)).toEqual(['72']);
   await expect(page.locator('[data-match-id="95"], [data-match-id="96"], [data-match-id="97"]')).toHaveCount(0);
   await settle(page);
@@ -298,7 +298,7 @@ test.describe('India_Time on a device in New York', () => {
     // A Final card the read lacks takes its day from finalizedAt in India_Time.
     await expect.poll(() => sockets.length).toBe(1);
     sockets[0].send(snapshot(1, [final('98', at.final)]));
-    await expect(past.locator('[data-match-id="98"] .match-clock')).toHaveText(`${dayText(at.final)} · Cup`);
+    await expect(past.locator('[data-match-id="98"] .match-clock')).toHaveText('Alpha won');
     await expect(past.locator('.date-chip')).toHaveText(['All', dayText(at.notScored), dayText(at.final)]);
     // Tournament dates are event calendar dates: no shift to the device's previous day.
     await page.goto(APP + '/tournaments/cup');
@@ -489,4 +489,38 @@ test('tournament sport illustrations stay within configured navigation links at 
   await expect(page).toHaveURL(APP + '/tournaments/cup/football');
   await page.goBack();
   await expect(page.locator('.tournament-sports a')).toHaveCount(6);
+});
+
+
+test('public cards centre the stage and winner, wrap long names and show only completed early-result units', async ({ page }) => {
+  const longName = 'ROYALFALCONS'.repeat(9), tournamentName = 'THAPARLYMPICS2026'.repeat(7);
+  const { sockets } = await mockPublic(page, { '/tournaments': list([]), '/tournaments/cup': detail([]) });
+  await page.goto(APP + '/');
+  await expect.poll(() => sockets.length).toBe(1);
+  const stages = [null, 'SF1', 'SF2', 'FINAL'];
+  const cards = stages.map((stage, i) => card(String(70 + i), { sport: 'table-tennis', kind: stage ? 'BRACKET' : 'CUSTOM', stage, status: 'APPROVED', competition: tournamentName,
+    sides: [{ name: longName }, { name: 'COMPUTER STEEL HEADS' }], winner: 1, endedEarly: true, score: [1, 0], format: { model: 'sets', bestOf: 5 }, periods: [{ points: [11, 8], winner: 0, current: false }] }));
+  sockets[0].send(snapshot(1, cards));
+  const finals = page.locator('#final-results-title').locator('..').locator('..');
+  await expect(finals.locator('.match-card')).toHaveCount(4);
+  await expect(finals.locator('.match-stage')).toHaveText(['Match', 'Semifinal 1', 'Semifinal 2', 'Final']);
+  await expect(finals.locator('.match-clock')).toHaveText(Array(4).fill('COMPUTER STEEL HEADS won'));
+  for (const width of [320, 390, 768, 1024, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), width + 'px page').toBe(false);
+    for (const tile of await finals.locator('.match-card').all()) {
+      const geometry = await tile.evaluate(el => {
+        const meta = el.querySelector('.match-meta').getBoundingClientRect(), stage = el.querySelector('.match-stage').getBoundingClientRect();
+        return { offset: Math.abs((stage.left + stage.right - meta.left - meta.right) / 2), overflow: [...el.querySelectorAll('.match-overview > span, .match-meta > span, .match-clock, th')].some(node => node.scrollWidth > node.clientWidth + 1), align: getComputedStyle(el.querySelector('.match-clock')).textAlign };
+      });
+      expect(geometry.offset).toBeLessThanOrEqual(1); expect(geometry.overflow).toBe(false); expect(geometry.align).toBe('center');
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await finals.getByRole('button', { name: 'Open match details: ' + longName + ' vs COMPUTER STEEL HEADS', exact: true }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.sport-dialog-status')).toHaveText('COMPUTER STEEL HEADS won');
+  await expect(dialog.locator('thead th')).toHaveCount(3);
+  await expect(dialog.locator('thead')).not.toContainText('S2');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });

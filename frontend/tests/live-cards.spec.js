@@ -10,6 +10,8 @@ test.describe('Home_Room card to LiveMatchCard prop', () => {
       sport: 'lawn-tennis',
       sportLabel: 'Tennis',
       competition: 'Spring Cup',
+      round: 'Match',
+      endedEarly: false,
       score: '3–0',
       clock: '',
       columns: [{ key: 'total', label: 'T', className: 'match-total', description: 'Total' }],
@@ -28,5 +30,5 @@ test('configured cards expose set winners and final winner without a clock', () 
   expect(match.columns.map(c => c.label)).toEqual(['S1', 'T']);
   expect(match.sides[0]).toMatchObject({ values: ['15', '1'], winners: [true, false] });
   expect(match.sides[1]).toMatchObject({ values: ['9', '0'], winners: [false, false] });
-  expect(match.clock).toBe('Final · Alpha won');
+  expect(match.clock).toBe('Alpha won');
 });

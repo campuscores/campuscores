@@ -2,7 +2,7 @@ import { EVENT_TIME_ZONE, istDate, matchPhase, timeText } from '../../../../shar
 import { sports } from '../../data/sports.js';
 import { toSportMatch } from '../sports/liveSportMatches.js';
 import { sportFixtures } from '../sports/sportFixtures.js';
-import { stageLabel } from '../staff/labels.js';
+import { stageLabel } from '../operator/operatorMatches.js';
 import useStaffData from '../staff/useStaffData.js';
 import { mergeCards } from './mergeCards.js';
 import { sampleTournaments } from './sampleTournaments.js';
@@ -42,7 +42,7 @@ function toPublicMatch(match, tournamentName, fromCard) {
   const at = match.scheduledAt ? Date.parse(match.scheduledAt) : NaN;
   const timed = Number.isFinite(at);
   const card = fromCard ? toSportMatch(match) : null;
-  const stage = stageLabel(match.stage);
+  const stage = stageLabel(match) || 'Match';
   return {
     ...card,
     id: String(match.id),

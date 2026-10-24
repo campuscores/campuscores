@@ -48,7 +48,7 @@ test.describe('homepage live row', () => {
     sockets[0].send(snapshot(2, [{ ...match, status: 'APPROVED', score: [2, 0], winner: 0, periods: [match.periods[0], { points: [21, 10], winner: 0, current: false }] }]));
     await expect(live.locator('.match-card')).toHaveCount(0);
     const finals = page.getByRole('region', { name: 'Final Results', exact: true });
-    await expect(finals.locator('.match-clock')).toHaveText('Final · Alpha won');
+    await expect(finals.locator('.match-clock')).toHaveText('Alpha won');
     await expect(finals.locator('tbody tr').first().locator('td')).toHaveText(['21', '21', '2']);
     await page.locator('.sports-nav [data-sport="basketball"]').click();
     await expect(finals.locator('.match-card')).toHaveCount(1);
@@ -147,9 +147,9 @@ test('the homepage dialog reads match facts once and keeps live scores current',
   await page.getByRole('button', { name: 'Open match details: Ana vs Ben' }).click();
   const details = page.getByRole('dialog');
   await expect.poll(() => calls.length).toBe(1);
-  await expect(details.locator('.sport-info dd')).toHaveText(['25 Oct', '14:30 IST', 'Spring Cup', 'SF1 (Semi-final 1)', 'Court 2']);
+  await expect(details.locator('.sport-info dd')).toHaveText(['25 Oct', '14:30 IST', 'Spring Cup', 'Semifinal 1', 'Court 2']);
   await expect(details.locator('.sport-dialog-status')).toHaveText('Live · Game 2 · 19–17');
-  await expect(details.locator('thead th')).toHaveText(['Team and players', 'G1', 'G2', 'G3', 'Games']);
+  await expect(details.locator('thead th')).toHaveText(['Team and players', 'G1', 'G2', 'Games']);
   socket.send(snapshot(2, [{ ...match, periods: [match.periods[0], { points: [20, 17], current: true }] }]));
   await expect(details.locator('.sport-dialog-status')).toHaveText('Live · Game 2 · 20–17');
   expect(calls).toHaveLength(1);
