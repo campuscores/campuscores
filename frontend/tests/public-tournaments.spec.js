@@ -468,7 +468,7 @@ test('tournament sport illustrations stay within configured navigation links at 
   await mockPublic(page, { '/tournaments/cup': [200, { tournament: { ...cupRow(), sports: sports.map(s => s.id), matches: [] } }] });
   await page.goto(APP + '/tournaments/cup');
   await expect(page.locator('.tournament-sports a')).toHaveCount(6);
-  for (const width of [320, 390, 768, 1024, 1440, 2560]) {
+  for (const width of [320, 390, 768, 1024, 1200, 1201, 1440, 2560]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), `${width}px`).toBe(false);
     for (const sport of sports) {
@@ -476,6 +476,11 @@ test('tournament sport illustrations stay within configured navigation links at 
       await expect(link).toHaveText(sport.label);
       await expectIllustration(link.locator('img'));
       expect(await link.evaluate(el => el.scrollWidth > el.clientWidth + 1)).toBe(false);
+      if (sport.id === 'table-tennis' && width >= 1201) {
+        const image = await link.locator('img').boundingBox();
+        const label = await link.locator('span').boundingBox();
+        expect(label.y - (image.y + image.height), `${width}px Table Tennis label clearance`).toBeGreaterThanOrEqual(8);
+      }
     }
   }
   expect(requests.filter(url => url.includes('/assets/empty/'))).toEqual([]);

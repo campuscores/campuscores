@@ -14,6 +14,7 @@
 @media (min-width: 1201px) {
   .tournament-sport-link { min-height: 300px; }
   .tournament-sport-link img { inset-block-start: 4px; height: calc(100% - 4px); }
+  .tournament-sport-link.table-tennis img { height: calc(100% - 80px); }
   .tournament-sport-link span { position: absolute; left: 2px; bottom: 2px; padding: 20px; }
 }
 .public-retry { margin-bottom: 18px; }
