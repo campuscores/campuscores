@@ -176,3 +176,21 @@ describe('home room', () => {
     late.ws.close(1000);
   });
 });
+
+
+describe('deleted match delivery', () => {
+  it('keeps a deleted card out after another match updates and an old publish arrives', async () => {
+    const home = stub('home');
+    const deleted = '910001';
+    const other = '910002';
+    await home.publishCard(deleted, { id: deleted, status: 'LIVE', score: [1, 0] }, 1);
+    await home.removeCards([deleted]);
+    await home.publishCard(other, { id: other, status: 'LIVE', score: [2, 0] }, 1);
+    expect(await home.publishCard(deleted, { id: deleted, status: 'LIVE', score: [3, 0] }, 2)).toBe(false);
+    const viewer = await connect('home');
+    const message = await viewer.next();
+    expect(message.data.some(card => String(card.id) === deleted)).toBe(false);
+    expect(message.data.some(card => String(card.id) === other)).toBe(true);
+    viewer.ws.close(1000);
+  });
+});

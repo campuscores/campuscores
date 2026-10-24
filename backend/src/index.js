@@ -14,6 +14,7 @@ import { publicRoutes } from './routes/public.js';
 export { MatchRoom } from './rooms.js';
 const app = new Hono();
 app.use('*', requestId);
+app.use('/api/*', async (c, next) => { c.header('Cache-Control', 'no-store'); await next(); });
 app.onError(onError);
 app.get('/health', (c) => c.json({ ok: true }));
 app.get('/live/:room', (c) => {

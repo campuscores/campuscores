@@ -130,7 +130,7 @@ test('loading keeps every heading with a text status, and an empty read shows on
     await expect(section.getByRole('status')).toHaveText('Loading tournaments…');
   }
   listRead.release(list([]));
-  for (const id of ['live', 'upcoming', 'past']) await expect(page.locator(`#${id}-tournaments .sport-empty`)).toHaveText(`No ${id} tournaments right now.`);
+  for (const id of ['live', 'upcoming', 'past']) await expect(page.locator(`#${id}-tournaments .public-empty`)).toBeVisible();
   await expect(page.locator('.tournament-card')).toHaveCount(0);
 
   await page.goto(APP + '/tournaments/cup');
@@ -154,7 +154,7 @@ test('loading keeps every heading with a text status, and an empty read shows on
   // Football is listed but only a badminton match exists.
   cupReads[1].release(detail([match('74', { sport: 'badminton' })]));
   await expect(h1(page)).toHaveText('Football · Cup');
-  for (const id of ['live', 'upcoming', 'past']) await expect(page.locator(`#${id} .sport-empty`)).toHaveText(`No ${id} matches right now.`);
+  for (const id of ['live', 'upcoming', 'past']) await expect(page.locator(`#${id} .public-empty`)).toBeVisible();
   await expect(page.locator('.sport-card')).toHaveCount(0);
 });
 
@@ -262,7 +262,7 @@ test('live cards merge into the Tournament sport page in place, before and after
     card('97', { tournamentId: '6', competition: 'Open' }),
     oldCard,
   ]));
-  await expect(live.locator('.sport-empty')).toHaveText('No live matches right now.');
+  await expect(live.locator('.public-empty')).toBeVisible();
   expect(await ids(past)).toEqual(['71']);
   await expect(past.locator('[data-match-id="71"] .match-overview')).toContainText('3–1');
   await expect(past.locator('[data-match-id="71"] .match-clock')).toHaveText(`${dayText('2026-10-25T09:00:00.000Z')} · Cup`);
@@ -355,7 +355,7 @@ test('without an API base the three pages show Display_Fixtures and send no API 
   await page.goto('/tournaments');
   await expectPage(page, 'Tournaments', 'Tournaments');
   await expect(page.locator('#live-tournaments .tournament-card h3')).toHaveText(sampleTournaments.map(event => event.name));
-  for (const id of ['upcoming', 'past']) await expect(page.locator(`#${id}-tournaments .sport-empty`)).toHaveText(`No ${id} tournaments right now.`);
+  for (const id of ['upcoming', 'past']) await expect(page.locator(`#${id}-tournaments .public-empty`)).toBeVisible();
   await page.locator(`#live-tournaments a[href="/tournaments/${main.id}"]`).click();
   await tournamentPage();
   for (const sport of mainSports) {
@@ -384,7 +384,7 @@ test('without an API base the three pages show Display_Fixtures and send no API 
   expect([hostelLive, hostelUpcoming]).toEqual([0, 1]);
   await page.goto(`/tournaments/${hostel.id}/football`);
   await expectPage(page, `Football · ${hostel.name}`, 'Tournament');
-  await expect(page.locator('#live .sport-empty')).toHaveText('No live matches right now.');
+  await expect(page.locator('#live .public-empty')).toBeVisible();
   await expect(page.locator('#upcoming .sport-card')).toHaveCount(1);
   for (const path of ['/tournaments/unknown-cup', `/tournaments/${racquet.id}/football`, `/tournaments/${main.id}/cricket`]) {
     await page.goto(path);
@@ -393,4 +393,95 @@ test('without an API base the three pages show Display_Fixtures and send no API 
   await page.waitForLoadState('networkidle');
   const local = 'http://127.0.0.1:4175';
   expect(urls.filter(url => new URL(url).origin !== local || /^\/(api|live)(\/|$)/.test(new URL(url).pathname))).toEqual([]);
+});
+
+async function expectIllustration(image) {
+  await expect(image).toHaveAttribute('loading', 'lazy');
+  await expect(image).toHaveAttribute('alt', '');
+  await expect(image).toHaveAttribute('width', /^(240|1254)$/);
+  await expect(image).toHaveAttribute('height', /^(128|1254)$/);
+  await expect(image).toHaveAttribute('srcset', /240w.*480w|320w.*640w.*1254w/);
+  await image.scrollIntoViewIfNeeded();
+  await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+}
+
+test('homepage and tournament empty results use their supplied illustrations and copy, never during loading or failure', async ({ page }) => {
+  const pending = held();
+  await mockPublic(page, { '/tournaments': n => n === 1 ? pending.reply : list([]) });
+  await page.goto(APP + '/');
+  await expect(page.locator('#tournaments [role="status"]')).toHaveText('Loading tournaments…');
+  await expect(page.locator('#tournaments .public-empty')).toHaveCount(0);
+  pending.release(list([]));
+  await expect(page.locator('.live-matches .public-empty h3')).toHaveText('No live matches just yet');
+  await expect(page.locator('#tournaments .public-empty h3')).toHaveText('No tournaments just yet');
+  await expect(page.locator('.live-matches .public-empty p')).toHaveText('When the action starts, catch it right here.');
+  await expect(page.locator('#tournaments .public-empty p')).toHaveText('The next big showdown will appear right here.');
+  for (const image of await page.locator('.public-empty img').all()) await expectIllustration(image);
+  const homeAssets = await page.locator('.public-empty img').evaluateAll(images => images.map(i => i.getAttribute('src')));
+  expect(homeAssets).toEqual(['/assets/empty/home/live-matches-empty.svg', '/assets/empty/home/tournaments-empty.svg']);
+  await page.goto(APP + '/tournaments');
+  const titles = ['The arena is quiet for now', 'Nothing on the calendar yet', 'History is waiting to be made'];
+  await expect(page.locator('.public-empty h3')).toHaveText(titles);
+  await expect(page.locator('.public-empty p')).toHaveText(['Live tournaments will appear here once play begins.', 'New tournaments will appear here when announced.', 'Completed tournaments will appear right here.']);
+  for (const width of [320, 390, 768, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    for (const image of await page.locator('.public-empty img').all()) await expectIllustration(image);
+  }
+  await page.route('http://api.test/api/tournaments', route => route.fulfill({ status: 500, headers: cors, contentType: 'application/json', body: JSON.stringify(apiError('INTERNAL', 'Internal error')) }));
+  await page.reload();
+  await expect(page.locator('.public-empty')).toHaveCount(0);
+  await expect(page.locator('#live-tournaments [role="status"]')).toHaveText(UNAVAILABLE);
+});
+
+for (const sport of sports) {
+  test(`${sport.label}: empty sport sections load only this sport's artwork and fit phone and desktop`, async ({ page }) => {
+    const requests = [];
+    page.on('request', request => requests.push(request.url()));
+    const { calls } = await mockPublic(page, { [`/sports/${sport.id}/matches`]: [200, { matches: [] }] });
+    await page.goto(APP + `/sports/${sport.id}/`);
+    await expect(page.locator('.public-empty')).toHaveCount(3);
+    for (const phase of ['live', 'upcoming', 'past']) {
+      const empty = page.locator(`#${phase} .public-empty`);
+      await expect(empty.locator('h3')).not.toHaveText('');
+      await expect(empty.locator('p')).not.toHaveText('');
+      await expect(empty.locator('img')).toHaveAttribute('src', `/assets/empty/sports/${sport.id}-${phase}-empty.svg`);
+    }
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), `${width}px`).toBe(false);
+      for (const image of await page.locator('.public-empty img').all()) await expectIllustration(image);
+    }
+    expect(calls).toEqual([`/sports/${sport.id}/matches`]);
+    const assets = requests.filter(url => /\/assets\/(empty|tournament-sports)\//.test(url));
+    expect(assets.length).toBeGreaterThan(0);
+    expect(assets.every(url => url.includes(`/empty/sports/${sport.id}-`))).toBe(true);
+    await page.reload();
+    await expect(page.locator('.public-empty')).toHaveCount(3);
+    expect(calls).toHaveLength(2);
+  });
+}
+
+test('tournament sport illustrations stay within configured navigation links at every width', async ({ page }) => {
+  const requests = [];
+  page.on('request', request => requests.push(request.url()));
+  await mockPublic(page, { '/tournaments/cup': [200, { tournament: { ...cupRow(), sports: sports.map(s => s.id), matches: [] } }] });
+  await page.goto(APP + '/tournaments/cup');
+  await expect(page.locator('.tournament-sports a')).toHaveCount(6);
+  for (const width of [320, 390, 768, 1024, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), `${width}px`).toBe(false);
+    for (const sport of sports) {
+      const link = page.locator(`.tournament-sports a[href="/tournaments/cup/${sport.id}"]`);
+      await expect(link).toHaveText(sport.label);
+      await expectIllustration(link.locator('img'));
+      expect(await link.evaluate(el => el.scrollWidth > el.clientWidth + 1)).toBe(false);
+    }
+  }
+  expect(requests.filter(url => url.includes('/assets/empty/'))).toEqual([]);
+  await page.locator('.tournament-sports a').first().focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(APP + '/tournaments/cup/football');
+  await page.goBack();
+  await expect(page.locator('.tournament-sports a')).toHaveCount(6);
 });

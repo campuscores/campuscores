@@ -131,3 +131,24 @@ test('phone header menu opens sports and closes after navigation', async ({ page
     await expect(menu).not.toHaveAttribute('open');
   }
 });
+
+
+test('phone match details use the larger score and readable table, with facts in two columns', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/sports/badminton/');
+  await card(page, sportFixtures.badminton.liveMatches[0].id).locator('button').tap();
+  const details = dialog(page);
+  await expect(details.locator('.sport-dialog-round')).toHaveText('Semifinal 1');
+  await expect(details.locator('.sport-dialog-status')).toHaveText('Live · Game 2 · 19–17');
+  expect(await details.locator('.match-overview strong').evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(40);
+  for (const selector of ['td', '.sport-team', '.sport-info dd', '.sport-dialog-status']) {
+    expect(await details.locator(selector).first().evaluate(el => parseFloat(getComputedStyle(el).fontSize)), selector).toBeGreaterThanOrEqual(16);
+  }
+  await expect(details.locator('thead th')).toHaveText(['Team and players', 'G1', 'G2', 'G3', 'Games']);
+  const facts = await details.locator('.sport-info > div').evaluateAll(divs => divs.map(el => { const r=el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width}; }));
+  expect(facts[0].y).toBe(facts[1].y);
+  expect(facts[2].y).toBe(facts[3].y);
+  expect(facts[4].width).toBeGreaterThan(facts[0].width * 1.8);
+  expect(await details.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
+  await page.screenshot({ path: test.info().outputPath('larger-phone-match.png') });
+});

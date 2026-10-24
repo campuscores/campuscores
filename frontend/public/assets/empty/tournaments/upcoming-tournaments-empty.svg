@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="128" viewBox="0 0 240 128" fill="none" role="img" aria-labelledby="upcoming-title upcoming-desc">
+  <title id="upcoming-title">Waiting for the next tournament announcement</title>
+  <desc id="upcoming-desc">A blue calendar and a small clock, framed by pale blue clouds and trees.</desc>
+  <defs>
+    <linearGradient id="upcoming-cloud" x1="120" y1="16" x2="120" y2="115" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2EEFF"/><stop offset="1" stop-color="#C9E1FF"/>
+    </linearGradient>
+    <linearGradient id="upcoming-blue" x1="120" y1="36" x2="120" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4D678C"/><stop offset="1" stop-color="#334D72"/>
+    </linearGradient>
+  </defs>
+  <path d="M22 107C9 97 13 80 28 71C29 54 39 47 46 44C50 23 69 13 86 18C99 21 108 33 112 39C124 27 145 17 162 20C182 20 198 33 202 49C219 51 226 64 219 77C234 88 232 104 218 111H28Z" fill="url(#upcoming-cloud)"/>
+  <path d="M24 98C39 83 57 85 66 96C79 80 101 85 110 100C125 86 145 90 150 101C170 89 187 91 196 101C205 97 217 100 224 109H22Z" fill="#D8E9FF"/>
+  <ellipse cx="120" cy="113" rx="102" ry="5" fill="#A9CDFB" fill-opacity=".7"/>
+  <g stroke="#263D5B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M110 24L107 19M120 22V15M130 24L133 19"/>
+    <rect x="68" y="37" width="98" height="69" rx="4" fill="#ECF5FF"/>
+    <path d="M72 37H162C164.2 37 166 38.8 166 41V56H68V41C68 38.8 69.8 37 72 37Z" fill="url(#upcoming-blue)"/>
+    <rect x="87" y="30" width="6" height="16" rx="3" fill="#AECBEF"/>
+    <rect x="140" y="30" width="6" height="16" rx="3" fill="#AECBEF"/>
+  </g>
+  <path d="M71 59H163V65H71Z" fill="#D9E9FC"/>
+  <g stroke="#8EAED6" stroke-width="3" stroke-linecap="round">
+    <path d="M84 73H91M108 73H115M132 73H139M84 87H91M108 87H115"/>
+  </g>
+  <rect x="129" y="81" width="14" height="12" rx="2" fill="#A9CDFB"/>
+  <circle cx="163" cy="87" r="22" fill="#AECBEF" stroke="#263D5B" stroke-width="1.9"/>
+  <circle cx="163" cy="87" r="17" fill="#F5FAFF" stroke="#59779E" stroke-width="1.3"/>
+  <path d="M163 74V76M176 87H174M163 100V98M150 87H152" stroke="#90ADD1" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M163 79V87L169 91" stroke="#326DCA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="163" cy="87" r="1.8" fill="#326DCA"/>
+  <g>
+    <path d="M28 94C23 90 25 84 29 81C28 72 37 68 40 78C45 80 47 86 43 90C44 95 38 99 34 98Z" fill="#7DB5FA"/>
+    <path d="M30 90C27 88 29 83 32 81C32 77 34 75 36 75C35 83 36 92 37 98C33 98 30 95 30 90Z" fill="#5C9EEB"/>
+    <path d="M35 84V109M35 98L30 94M35 93L40 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+    <path d="M199 94C194 90 196 84 200 81C199 72 208 68 211 78C216 80 218 86 214 90C215 95 209 99 205 98Z" fill="#7DB5FA"/>
+    <path d="M201 90C198 88 200 83 203 81C203 77 205 75 207 75C206 83 207 92 208 98C204 98 201 95 201 90Z" fill="#5C9EEB"/>
+    <path d="M206 84V109M206 98L201 94M206 93L211 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+  </g>
+  <path d="M48 109L51 103L55 109M189 109L193 104L197 109" fill="#78AAF0"/>
+  <path d="M14 110H226" stroke="#263D5B" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

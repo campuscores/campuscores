@@ -66,3 +66,12 @@ describe('foundation', () => {
     });
   });
 });
+
+
+it('API errors and protected replies cannot be stored in browser or shared caches', async () => {
+  for (const path of ['/api/x', '/api/me']) {
+    const response = await worker(path);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect([401, 404]).toContain(response.status);
+  }
+});

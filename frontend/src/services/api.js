@@ -10,13 +10,17 @@ export async function apiFetch(path, { method = 'GET', token, body } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  let res;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let res, data;
   try {
-    res = await fetch(`${apiBase}/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    res = await fetch(`${apiBase}/api${path}`, { method, headers, signal: controller.signal, body: body === undefined ? undefined : JSON.stringify(body) });
+    data = await res.json().catch(err => { if (controller.signal.aborted) throw err; return null; });
   } catch {
-    throw new Error('the server could not be reached');
+    throw new Error(controller.signal.aborted ? 'the server took too long to respond' : 'the server could not be reached');
+  } finally {
+    clearTimeout(timeout);
   }
-  const data = await res.json().catch(() => null); // empty or non-JSON body (e.g. an edge error page)
   if (res.ok) return data;
   const error = data?.error;
   throw Object.assign(new Error(error?.message ?? `the server returned status ${res.status}`), {

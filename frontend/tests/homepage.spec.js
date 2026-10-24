@@ -25,6 +25,10 @@ test('approved layout, local assets and text fit from phones to large screens', 
   const favicon = await page.request.get('/favicon.ico');
   expect(favicon.status()).toBe(200);
   expect([...(await favicon.body()).subarray(0, 4)]).toEqual([0, 0, 1, 0]);
+  // The logo is the only tab icon and the home screen icon; favicon.ico stays for browsers that request it directly.
+  expect(await page.locator('link[rel="icon"]').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(['/assets/logo-icon-64.png']);
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/assets/logo-touch-180.png');
+  expect((await page.request.get('/assets/logo-icon-64.png')).status()).toBe(200);
   await page.locator('.athlete-card, .match-card').evaluateAll(cards => Promise.all(cards.map(card => {
     const value = getComputedStyle(card).getPropertyValue(card.matches('.athlete-card') ? '--panel-background' : '--match-background');
     const image = new Image();
@@ -78,7 +82,10 @@ test('image skeletons: neutral shimmer blocks while images load, alt text hidden
   let release;
   const held = new Promise(resolve => { release = resolve; });
   await page.route(/\/assets\/(?!logo).*\.webp$/, async route => { await held; await route.continue(); });
-  await page.goto('/');
+  // The held images delay the load event (Firefox waits for them), so wait only for the rendered cards.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.locator('.tournament-surface img').first().waitFor({ state: 'attached' });
+  await page.locator('.athlete-card img').first().waitFor({ state: 'attached' });
   const state = () => page.evaluate(() => {
     const style = (el, pseudo) => getComputedStyle(el, pseudo);
     const image = document.querySelector('.tournament-surface img'), panel = document.querySelector('.athlete-card'), match = document.querySelector('.match-surface');
@@ -227,6 +234,25 @@ for (const width of [390, 820, 1440, 2560, 3840]) {
     await railExpect(page.locator('.match-surface').first()).toHaveCSS('transform', 'none');
   });
 }
+
+test('Sports dropdown opens under its trigger, inside the viewport, with every name on one unclipped line', async ({ page }) => {
+  await page.goto('/tournaments');
+  for (const width of [768, 1024, 1440, 3840]) {
+    await page.setViewportSize({ width, height: 800 });
+    const menu = page.locator('.desktop-nav .sports-dropdown');
+    if ((await menu.getAttribute('open')) === null) await menu.locator('summary').click();
+    const box = await menu.evaluate(el => {
+      const panel = el.querySelector('.sports-options').getBoundingClientRect(), trigger = el.querySelector('summary').getBoundingClientRect();
+      const links = [...el.querySelectorAll('.sports-options a')];
+      return { left: panel.left, right: panel.right, triggerRight: trigger.right, viewport: document.documentElement.clientWidth,
+        clipped: links.filter(a => a.scrollWidth > a.clientWidth || a.getClientRects().length !== 1 || a.getBoundingClientRect().height > 50).map(a => a.textContent) };
+    });
+    expect(Math.round(box.right), `${width}px right edge on the trigger`).toBe(Math.round(box.triggerRight));
+    expect(box.left, `${width}px`).toBeGreaterThanOrEqual(0);
+    expect(box.right, `${width}px`).toBeLessThanOrEqual(box.viewport);
+    expect(box.clipped, `${width}px`).toEqual([]);
+  }
+});
 
 test('menus and legacy links navigate and close correctly', async ({ page }) => {
   const errors = [];

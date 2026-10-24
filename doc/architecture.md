@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation — 23 October 2026
+## Current implementation — 24 October 2026
 
 The application has three parts:
 
@@ -12,7 +12,7 @@ Implemented management: tournament, sport, Default_Format, Sport_Manager, team a
 
 Current folders: `frontend/src/app/` (routes), `components/` (header/icons/native rail), `data/` (sport IDs), `features/home/` (hero/matrix/filter/composition), `features/matches/` (live cards), `features/tournaments/` (public tournament pages, cards, Venue_Library, display fixtures), `features/sports/` (shared sport page, sections, cards, dialog, calendar, fixture registry and one fixture folder per sport), `features/auth/` (lazy Clerk area and role gate), `features/staff/` (shared staff components), `features/manage/` and `features/admin/` (staff screens), `features/operator/` (My Matches and Score console), `features/legal/` (privacy), `services/` (HTTP and live clients), `styles/` (visual tokens), `frontend/public/` (local assets/favicon), and `frontend/tests/` (browser integration checks). Component styles sit alongside components. Setup is in `doc/local-development.md`. Current integration contracts are in `doc/handoff.md`.
 
-The homepage owns its selected-sport state and passes filtered display data to presentational match cards. It has no persistence or network score feed. The shared native rail uses IntersectionObserver on stable card slots for partial-card emphasis; the canvas effect has lifecycle cleanup, a capped refresh rate, reduced-motion handling and offscreen/tab-hidden suspension. Build output is static files in `frontend/dist/`. Nested-route deployments require an index.html fallback.
+The homepage owns its selected-sport state and passes filtered data to presentational match cards. With `VITE_API_BASE` it subscribes to the home room; without it, it uses display fixtures. The shared native rail uses IntersectionObserver on stable card slots for partial-card emphasis; the canvas effect has lifecycle cleanup, a capped refresh rate, reduced-motion handling and offscreen/tab-hidden suspension. Build output is static files in `frontend/dist/`. Nested-route deployments require an index.html fallback.
 
 GitHub Actions runs **frontend lint, build and browser tests** on Ubuntu, Windows and macOS: Chromium and an emulated Pixel on all three, plus Firefox, WebKit and emulated iPhone and iPad on Ubuntu and macOS. New frontend specs join the same suite. Extend test commands, jobs and path triggers when new application layers are implemented; follow the verification policy in `AGENTS.md`. Backend CI, deploy, backup and bootstrap workflows are described in [Database hosting and migrations](#database-hosting-and-migrations). Create future feature folders only when they contain actual implementation; do not add empty backend or database scaffolding for this milestone.
 
@@ -610,3 +610,13 @@ Source: `frontend/src/features/tournaments/{TournamentsPage,TournamentPage,Tourn
 All commands keep the existing action ID, client sequence, assignment and lease contract. Start stores a validated format and source/version with the match. Scoring and manual early set endings derive a new snapshot. Final confirmation writes the final status and snapshot in the same transaction as the action, audit and outbox. Replaying a lost final response is idempotent; new writes to a final match are refused. The backend and frontend use the same pure scoring calculations, but the backend validates and decides acceptance. Pending offline projections are never presented as server-accepted results.
 
 Private scoring reads return only the assigned match and its accepted scoring actions through the uncached connection. Public snapshots/cards allow-list set/period points, winners, current state and display events; they exclude staff IDs, device IDs, tokens and raw command history. The home feed separates live matches from completed results. Public visibility follows the tournament status: every match of an Ongoing or Completed tournament is public ([Public read API](#public-read-api)).
+
+## Connection and public display hardening — 24 October 2026
+
+- `frontend/src/services/api.js` aborts a request after 15 seconds, including its response body. A timeout has no HTTP status, so the scoring queue retries with its existing backoff. Reads keep their one-read and Try again contract.
+- `ScoreConsole.jsx` keeps one send in flight. Each unsent action retains its wire sequence through lease rechecks, so a lost response cannot change the hash of an idempotent retry. A new GRANT or TAKEOVER clears those transient wire numbers. Reload still reconciles accepted real scoring actions before sending. Network, 429 and 5xx lease failures retry with capped backoff; authorization failures need staff attention. A loaded holder can save offline actions. Initial access still requires a connection and a lease.
+- Leases remain keyed by match. One account can hold independent leases and score different matches on different devices. The database regression in `backend/test/actions.spec.js` checks concurrent acceptance and separate sequences.
+- API replies, including errors, send `Cache-Control: no-store`. This does not change the Hyperdrive split: public tournament list/detail use the uncached binding; public sport/match reads use the cached binding; authorization and writes use the uncached binding.
+- `rooms.js` preserves deleted-ID markers when another card updates. A delayed publish cannot restore a deleted card while its marker is retained. The existing bound is the last 500 deleted IDs.
+- Opening a homepage match dialog reads `GET /api/matches/:id` once for schedule, round and venue. Live cards continue to supply accepted scores. The sport page prefers its merged read when opening details, so it keeps that metadata. Missing fields show Not listed. No staff or roster fields are added to the public API.
+- The one-time tournament GET 500 in the handoff has no captured request ID or server error. Local API regressions do not establish its cause. Live log access is required to diagnose a recurrence.

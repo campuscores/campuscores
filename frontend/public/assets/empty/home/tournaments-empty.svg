@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="128" viewBox="0 0 240 128" fill="none" role="img" aria-labelledby="tournament-title tournament-desc">
+  <title id="tournament-title">Waiting for the next tournament</title>
+  <desc id="tournament-desc">A blue trophy with a star, small trees, and a pale blue backdrop.</desc>
+  <defs>
+    <linearGradient id="tournament-cloud" x1="120" y1="16" x2="120" y2="115" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2EEFF"/>
+      <stop offset="1" stop-color="#C9E1FF"/>
+    </linearGradient>
+    <linearGradient id="tournament-cup" x1="120" y1="39" x2="120" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4D678C"/>
+      <stop offset="1" stop-color="#334D72"/>
+    </linearGradient>
+  </defs>
+  <path d="M22 107C9 97 13 80 28 71C29 54 39 47 46 44C50 23 69 13 86 18C99 21 108 33 112 39C124 27 145 17 162 20C182 20 198 33 202 49C219 51 226 64 219 77C234 88 232 104 218 111H28Z" fill="url(#tournament-cloud)"/>
+  <path d="M24 98C39 83 57 85 66 96C79 80 101 85 110 100C125 86 145 90 150 101C170 89 187 91 196 101C205 97 217 100 224 109H22Z" fill="#D8E9FF"/>
+  <ellipse cx="120" cy="113" rx="102" ry="5" fill="#A9CDFB" fill-opacity=".7"/>
+  <g stroke="#263D5B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M110 27L106 20M120 24V15M130 27L134 20"/>
+    <path d="M87 44H71V53C71 69 83 77 99 77L95 69C85 68 79 62 79 53V51H88ZM153 44H169V53C169 69 157 77 141 77L145 69C155 68 161 62 161 53V51H152Z" fill="#AECBEF"/>
+    <path d="M115 80H125V91C125 95 129 98 135 100H105C111 98 115 95 115 91Z" fill="#AECBEF"/>
+    <path d="M86 39H154L151 58C149 74 137 84 120 84C103 84 91 74 89 58Z" fill="url(#tournament-cup)"/>
+    <rect x="84" y="35" width="72" height="6" rx="2" fill="#AECBEF"/>
+    <rect x="101" y="99" width="38" height="5" rx="1.5" fill="#AECBEF"/>
+    <rect x="96" y="104" width="48" height="6" rx="1.5" fill="#425F86"/>
+  </g>
+  <path d="M91 43H104C104 58 107 72 114 80C102 78 94 69 92 57Z" fill="#7D9CC6" fill-opacity=".27"/>
+  <path d="M120 48L124 56L133 57.3L126.5 63.6L128 72.5L120 68.3L112 72.5L113.5 63.6L107 57.3L116 56Z" fill="#9CC8FF" stroke="#C3DFFF" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M88 37H152" stroke="#EAF4FF" stroke-width="1.5"/>
+  <g>
+    <path d="M28 94C23 90 25 84 29 81C28 72 37 68 40 78C45 80 47 86 43 90C44 95 38 99 34 98Z" fill="#7DB5FA"/>
+    <path d="M30 90C27 88 29 83 32 81C32 77 34 75 36 75C35 83 36 92 37 98C33 98 30 95 30 90Z" fill="#5C9EEB"/>
+    <path d="M35 84V109M35 98L30 94M35 93L40 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+    <path d="M199 94C194 90 196 84 200 81C199 72 208 68 211 78C216 80 218 86 214 90C215 95 209 99 205 98Z" fill="#7DB5FA"/>
+    <path d="M201 90C198 88 200 83 203 81C203 77 205 75 207 75C206 83 207 92 208 98C204 98 201 95 201 90Z" fill="#5C9EEB"/>
+    <path d="M206 84V109M206 98L201 94M206 93L211 89" stroke="#284B76" stroke-width="1.65" stroke-linecap="round"/>
+  </g>
+  <path d="M48 109L51 103L55 109M179 109L183 104L187 109" fill="#78AAF0"/>
+  <path d="M14 110H226" stroke="#263D5B" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

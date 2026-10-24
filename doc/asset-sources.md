@@ -41,7 +41,7 @@ The six approved athlete cutouts and six textured sport backgrounds are supplied
 | Table tennis | `table-tennis.webp` | `table-tennis-background.webp` |
 | Volleyball | `volleyball.webp` | `volleyball-background.webp` |
 
-The 17 original images and their 18 responsive versions are in `frontend/public/assets/`. The app makes no remote image request. `frontend/public/favicon.ico` is the local blue/white T favicon. `SportIcon.jsx` contains the Hugeicons outlines. Keep their MIT notice with the assets. Do not use an institute logo without approval.
+The 17 original images and their 18 responsive versions are in `frontend/public/assets/`. The app makes no remote image request. `frontend/public/favicon.ico` is derived from the supplied header logo (24 October 2026). `SportIcon.jsx` contains the Hugeicons outlines. Keep their MIT notice with the assets. Do not use an institute logo without approval.
 
 ## Responsive artwork — 9 October 2026
 
@@ -68,3 +68,18 @@ Both portrait layers use the same `srcSet` and `sizes`. The browser selects a so
 | `volleyball-background.webp` | `volleyball-background-640.webp` | 640 × 480 |
 
 At widths up to 767px, hero panels and live-match cards use the same phone texture URLs. This avoids downloading both sizes for the two sections. At larger widths they use the originals. The live-match overlay remains at 56%. Keep the hero portraits eager because they are visible at page entry.
+
+## Public illustrations — 24 October 2026
+
+Arnav supplied the sport-card and empty-state bundles with the handoff. No separate creator or license was supplied. Use them as owner-supplied assets; no third-party license is claimed. Source SVGs are preserved unchanged. They contain no script or external image reference. Preview screenshots and preview HTML remain local and are not application assets.
+
+| App folder | Supplied originals | Derived variants and use |
+| --- | --- | --- |
+| `frontend/public/assets/tournament-sports/` | Six 1254 × 1254 WebPs: `football`, `basketball`, `lawn-tennis` (supplied as `tennis`), `table-tennis`, `badminton`, `volleyball` | Square 320px and 640px WebPs, quality 88, plus originals. Tournament detail sport links only. |
+| `frontend/public/assets/empty/home/` | `live-matches-empty.svg`, `tournaments-empty.svg`, each 240 × 128 | Matching 240px and 480px WebPs, quality 88. Empty homepage sections only. |
+| `frontend/public/assets/empty/tournaments/` | `tournaments-live-empty.svg`, `upcoming-tournaments-empty.svg`, `past-tournaments-empty.svg`, each 240 × 128 | Matching 240px and 480px WebPs, quality 88. Empty tournament-index sections only. |
+| `frontend/public/assets/empty/sports/` | `<sport>-live-empty.svg`, `<sport>-upcoming-empty.svg`, `<sport>-past-empty.svg` for each of the six stable sport keys; 18 SVGs, each 240 × 128 | Matching 240px and 480px WebPs, quality 88. Empty sport sections only. The duplicate tournament SVG in the supplied sport bundle is not copied. |
+
+The variants were made with the already installed Sharp library. No image content was added. HTML text follows the supplied previews and SVG titles, with the approved site font and spacing. Images have empty alt text because the adjacent HTML names the state or sport. The source SVG is the fallback; responsive WebP candidates, explicit dimensions and lazy loading prevent unnecessary image loading and layout shifts.
+
+The supplied header logo also produces `logo-icon-64.png` and `logo-touch-180.png`: contained, undistorted on white 64px and 180px squares. `frontend/public/favicon.ico` contains the same 64px PNG. Browser tabs and the Apple home-screen icon now use this logo; the former T icon is replaced.

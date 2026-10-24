@@ -43,7 +43,7 @@ test('tournament routes read the API once on entry, group by phase, merge only t
   await expect(page).toHaveTitle('Tournaments | Campuscores');
   await expect(page.locator('#live-tournaments .tournament-card')).toHaveCount(1);
   await expect(page.locator('#past-tournaments .tournament-card')).toHaveCount(1);
-  await expect(page.locator('#upcoming-tournaments')).toContainText('No upcoming tournaments right now.');
+  await expect(page.locator('#upcoming-tournaments')).toContainText('Nothing on the calendar yet');
   await page.locator('#live-tournaments .tournament-card').click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cup');
   await expect(page.locator('.tournament-facts')).toContainText('Main ground');
@@ -141,7 +141,7 @@ test('sport page read failure marks only Upcoming and Past and Try again reads o
   socket.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [{ ...card, sport: 'volleyball' }] }));
   await expect(page.locator('#live .sport-card')).toHaveCount(1);
   await page.locator('#upcoming').getByRole('button', { name: 'Try again' }).click();
-  await expect(page.locator('#upcoming')).toContainText('No upcoming matches right now.');
-  await expect(page.locator('#past')).toContainText('No past matches right now.');
+  await expect(page.locator('#upcoming .public-empty')).toBeVisible();
+  await expect(page.locator('#past .public-empty')).toBeVisible();
   expect(reads).toBe(2);
 });

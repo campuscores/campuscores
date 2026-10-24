@@ -212,3 +212,12 @@ describe('toPublic', () => {
     expect(() => toPublic('account', {})).toThrow();
   });
 });
+
+
+it.skipIf(!env.HYPERDRIVE_CACHED)('public tournament and match reads send no-store while keeping the database cache split', async () => {
+  for (const path of ['/api/tournaments', '/api/tournaments/1', '/api/matches/1', '/api/sports/football/matches']) {
+    const response = await worker(path);
+    expect(response.status, path).toBe(200);
+    expect(response.headers.get('Cache-Control'), path).toBe('no-store');
+  }
+});

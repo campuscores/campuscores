@@ -5,11 +5,21 @@
 .tournament-facts dt { color: #50688c; font-size: 14px; font-weight: 600; }
 .tournament-facts dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
 .tournament-description { max-width: 70ch; margin: 0 0 32px; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
-.tournament-sports { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.tournament-sports .sport-link { width: 100%; }
+.tournament-sports { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.tournament-sport-link { position: relative; display: block; min-height: 280px; overflow: hidden; border-radius: 16px; background: #fff; }
+.tournament-sport-link img { position: absolute; inset: 40px 0 0; width: 100%; height: calc(100% - 40px); object-fit: contain; object-position: right bottom; }
+.tournament-sport-link span { position: relative; display: block; padding: 20px; font-size: 20px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.tournament-sport-link:hover { background: #eaf2ff; }
+.tournament-sport-link:focus-visible { outline-offset: 4px; }
+@media (min-width: 1201px) {
+  .tournament-sport-link { min-height: 300px; }
+  .tournament-sport-link img { inset-block-start: 4px; height: calc(100% - 4px); }
+  .tournament-sport-link span { position: absolute; left: 2px; bottom: 2px; padding: 20px; }
+}
 .public-retry { margin-bottom: 18px; }
 
 @media (max-width: 767px) {
   .tournament-sports { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .tournament-sports .sport-link { white-space: normal; }
+  .tournament-sport-link { min-height: clamp(200px, 46vw, 250px); }
+  .tournament-sport-link span { padding: 16px 12px; font-size: 17px; }
 }

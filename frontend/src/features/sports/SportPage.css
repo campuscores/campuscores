@@ -178,3 +178,34 @@ html:has(.sport-dialog[open]) { overflow: hidden; }
 .sport-score-scroll { max-width: 100%; overflow-x: auto; }
 .sport-score-scroll table { table-layout: auto; }
 .sport-score-scroll th, .sport-score-scroll td { min-width: 32px; }
+
+.sport-dialog-round { display: none; }
+@media (max-width: 767px) {
+  .sport-dialog-hero { padding: max(16px, env(safe-area-inset-top)) 20px 42px; }
+  .sport-dialog-top .match-meta { font-size: 14px; line-height: 1.5; flex-wrap: wrap; }
+  .sport-dialog-category { display: none; }
+  .sport-dialog-round { display: inline; }
+  .sport-dialog-close { font-size: 16px; }
+  .sport-dialog .match-overview { margin: 28px 0 16px; font-size: clamp(18px, 5vw, 24px); gap: 12px; }
+  .sport-dialog .match-overview > span { overflow-wrap: anywhere; }
+  .sport-dialog .match-overview strong { font-size: clamp(40px, 12vw, 52px); }
+  .sport-dialog-status { font-size: 16px; line-height: 1.5; }
+  .sport-dialog-details { padding: 20px 16px max(24px, env(safe-area-inset-bottom)); }
+  .sport-score-table { max-width: 100%; overflow-x: auto; }
+  .sport-score-table:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  .sport-score-table table { table-layout: auto; }
+  .sport-dialog-details th, .sport-dialog-details td { min-width: 24px; padding: 16px 2px; font-size: 16px; }
+  .sport-dialog-details th:first-child { width: 40%; min-width: 80px; }
+  .sport-dialog-details thead th { font-size: 14px; }
+  .sport-dialog .sport-team { font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+  .sport-dialog .sport-player { font-size: 15px; overflow-wrap: anywhere; }
+  .sport-dialog .winner-tag, .sport-dialog .sport-legend { font-size: 14px; line-height: 1.5; }
+  .sport-dialog .sport-legend { gap: 8px 16px; padding-top: 16px; }
+  .sport-dialog .sport-extra { margin-top: 20px; padding-top: 20px; }
+  .sport-dialog .sport-extra h3 { font-size: 14px; }
+  .sport-dialog .sport-scorers li { font-size: 16px; }
+  .sport-dialog .sport-info { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; margin-top: 24px; padding-top: 20px; }
+  .sport-dialog .sport-info > div:last-child { grid-column: 1 / -1; }
+  .sport-dialog .sport-info dt { font-size: 14px; }
+  .sport-dialog .sport-info dd { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+}

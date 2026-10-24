@@ -307,3 +307,11 @@ Confirmed by Arnav.
 - Match Scorer logins are shared event accounts. They cannot delete themselves (`DELETE /api/me` 403 `SCORER_ACCOUNT_MANAGED`; no Delete link). A Super Admin disables them.
 - One device scores a match. Score controls stay off until this device holds the lease. **Take over scoring** discards this device's unsent actions and loads the server score first, so two devices' points never add up. Limit: a scoring page opened while offline cannot score until it gets the lease.
 - Public tournament list and detail reads use the uncached Hyperdrive pool, so a status change (for example Completed) shows on the next read.
+
+## Phone details and public illustrations — 24 October 2026
+
+Arnav approved the larger phone match dialog in the handoff: sport and round, large side names and score, live game state, a readable score table and legend, then a two-column Date/Time/Tournament/Round grid and full-width Venue. Desktop keeps its existing layout. Use the supplied public empty-state SVGs and tournament sport illustrations, with the established font, colors and spacing. Load an illustration only where it is rendered; keep loading and failed reads distinct from an empty result.
+
+## Scoring on unreliable connections — 24 October 2026
+
+Arnav delegated the remaining reliability choices. Prioritize slow and disconnected networks. One staff login may score different assigned matches on different devices; leases stay per match. A loaded lease holder can keep saving pending actions offline. Preserve the durable queue, action IDs and server authorization on reconnect. One match still has one scoring device; a takeover must not combine two devices' unsent scores. Initial access needs a connection to verify the assignment and acquire the lease. Cold offline page loading is not supported. Bound stalled requests and retry score delivery without counting an action twice. Do not silently discard a saved action after a connection failure.

@@ -6,7 +6,7 @@
 // routes read. The device clock runs outside India time, so the expiry text proves the IST conversion.
 import { test, expect } from '@playwright/test';
 import { istDate, timeText } from '../../shared/time.mjs';
-import { expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabTo } from './helpers.js';
+import { expectNoCode, held, mockStaff, REPLIES, STAFF_APP as APP, tabKey, tabTo } from './helpers.js';
 import { adminApi, fillerStaff, STAFF } from './admin-fakes.js';
 
 test.use({ locale: 'en-GB', timezoneId: 'America/Los_Angeles' });
@@ -39,9 +39,6 @@ const expiryText = expiresAt => {
 // Every code the admin endpoints return; none may show (Req 20.3).
 const CODES = ['INVITE_PENDING', 'CLERK_UNAVAILABLE', 'INVITE_CLOSED', 'LAST_SUPER_ADMIN', 'OWNER_TRANSFER_REQUIRED', 'REASON_REQUIRED',
   'ALREADY_DISABLED', 'ALREADY_ACTIVE', 'ACCOUNT_EXISTS', 'ROLE_FORBIDDEN', 'email:', 'role:'];
-// macOS WebKit follows Safari: plain Tab skips links and buttons; Option+Tab reaches every item.
-const tabKey = browserName => (browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
-const shiftTab = browserName => (tabKey(browserName) === 'Tab' ? 'Shift+Tab' : 'Alt+Shift+Tab');
 
 test.beforeEach(async ({ page }) => {
   page.errors = [];
@@ -49,10 +46,10 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => { expect(page.errors).toEqual([]); });
 
-test('Admin home shows the pending count; "Invite staff" by keyboard only sends { email, role } and names the IST expiry', async ({ page, browserName }) => {
+test('Admin home shows the pending count; "Invite staff" by keyboard only sends { email, role } and names the IST expiry', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   await page.goto(`${APP}/admin`);
   await expect(heading(page)).toHaveText('Admin home');
   await expect(heading(page)).toBeFocused();
@@ -148,7 +145,7 @@ test('A double submit of Invite staff sends one request; a 401 offers "Sign in a
   expect(api.sent('POST', '/invites').map(r => r.body)).toEqual(Array(2).fill({ email: 'ravi@example.com', role: 'SUPER_ADMIN' }));
 });
 
-test('Staff list "Load more" by keyboard only appends the next 50-row page and keeps the loaded rows', async ({ page, browserName }) => {
+test('Staff list "Load more" by keyboard only appends the next 50-row page and keeps the loaded rows', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page, { staff: [...STAFF(), ...fillerStaff(51)] });
   await page.goto(`${APP}/admin/staff`);
@@ -160,7 +157,7 @@ test('Staff list "Load more" by keyboard only appends the next 50-row page and k
   await expect(rows(page).nth(3)).toContainText('Mira Coach');
   await expect(rows(page).nth(3)).toContainText('Spring Cup');
   await expect(rows(page).nth(49)).toContainText('scorer46@example.com');
-  await tabTo(page, button(page, 'Load more'), tabKey(browserName), 80);
+  await tabTo(page, button(page, 'Load more'), tabKey(page), 80);
   await page.keyboard.press('Enter');
   await expect(rows(page)).toHaveCount(56);
   await expect(rows(page).first()).toContainText('Arnav Admin');
@@ -264,10 +261,10 @@ test('Empty Staff list and Pending invitations keep the heading with "Invite sta
   await expect(link(page, 'Pending invitations: 0')).toBeVisible();
 });
 
-test('Role change by keyboard only: the dialog names each effect, opens on Cancel, and sends { role, reason }', async ({ page, browserName }) => {
+test('Role change by keyboard only: the dialog names each effect, opens on Cancel, and sends { role, reason }', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   await page.goto(`${APP}/admin/staff/3`);
   await expect(heading(page)).toHaveText('Kabir Rao');
   await expect(heading(page)).toBeFocused();
@@ -280,7 +277,7 @@ test('Role change by keyboard only: the dialog names each effect, opens on Cance
   await expect(dialog(page).getByRole('heading')).toHaveText('Change the role of Kabir Rao?');
   await expect(dialog(page).getByRole('listitem')).toHaveText(['The role changes from Tournament Manager to Match Scorer.', 'They lose access to the sports they manage.']);
   await expect(inDialog(page, 'Cancel')).toBeFocused();
-  await tabTo(page, dialogField(page, 'Reason (optional)'), shiftTab(browserName));
+  await tabTo(page, dialogField(page, 'Reason (optional)'), tabKey(page, 'Shift+Tab'));
   await page.keyboard.type('Moved to scoring');
   await tabTo(page, inDialog(page, 'Change role'), tab);
   await page.keyboard.press('Enter');
@@ -293,10 +290,10 @@ test('Role change by keyboard only: the dialog names each effect, opens on Cance
   expect(api.sent('POST', '/accounts/3/role').map(r => r.body)).toEqual([{ role: 'MATCH_OPERATOR', reason: 'Moved to scoring' }]);
 });
 
-test('Disable by keyboard only: Escape returns focus, a late close keeps a reopened dialog, a Reason is required, then enable', async ({ page, browserName }) => {
+test('Disable by keyboard only: Escape returns focus, a late close keeps a reopened dialog, a Reason is required, then enable', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   await page.goto(`${APP}/admin/staff/4`);
   await expect(heading(page)).toHaveText('Asha Singh');
   const disable = button(page, 'Disable account');
@@ -349,10 +346,10 @@ test('Disable by keyboard only: Escape returns focus, a late close keeps a reope
   expect(api.sent('POST', '/accounts/4/enable').map(r => r.body)).toEqual([{}]);
 });
 
-test('Ownership transfer by keyboard only from All tournaments: 400 email errors keep the email, then { email } is sent', async ({ page, browserName }) => {
+test('Ownership transfer by keyboard only from All tournaments: 400 email errors keep the email, then { email } is sent', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   await page.goto(`${APP}/admin/tournaments`);
   await expect(heading(page)).toHaveText('All tournaments');
   await expect(rows(page).first()).toContainText('Mira Coach');
@@ -370,7 +367,7 @@ test('Ownership transfer by keyboard only from All tournaments: 400 email errors
     ['asha@example.com', 'Enter the email of an active tournament manager.'],
     ['mira@example.com', 'This tournament manager already owns this tournament.'],
   ]) {
-    await tabTo(page, email, shiftTab(browserName));
+    await tabTo(page, email, tabKey(page, 'Shift+Tab'));
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type(address);
     await tabTo(page, inDialog(page, 'Transfer ownership'), tab);
@@ -381,7 +378,7 @@ test('Ownership transfer by keyboard only from All tournaments: 400 email errors
     await expect(dialog(page).getByRole('heading')).toHaveText('Transfer ownership of Spring Cup');
     await expectNoCode(page, CODES);
   }
-  await tabTo(page, email, shiftTab(browserName));
+  await tabTo(page, email, tabKey(page, 'Shift+Tab'));
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type(' Kabir@Example.com ');
   await tabTo(page, inDialog(page, 'Transfer ownership'), tab);
@@ -419,10 +416,10 @@ test('An owner gets no role change or disable control, only "Transfer ownership"
   expect(api.sent('POST', '/admin/tournaments/spring-cup/owner').map(r => r.body)).toEqual([{ email: 'kabir@example.com', reason: 'Mira is away' }]);
 });
 
-test('Cancel invitation by keyboard only: soonest expiry first in IST, the dialog opens on Cancel, and the row goes', async ({ page, browserName }) => {
+test('Cancel invitation by keyboard only: soonest expiry first in IST, the dialog opens on Cancel, and the row goes', async ({ page }) => {
   await mockStaff(page, { me: REPLIES.admin });
   const api = await adminApi(page);
-  const tab = tabKey(browserName);
+  const tab = tabKey(page);
   const [first, second] = api.state.invitations;
   await page.goto(`${APP}/admin`);
   await tabTo(page, link(page, 'Pending invitations: 2'), tab);

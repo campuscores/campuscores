@@ -146,8 +146,9 @@ function fixtures() {
         const { rows } = await client.query('SELECT id::text FROM match_operator_assignments WHERE match_id = ANY($1)', [matches]);
         await client.query(
           `DELETE FROM admin_audit_log WHERE (entity = 'score_actions' AND actor_account_id = ANY($1))
-             OR (entity = 'match_operator_assignments' AND entity_id = ANY($2))`,
-          [actors, rows.map((r) => r.id)],
+             OR (entity = 'match_operator_assignments' AND entity_id = ANY($2))
+             OR (entity = 'scorer_leases' AND entity_id = ANY($3))`,
+          [actors, rows.map((r) => r.id), matches],
         );
         for (const table of ['outbox_events', 'match_snapshots', 'scorer_leases', 'score_actions', 'match_operator_assignments']) {
           await client.query(`DELETE FROM ${table} WHERE match_id = ANY($1)`, [matches]);
@@ -163,6 +164,26 @@ const EMPTY = { actions: 0, snapshots: 0, outbox: 0, undelivered: 0, audits: 0, 
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/matches/:id/actions against Postgres', () => {
   const f = fixtures();
   afterAll(() => f.cleanup());
+
+  it('one shared scorer account scores two different matches on different devices without sharing leases or sequences', async () => {
+    const first = await f.scorer();
+    const second = await f.scorer({ lease: false });
+    await one('UPDATE match_operator_assignments SET account_id = $1 WHERE id = $2 RETURNING id', [first.accountId, second.assignmentId]);
+    const granted = await api('POST', `/api/matches/${second.matchId}/lease`, { user: first.user, body: { deviceId: second.deviceId } });
+    expect(granted.status).toBe(200);
+    const responses = await Promise.all([
+      first.post(),
+      api('POST', `/api/matches/${second.matchId}/actions`, { user: first.user, body: { actionId: crypto.randomUUID(), clientSeq: 1, deviceId: second.deviceId, type: 'POINT', payload: { side: 1 } } }),
+    ]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    const accepted = await Promise.all(responses.map(response => response.json()));
+    expect(accepted.map(result => result.seq)).toEqual([1, 1]);
+    expect(accepted.map(result => result.snapshot.sides.map(side => side.points))).toEqual([[1, 0], [0, 1]]);
+    const firstLease = await one('SELECT device_id, last_client_seq FROM scorer_leases WHERE match_id = $1', [first.matchId]);
+    const secondLease = await one('SELECT device_id, last_client_seq FROM scorer_leases WHERE match_id = $1', [second.matchId]);
+    expect(firstLease).toEqual({ device_id: first.deviceId, last_client_seq: 1 });
+    expect(secondLease).toEqual({ device_id: second.deviceId, last_client_seq: 1 });
+  });
 
   it('stores action, snapshot, audit and outbox in one transaction with seq = last_seq + 1, then delivers', async () => {
     const s = await f.scorer();

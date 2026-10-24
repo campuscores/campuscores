@@ -9,7 +9,7 @@ export const shouldAccept = (storedSeq, seq) => Number.isSafeInteger(seq) && seq
 export const LIVE_STATUSES = new Set(['LIVE', 'APPROVED']);
 export function applyCard(state, matchId, card, seq) {
   if (!shouldAccept(state.cards[matchId]?.seq, seq)) return null;
-  return { seq: state.seq + 1, cards: { ...state.cards, [matchId]: { ...card, seq } } };
+  return { ...state, seq: state.seq + 1, cards: { ...state.cards, [matchId]: { ...card, seq } } };
 }
 export const liveCards = (state) => Object.values(state.cards).filter((card) => LIVE_STATUSES.has(card.status));
 

@@ -11,11 +11,11 @@ const START_STATUS = { START_TOO_EARLY: 403, TOURNAMENT_NOT_ONGOING: 409, MATCH_
 // Row shape of GET /api/operator/matches (backend/src/routes/assignments.js): canStart/startReason only for SCHEDULED.
 // `refuseStart` is the code POST /actions gives a START although the list said canStart (database time moved on).
 async function mockScoring(page, sport, { scheduled = false, custom = {}, isToday = true, startReason = null, refuseStart = null, scheduledAt = new Date().toISOString(),
-  defaultFormat = DEFAULT_FORMATS[sport], validNow = true, dropFinal = false, leaseHeld = false } = {}) {
+  defaultFormat = DEFAULT_FORMATS[sport], validNow = true, dropFinal = false, stallPoint = false, leaseHeld = false } = {}) {
   const format = validateFormat(sport, { ...DEFAULT_FORMATS[sport], ...custom });
   const match = { id: '7', sport, kind: 'BRACKET', status: scheduled ? 'SCHEDULED' : 'LIVE', sides: [{ name: 'Alpha' }, { name: 'Bravo' }], venue: 'Court 1', stage: 'SF1', scheduledAt, isToday, validNow,
     canStart: scheduled && !startReason, startReason: scheduled ? startReason : null, notScored: false, defaultFormat, ...(scheduled ? {} : { format }) };
-  const server = { match, actions: [], requests: [], clientSeq: 0, responses: new Map(), seq: 0, snapshot: scheduled ? null : scoreMatch({ matchId: '7', sport, sides: match.sides, format }), dropped: false };
+  const server = { match, actions: [], requests: [], clientSeq: 0, responses: new Map(), seq: 0, snapshot: scheduled ? null : scoreMatch({ matchId: '7', sport, sides: match.sides, format }), dropped: false, stalled: false, leaseCalls: 0 };
   const reply = (route, body, status = 200) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
   await page.addInitScript(stubClerk, 'operator-token');
   await page.route('https://clerk.operator.test/**', route => route.abort());
@@ -28,7 +28,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
     if (path === '/api/matches/7') return reply(route, { match: { ...match, seq: server.seq, snapshot: server.snapshot } });
     // `leaseHeld`: another device holds the lease until this one takes over (backend leases.js LEASE_HELD).
     if (path.endsWith('/lease') && leaseHeld && req.method() === 'POST' && !req.postDataJSON().takeover) return reply(route, { error: { code: 'LEASE_HELD', message: 'held', requestId: 'req-test' } }, 409);
-    if (path.endsWith('/lease')) return reply(route, { lease: { lastClientSeq: server.clientSeq } });
+    if (path.endsWith('/lease')) { server.leaseCalls++; return reply(route, { lease: { lastClientSeq: server.clientSeq, decision: server.leaseCalls === 1 ? 'GRANT' : 'KEEP' } }); }
     if (!path.endsWith('/actions')) return reply(route, { error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
     expect(req.headers().authorization).toBe('Bearer operator-token');
     const body = req.postDataJSON(); server.requests.push(body);
@@ -42,6 +42,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
     server.seq++; server.clientSeq = body.clientSeq; server.snapshot = next; match.status = next.status;
     server.actions.push({ ...body, seq: server.seq });
     const result = { actionId: body.actionId, seq: server.seq, snapshot: next }; server.responses.set(body.actionId, result);
+    if (stallPoint && body.type === 'POINT' && !server.stalled) { server.stalled = true; return; }
     if (dropFinal && body.type === 'FINALIZE' && !server.dropped) { server.dropped = true; return route.abort('failed'); }
     return reply(route, result);
   });
@@ -239,4 +240,58 @@ test('a tied football match keeps undo but offers no unapproved deciding period 
   await expect(page.getByRole('button', { name: 'Start extra period', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Confirm final result', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo last action' }).click(); await accepted(page, 2); await expect(point(page)).toBeEnabled();
+});
+
+
+test('a stalled accepted point times out and retries the same action and sequence after a lease recheck', async ({ page }) => {
+  await page.clock.install();
+  const server = await mockScoring(page, 'badminton', { stallPoint: true });
+  await open(page);
+  await point(page).click();
+  await expect.poll(() => server.requests.length).toBe(1);
+  await expect(page.locator('.console-status')).toHaveText('Syncing · 1 queued');
+  await page.clock.runFor(16000);
+  await expect.poll(() => server.leaseCalls).toBeGreaterThanOrEqual(2);
+  await page.clock.runFor(2000);
+  await accepted(page, 1);
+  expect(server.requests.length).toBeGreaterThanOrEqual(2);
+  expect(server.requests.every(request => JSON.stringify(request) === JSON.stringify(server.requests[0]))).toBe(true);
+  expect(server.actions).toHaveLength(1);
+  await point(page, 1, 'Bravo').click();
+  await accepted(page, 2);
+  expect(server.requests.at(-1).clientSeq).toBe(2);
+});
+
+test('a transient lease failure retries automatically and still prevents scoring before access is held', async ({ page }) => {
+  await page.clock.install();
+  const server = await mockScoring(page, 'badminton');
+  let calls = 0;
+  await page.route(`${API}/matches/7/lease`, route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    calls++;
+    return calls === 1 ? route.abort() : route.fallback();
+  });
+  await page.goto(`${APP}/operator/matches/7/score`);
+  await expect.poll(() => calls).toBeGreaterThanOrEqual(1);
+  await page.clock.runFor(2000);
+  await expect(point(page)).toBeEnabled();
+  await point(page).click(); await accepted(page, 1);
+  expect(server.actions).toHaveLength(1);
+});
+
+
+test('an interrupted initial read offers recovery and leaves stored actions intact', async ({ page }) => {
+  const server = await mockScoring(page, 'badminton');
+  let reads = 0;
+  await page.route(`${API}/operator/matches`, route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    reads++;
+    return reads === 1 ? route.abort() : route.fallback();
+  });
+  await page.goto(`${APP}/operator/matches/7/score`);
+  await expect(page.getByText('Could not load this match.')).toBeVisible();
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(point(page)).toBeEnabled();
+  await point(page).click(); await accepted(page, 1);
+  expect(server.actions).toHaveLength(1);
 });
