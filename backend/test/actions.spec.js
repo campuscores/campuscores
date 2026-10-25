@@ -168,7 +168,7 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/matches/:id/actions against
   it('separates accepted/replayed requests from delayed publication, and survives a failed metrics sink', async () => {
     const s = await f.scorer();
     const points = [];
-    const e = { STAGING_OBSERVABILITY: 'true', APP_METRICS: { writeDataPoint: p => points.push(p) }, ROOMS: failingRooms() };
+    const e = { APP_OBSERVABILITY: 'true', APP_METRICS: { writeDataPoint: p => points.push(p) }, ROOMS: failingRooms() };
     const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const command = { actionId: crypto.randomUUID(), clientSeq: 1 };

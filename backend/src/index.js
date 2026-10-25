@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { AppError, onError, reportError, requestId } from './http.js';
-import { measureRequest, stagingMetrics } from './metrics.js';
+import { measureRequest, metricsEnabled } from './metrics.js';
 import { telemetryRoutes } from './routes/telemetry.js';
 import { sweep } from './outbox.js';
 import { parseRoom } from './rooms.js';
@@ -44,5 +44,5 @@ app.notFound(() => {
 });
 export default {
   fetch: app.fetch,
-  scheduled: (controller, env, ctx) => ctx.waitUntil(sweep(env, ctx).catch(err => { if (stagingMetrics(env)) reportError(env, err, { code: 'SWEEP_FAILED' }); throw err; })), // Requirement 17.1: cron Outbox_Sweep
+  scheduled: (controller, env, ctx) => ctx.waitUntil(sweep(env, ctx).catch(err => { if (metricsEnabled(env)) reportError(env, err, { code: 'SWEEP_FAILED' }); throw err; })), // Requirement 17.1: cron Outbox_Sweep
 };

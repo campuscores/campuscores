@@ -1,4 +1,4 @@
-import { stagingMetrics } from './metrics.js';
+import { metricsEnabled } from './metrics.js';
 
 const SECRET_KEY = /token|secret|password|authorization|cookie|connection/i;
 // URL schemes are case-insensitive, so match the value prefixes case-insensitively too.
@@ -36,7 +36,7 @@ export function onError(err, c) {
   const code = known ? err.code : 'INTERNAL';
   const requestId = c.get('requestId');
   c.set('metricCode', code);
-  if (!stagingMetrics(c.env)) console.log(JSON.stringify(redact({ requestId, code, name: err?.name })));
+  if (!metricsEnabled(c.env)) console.log(JSON.stringify(redact({ requestId, code, name: err?.name })));
   else if (!known || err.status >= 500) reportError(c.env, err, { code, requestId });
   return c.json(
     { error: { code, message: known ? err.message : 'Internal error', requestId } },
@@ -46,7 +46,7 @@ export function onError(err, c) {
 
 // Keep useful origin locations without copying messages, causes, SQL or arbitrary stack text.
 export function reportError(env, err, metadata) {
-  if (!stagingMetrics(env)) {
+  if (!metricsEnabled(env)) {
     console.log(JSON.stringify(redact({ ...metadata, name: err?.name })));
     return;
   }

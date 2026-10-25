@@ -29,7 +29,7 @@
       },
       "workers_dev": true, // Clerk development instance; Clerk production refuses *.workers.dev
       "vars": {
-        "STAGING_OBSERVABILITY": "true",
+        "APP_OBSERVABILITY": "true",
         "ENABLE_TEST_ENGINE": "true", // staging scores with the Test_Engine; production must not set it
         "CLERK_PUBLISHABLE_KEY": "pk_test_bmF0aW9uYWwtYWxwYWNhLTk2MDIuY2xlcmsuYWNjb3VudHMuZGV2JA",
         "AUTHORIZED_PARTIES": "https://thaparlympics-staging.bhatiaarnav05.workers.dev",
@@ -43,16 +43,20 @@
       ]
     },
     "production": {
+      "upload_source_maps": true,
+      "analytics_engine_datasets": [{ "binding": "APP_METRICS", "dataset": "campuscores_production_metrics" }],
       "observability": {
         "enabled": true,
         "redact_query_string": true,
         "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false },
-        "traces": { "enabled": false }
+        "issues": { "enabled": true },
+        "traces": { "enabled": true, "head_sampling_rate": 0.01 }
       },
       "workers_dev": false,
       // Set the fail-closed request-limit failure mode on this route in the Cloudflare dashboard (Requirement 20.2).
       "routes": [{ "pattern": "campuscores.live/*", "zone_name": "campuscores.live" }],
       "vars": {
+        "APP_OBSERVABILITY": "true",
         "CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuY2FtcHVzY29yZXMubGl2ZSQ",
         "AUTHORIZED_PARTIES": "https://campuscores.live",
         "INVITE_REDIRECT_URL": "https://campuscores.live/sign-up"

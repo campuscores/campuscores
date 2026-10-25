@@ -8,11 +8,11 @@ import { measureRequest, metric } from '../src/metrics.js';
 import { parseRecovery } from '../src/routes/telemetry.js';
 import { api, one, testCtx } from './helpers.js';
 
-const bindings = () => ({ STAGING_OBSERVABILITY: 'true', APP_METRICS: { writeDataPoint: vi.fn() } });
+const bindings = () => ({ APP_OBSERVABILITY: 'true', APP_METRICS: { writeDataPoint: vi.fn() } });
 const recovery = { outcome: 'recovered', durationMs: 240, ageMs: 1500, pending: 3, retries: 2 };
 afterEach(() => vi.restoreAllMocks());
 
-it('uses only the staging dataset and allowlisted fields, even when a binding fails', () => {
+it('uses only an explicitly enabled binding and allowlisted fields, even when a binding fails', () => {
   const e = bindings();
   metric({ APP_METRICS: e.APP_METRICS }, 'http');
   expect(e.APP_METRICS.writeDataPoint).not.toHaveBeenCalled();
@@ -78,8 +78,8 @@ it('counts expected 4xx responses without generating staging log lines or Issues
   expect(e.APP_METRICS.writeDataPoint.mock.calls[0][0].doubles[7]).toBe(409);
 });
 
-it('does not activate recovery ingestion in production, even for a valid-looking body', async () => {
-  const e = bindings(); delete e.STAGING_OBSERVABILITY;
+it('does not activate recovery ingestion without explicit configuration', async () => {
+  const e = bindings(); delete e.APP_OBSERVABILITY;
   const res = await worker.fetch(new Request('https://example.com/api/operator/metrics', { method: 'POST', body: JSON.stringify(recovery) }), e, testCtx());
   expect(res.status).toBe(404);
   expect(e.APP_METRICS.writeDataPoint).not.toHaveBeenCalled();

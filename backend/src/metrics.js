@@ -1,6 +1,6 @@
 import { routePath } from 'hono/route';
 
-export const stagingMetrics = env => env?.STAGING_OBSERVABILITY === 'true';
+export const metricsEnabled = env => env?.APP_OBSERVABILITY === 'true';
 const EVENTS = new Set(['http', 'publish', 'broadcast', 'sweep', 'recovery']);
 const ACTIONS = new Set(['START', 'POINT', 'UNDO', 'END_SET', 'END_PERIOD', 'END_MATCH', 'FINALIZE', 'FOUL', 'CARD', 'SUBSTITUTION', 'EXTRA_PERIOD', 'REVERSE']);
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_:/.*-]{0,120}$/.test(value) ? value : '';
@@ -11,7 +11,7 @@ export function metric(env, event, {
   route = '', outcome = '', action = '', room = '', code = '', method = '',
   durationMs = 0, recipients = 0, bytes = 0, pending = 0, ageMs = 0, failures = 0, retries = 0, status = 0,
 } = {}) {
-  if (!stagingMetrics(env) || !EVENTS.has(event)) return;
+  if (!metricsEnabled(env) || !EVENTS.has(event)) return;
   try {
     env.APP_METRICS?.writeDataPoint({
       indexes: [event],
@@ -26,7 +26,7 @@ export function metric(env, event, {
 }
 
 export async function measureRequest(c, next) {
-  if (!stagingMetrics(c.env)) return next();
+  if (!metricsEnabled(c.env)) return next();
   const start = performance.now();
   try { await next(); }
   finally {

@@ -42,7 +42,7 @@ export default defineConfig({
       // never resolves. The fake Clerk key points at an unresolvable host; operator-console.spec.js injects a stub Clerk.
       command: 'npx vite build --outDir ../output/live-dist --emptyOutDir && npx vite preview --outDir ../output/live-dist --host 127.0.0.1 --port 4176 --strictPort',
       url: 'http://127.0.0.1:4176',
-      env: { VITE_STAGING_OBSERVABILITY: 'true', VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
+      env: { VITE_APP_OBSERVABILITY: 'true', VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
       reuseExistingServer: false,
       timeout: 120000,
     },

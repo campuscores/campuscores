@@ -6,7 +6,7 @@ import { engineFor } from '../engines/index.js';
 import { AppError, jsonBody, reportError, toPublic } from '../http.js';
 import { markDelivered, publishEvent, room } from '../outbox.js';
 import { decideAction, evaluateChain, loadScoringContext, payloadHash } from '../scoring.js';
-import { metric, stagingMetrics } from '../metrics.js';
+import { metric, metricsEnabled } from '../metrics.js';
 import { idParam } from './public.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,7 +54,7 @@ export const actionRoutes = new Hono();
 actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
   const matchId = idParam(c);
   const action = parseAction(await jsonBody(c));
-  if (stagingMetrics(c.env)) c.set('metricAction', action.type);
+  if (metricsEnabled(c.env)) c.set('metricAction', action.type);
   const hash = await payloadHash(action);
   await room(c.env, 'home').noteWrite(); // Write_Signal before BEGIN, so the sweep covers every committed write
 
@@ -125,7 +125,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
       return { seq, snapshot, delivery: { outboxId: outbox.id, matchId: match.id, seq, snapshot, card, private: privateMatch } };
     }),
   );
-  if (stagingMetrics(c.env)) c.set('metricOutcome', out.delivery ? 'accepted' : 'replay');
+  if (metricsEnabled(c.env)) c.set('metricOutcome', out.delivery ? 'accepted' : 'replay');
   if (out.delivery) c.executionCtx.waitUntil(deliver(c, out.delivery));
   return c.json({ actionId: action.actionId, seq: out.seq, snapshot: out.snapshot });
 });

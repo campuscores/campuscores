@@ -9,19 +9,18 @@ const prod = read('production');
 const staging = read('staging');
 
 describe('wrangler environments', () => {
-  it('enables Issues, sampled traces, source maps and the metrics dataset on staging only', () => {
-    expect(staging.observability.issues).toEqual({ enabled: true });
-    expect(staging.observability.traces).toMatchObject({ enabled: true, head_sampling_rate: 0.01 });
-    expect(staging.observability.logs).toMatchObject({ head_sampling_rate: 1, invocation_logs: false });
-    expect(staging.observability.redact_query_string).toBe(true);
-    expect(staging.upload_source_maps).toBe(true);
+  it('enables safe observability in each environment with separate datasets', () => {
+    for (const config of [staging, prod]) {
+      expect(config.observability.issues).toEqual({ enabled: true });
+      expect(config.observability.traces).toMatchObject({ enabled: true, head_sampling_rate: 0.01 });
+      expect(config.observability.logs).toMatchObject({ head_sampling_rate: 1, invocation_logs: false });
+      expect(config.observability.redact_query_string).toBe(true);
+      expect(config.upload_source_maps).toBe(true);
+      expect(config.vars.APP_OBSERVABILITY).toBe('true');
+      expect(config.vars).not.toHaveProperty('STAGING_OBSERVABILITY');
+    }
     expect(staging.analytics_engine_datasets).toEqual([{ binding: 'APP_METRICS', dataset: 'campuscores_staging_metrics' }]);
-    expect(staging.vars.STAGING_OBSERVABILITY).toBe('true');
-    expect(prod.vars).not.toHaveProperty('STAGING_OBSERVABILITY');
-    expect(prod.analytics_engine_datasets).toEqual([]);
-    expect(prod.upload_source_maps).not.toBe(true);
-    expect(prod.observability.issues?.enabled).not.toBe(true);
-    expect(prod.observability.traces.enabled).toBe(false);
+    expect(prod.analytics_engine_datasets).toEqual([{ binding: 'APP_METRICS', dataset: 'campuscores_production_metrics' }]);
   });
 
   it('production never enables the Test_Engine', () => {

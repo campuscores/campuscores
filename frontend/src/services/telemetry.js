@@ -1,6 +1,6 @@
 import { apiFetch } from './api.js';
 
-export const telemetryEnabled = import.meta.env?.VITE_STAGING_OBSERVABILITY === 'true';
+export const telemetryEnabled = import.meta.env?.VITE_APP_OBSERVABILITY === 'true';
 const STAGING = 'https://thaparlympics-staging.bhatiaarnav05.workers.dev';
 
 // A separate public token is required; never attach the production beacon to staging.

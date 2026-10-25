@@ -172,4 +172,4 @@ The [early completion contract](architecture.md#early-match-completion-contract-
 
 ## Staging observability integration — 25 October 2026
 
-Staging-only gating, the application metric schema and the staff recovery-summary endpoint are in [architecture.md](architecture.md#staging-operational-measurements). The [runbook](local-development.md#staging-observability-and-evidence) owns setup and collection. Keep the production environment unchanged. No score payload, idempotency hash, queue record, public DTO, room RPC or schema changes. Keep native metrics separate from client-reported observations and fault-test results.
+Environment gating, isolated datasets, the application metric schema and the staff recovery-summary endpoint are in [architecture.md](architecture.md#operational-measurements). The [runbook](local-development.md#staging-observability-and-evidence) owns setup and collection. The 25 October production rollout preserves database/Clerk bindings and existing automatic RUM. No score payload, idempotency hash, queue record, public DTO, room RPC or schema changes. Keep native metrics separate from client-reported observations and fault-test results.

@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { toPublic } from './http.js';
-import { metric, stagingMetrics } from './metrics.js';
+import { metric, metricsEnabled } from './metrics.js';
 import { withClient } from './db.js';
 
 export const ROOM_PATTERN = /^(home|match:[1-9][0-9]{0,17})$/;
@@ -124,7 +124,7 @@ export class MatchRoom extends DurableObject {
         failures += 1; // A closing socket must not stop delivery to the others.
       }
     }
-    if (stagingMetrics(this.env)) metric(this.env, 'broadcast', {
+    if (metricsEnabled(this.env)) metric(this.env, 'broadcast', {
       room: kind,
       recipients: sockets.length,
       bytes: new TextEncoder().encode(message).byteLength, failures,

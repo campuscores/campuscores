@@ -26,3 +26,13 @@ it('fails clearly on missing access, HTTP errors and unexpected result shapes', 
   mock.mockResolvedValue(new Response(JSON.stringify({ success: false })));
   await expect(exportMetrics('a'.repeat(32), 'token', from, to)).rejects.toThrow('Unexpected');
 });
+
+it('selects production only explicitly and never mixes the environment datasets', async () => {
+  const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ data: [] })));
+  const report = await exportMetrics('a'.repeat(32), 'private-token', from, to, 'production');
+  expect(report).toMatchObject({ environment: 'production', dataset: 'campuscores_production_metrics' });
+  expect(mock.mock.calls.every(([, options]) => options.body.includes('campuscores_production_metrics') && !options.body.includes('campuscores_staging_metrics'))).toBe(true);
+  mock.mockClear();
+  await expect(exportMetrics('a'.repeat(32), 'token', from, to, 'other')).rejects.toThrow('Choose staging or production');
+  expect(mock).not.toHaveBeenCalled();
+});
