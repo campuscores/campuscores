@@ -79,8 +79,9 @@ test('rails and date chips are native touch scroll containers', async ({ page })
     for (const selector of ['#past-results', '#upcoming-results', '#upcoming .date-chips']) {
       const row = page.locator(selector);
       await row.evaluate(el => { el.scrollLeft = 0; });
-      const { overflowX, scrollWidth, clientWidth } = await row.evaluate(el => ({ overflowX: getComputedStyle(el).overflowX, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+      const { overflowX, snap, scrollWidth, clientWidth } = await row.evaluate(el => ({ overflowX: getComputedStyle(el).overflowX, snap: getComputedStyle(el).scrollSnapType, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
       expect(overflowX, selector).toBe('auto');
+      if (selector !== '#upcoming .date-chips') expect(snap, 'touch card snapping at ' + viewport.width + 'px').toBe('x mandatory');
       // Wide screens can fit every chip; such a row has nothing to scroll.
       if (scrollWidth <= clientWidth) continue;
       overflowing++;
@@ -188,5 +189,28 @@ test('a short phone swipe advances the rail and settles on a card', async ({ pag
       return Math.min(...anchors.map(left => Math.abs(el.scrollLeft - left)));
     })).toBeLessThan(2);
     await expect(rail.locator(':scope > :not(.is-peek)')).toHaveCount(1);
+  }
+});
+
+
+test('slow touch swipes settle on cards in portrait, landscape and tablet layouts', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Touch-drag input uses Chromium CDP; physical Safari and Firefox remain manual checks');
+  await page.goto('/');
+  for (const width of [390, 844, 1024]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const selector of ['.match-scroll', '.tournament-scroll']) {
+      const rail = page.locator(selector).first();
+      expect(await rail.evaluate(el => getComputedStyle(el).scrollSnapType), 'touch snapping at ' + width + 'px').toBe('x mandatory');
+      for (const distance of [140, -140]) {
+        await rail.evaluate((el, distance) => { el.scrollLeft = distance > 0 ? 0 : el.scrollWidth; }, distance);
+        await swipe(page, rail, distance, 60);
+        await expect.poll(() => rail.evaluate(el => {
+          const max = el.scrollWidth - el.clientWidth;
+          const anchors = [...el.children].map(card => Math.min(max, card.offsetLeft));
+          anchors.push(0, max);
+          return Math.min(...anchors.map(left => Math.abs(el.scrollLeft - left)));
+        }), selector + ' at ' + width + 'px / ' + distance).toBeLessThan(2);
+      }
+    }
   }
 });
