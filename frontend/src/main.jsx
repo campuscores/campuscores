@@ -4,6 +4,7 @@ import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import App from './app/App.jsx';
 import './styles/global.css';
+import { startMonitoring, captureReactError } from './services/monitoring.js';
 import { startRum, telemetryEnabled } from './services/telemetry.js';
 
 if (telemetryEnabled) startRum(import.meta.env.VITE_CLOUDFLARE_WEB_ANALYTICS_TOKEN, window.location.origin, document);
@@ -12,7 +13,9 @@ if (telemetryEnabled) startRum(import.meta.env.VITE_CLOUDFLARE_WEB_ANALYTICS_TOK
 // so there is no <ScrollRestoration> here.
 const router = createBrowserRouter([{ path: '*', element: <App /> }]);
 
-createRoot(document.getElementById('root')).render(
+startMonitoring(router);
+
+createRoot(document.getElementById('root'), { onUncaughtError: captureReactError, onCaughtError: captureReactError, onRecoverableError: captureReactError }).render(
   <StrictMode>
     <RouterProvider router={router} />
   </StrictMode>,

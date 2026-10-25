@@ -1,4 +1,5 @@
 import { apiFetch } from './api.js';
+import { recordRecovery } from './monitoring.js';
 
 export const telemetryEnabled = import.meta.env?.VITE_APP_OBSERVABILITY === 'true';
 const STAGING = 'https://thaparlympics-staging.bhatiaarnav05.workers.dev';
@@ -46,5 +47,6 @@ export function recoveryObserver() {
 
 export function reportRecovery(summary, getToken) {
   if (!telemetryEnabled) return;
+  recordRecovery(summary);
   Promise.resolve().then(getToken).then(token => apiFetch('/operator/metrics', { method: 'POST', token, body: summary })).catch(() => {});
 }

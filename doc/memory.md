@@ -48,6 +48,10 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 Superseded for the current release by Arnav on 24 October 2026. He requested the tested changes on the main website before the expected 17:30 IST traffic, with existing tournaments, scheduled matches, final results and scorer access preserved. Promote `develop` through a release pull request to `main` after its checks pass. Keep the production database and Clerk bindings. Do not seed, reset, import staging data, run test score actions or change hosted data outside the normal application flow. Inspect production records before and after deployment. The private backup, physical-device and wider staff-layout checks remain separate deferred work; this request does not start the backup workflow.
 
+## Sentry staging experiments — 25 October 2026
+
+Confirmed by Arnav: use his GitHub Student Developer Pack entitlement and try Sentry error monitoring, logging, tracing, application metrics and session replay. Use separate Campuscores staging and production React projects in the `arnav-bhatia` organization. Validate the five signals on staging first. Replay is limited to masked public staging content; block authentication and staff screens, text, inputs, media and network bodies. Production keeps conservative error/trace reporting while Cloudflare retains its existing metrics. Do not change billing or authentication. Keep upload tokens in CI secrets, never Vite, source, chat or logs. Monitoring failures must not block rendering, score persistence, retries or live delivery.
+
 ## Touch rail and provider monitoring follow-up — 25 October 2026
 
 Confirmed by Arnav: touch swipes must settle on a card across phone browsers, including wide touch layouts. Preserve native scrolling and desktop mouse behavior. Keep production and staging measurements separate for the frontend, Worker, rooms, Hyperdrive, Neon and Clerk/Google sign-in. Reuse free native tools; no paid upgrade. Account-only setup and unavailable validation must remain explicit. Preserve live event data and scorer access.
