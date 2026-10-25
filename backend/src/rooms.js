@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { toPublic } from './http.js';
+import { metric, metricsEnabled } from './metrics.js';
 import { withClient } from './db.js';
 
 export const ROOM_PATTERN = /^(home|match:[1-9][0-9]{0,17})$/;
@@ -19,13 +20,16 @@ const WRITE_SIGNAL_MS = 60 * 1000;
 // One class for every Live_Room: `home` and `match:<id>`. Viewer sockets are receive-only.
 // Every Room_Message carries only Public_DTO fields (toPublic), whatever the caller passes.
 export class MatchRoom extends DurableObject {
-  async fetch() {
+  async fetch(request) {
+    const home = decodeURIComponent(new URL(request.url).pathname) === '/live/home';
+    // Keep the upgrade on the existing fetch contract while old and new room code coexist.
+    if (home) await this.pruneDeletedCards();
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server); // Hibernation API
     const message = await this.ctx.storage.get('message');
     if (message) server.send(message); // stored snapshot first, no database query
     // An empty home room still answers, so viewers leave "Connecting" before the first score.
-    else if (this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
+    else if (home || this.ctx.id.name === 'home') server.send(JSON.stringify({ type: 'snapshot', room: 'home', seq: 0, data: [] }));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -73,7 +77,7 @@ export class MatchRoom extends DurableObject {
     const data = toPublic('snapshot', snapshot);
     const message = JSON.stringify({ type: 'snapshot', room: this.ctx.id.name, seq, data });
     await this.ctx.storage.put({ seq, message });
-    this.#broadcast(message);
+    this.#broadcast(message, 'match');
     return true;
   }
 
@@ -110,13 +114,20 @@ export class MatchRoom extends DurableObject {
     return (await this.ctx.storage.get('lastWriteAt')) ?? 0;
   }
 
-  #broadcast(message) {
-    for (const ws of this.ctx.getWebSockets()) {
+  #broadcast(message, kind = 'home') {
+    const sockets = this.ctx.getWebSockets();
+    let failures = 0;
+    for (const ws of sockets) {
       try {
         ws.send(message);
       } catch {
-        // A closing socket must not stop delivery to the others.
+        failures += 1; // A closing socket must not stop delivery to the others.
       }
     }
+    if (metricsEnabled(this.env)) metric(this.env, 'broadcast', {
+      room: kind,
+      recipients: sockets.length,
+      bytes: new TextEncoder().encode(message).byteLength, failures,
+    });
   }
 }

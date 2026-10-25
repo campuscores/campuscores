@@ -22,6 +22,7 @@ async function mockScoring(page, sport, { scheduled = false, custom = {}, isToda
   await page.route(`${API}/**`, async route => {
     const req = route.request(), path = new URL(req.url()).pathname;
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (path === '/api/operator/metrics') return route.fulfill({ status: 204, headers: cors });
     if (path === '/api/me') return reply(route, { role: 'MATCH_OPERATOR', status: 'ACTIVE' }); // the staff role gate
     if (path === '/api/operator/matches') return reply(route, { matches: [match] });
     if (path === '/api/operator/matches/7/scoring') return reply(route, { seq: server.seq, snapshot: server.snapshot, actions: server.actions });

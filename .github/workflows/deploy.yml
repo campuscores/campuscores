@@ -62,6 +62,8 @@ jobs:
       # Rebuild with the environment's public VITE_* values; Vite sends them to the browser.
       - run: npm run build
         env:
+          VITE_APP_OBSERVABILITY: 'true'
+          VITE_CLOUDFLARE_WEB_ANALYTICS_TOKEN: ${{ env.DEPLOY_ENV == 'staging' && vars.CLOUDFLARE_WEB_ANALYTICS_TOKEN || '' }}
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
       - run: npx wrangler deploy --env "$DEPLOY_ENV"

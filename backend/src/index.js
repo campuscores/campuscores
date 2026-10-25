@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import { AppError, onError, requestId } from './http.js';
+import { AppError, onError, reportError, requestId } from './http.js';
+import { measureRequest, metricsEnabled } from './metrics.js';
+import { telemetryRoutes } from './routes/telemetry.js';
 import { sweep } from './outbox.js';
 import { parseRoom } from './rooms.js';
 import { accountRoutes } from './routes/accounts.js';
@@ -13,6 +15,7 @@ import { meRoutes } from './routes/me.js';
 import { publicRoutes } from './routes/public.js';
 export { MatchRoom } from './rooms.js';
 const app = new Hono();
+app.use('*', measureRequest);
 app.use('*', requestId);
 app.use('/api/*', async (c, next) => { c.header('Cache-Control', 'no-store'); await next(); });
 app.onError(onError);
@@ -24,9 +27,9 @@ app.get('/live/:room', async (c) => {
   const room = parseRoom(c.req.param('room'));
   if (!room) throw new AppError(404, 'NOT_FOUND', 'Room not found');
   const stub = c.env.ROOMS.get(c.env.ROOMS.idFromName(room));
-  if (room === 'home') await stub.pruneDeletedCards();
   return stub.fetch(c.req.raw);
 });
+app.route('/api', telemetryRoutes);
 app.route('/api', publicRoutes); // cached pool, no auth
 app.route('/api', meRoutes); // clerkAuth + loadAccount, uncached pool
 app.route('/api', inviteRoutes); // clerkAuth (+ loadAccount for staff), uncached pool
@@ -41,5 +44,5 @@ app.notFound(() => {
 });
 export default {
   fetch: app.fetch,
-  scheduled: (controller, env, ctx) => ctx.waitUntil(sweep(env, ctx)), // Requirement 17.1: cron Outbox_Sweep
+  scheduled: (controller, env, ctx) => ctx.waitUntil(sweep(env, ctx).catch(err => { if (metricsEnabled(env)) reportError(env, err, { code: 'SWEEP_FAILED' }); throw err; })), // Requirement 17.1: cron Outbox_Sweep
 };

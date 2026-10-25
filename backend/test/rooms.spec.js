@@ -267,3 +267,20 @@ describe.skipIf(!env.HYPERDRIVE_UNCACHED)('home cache repair', () => {
     recovered.ws.close(1000);
   });
 });
+
+// A previous Worker forwards the original request without calling the newer cleanup RPC.
+describe.skipIf(!env.HYPERDRIVE_UNCACHED)('mixed-version home room fetch', () => {
+  it.each(['home', '%68ome'])('cleans stale cards for %s inside the room before its first message', async room => {
+    const home = stub('home');
+    await runInDurableObject(home, (_, state) => state.storage.deleteAll());
+    await home.publishCard('1', { id: '1', status: 'LIVE', score: [2, 0] }, 1);
+    await home.publishCard('999999994', { id: '999999994', status: 'LIVE', score: [1, 0] }, 1);
+    const response = await home.fetch(`http://example.com/live/${room}`, { headers: { Upgrade: 'websocket' } });
+    expect(response.status).toBe(101);
+    const ws = response.webSocket;
+    const message = new Promise(resolve => ws.addEventListener('message', event => resolve(JSON.parse(event.data)), { once: true }));
+    ws.accept();
+    expect((await message).data.map(card => String(card.id))).toEqual(['1']);
+    ws.close(1000);
+  });
+});

@@ -209,13 +209,13 @@ Use the existing `TournamentCard` shell: venue image above white title/date deta
 
 ### Horizontal rails and spotlight
 
-Reuse `HorizontalRail` for both rows. Use native touch/trackpad/wheel scrolling, `scroll-snap-type: x proximity`, start-aligned cards and hidden scrollbars. When the rail itself has focus, unmodified Left/Right arrow keys scroll one visible page through the native scroll API. Keys on child controls keep their normal behavior. No carousel arrows or View All controls. The right edge has a 56px fade:
+Reuse `HorizontalRail` for both rows. Use native touch/trackpad/wheel scrolling, start-aligned cards and hidden scrollbars. Phones through 767px use `scroll-snap-type: x mandatory` so a released swipe settles on a card; larger widths retain `x proximity`. When the rail itself has focus, unmodified Left/Right arrow keys scroll one visible page through the native scroll API. Keys on child controls keep their normal behavior. No carousel arrows or View All controls. The right edge has a 56px fade:
 
 ```css
 background: linear-gradient(90deg, transparent, #f6faff);
 ```
 
-The fade is decorative and ignores pointer input. At less than 90% card visibility, the inner surface scales to `.9` with `.66` opacity, anchored at left center. At 90% or more, the surface has full size/opacity. Outer card slots keep their original dimensions, preserving scroll/snap geometry. Apply this on phones, tablets, desktops and larger screens. Keyboard-focused tournament cards restore full emphasis. Reduced motion keeps the opacity treatment but removes scale and transitions.
+The fade is decorative and ignores pointer input. At less than 90% card visibility, the inner surface scales to `.9` with `.66` opacity, anchored at left center. At 90% or more, the surface has full size/opacity. If no card reaches 90%, keep the most visible card fully emphasized, so short phone drags never dim both adjacent cards. Outer card slots keep their original dimensions, preserving scroll/snap geometry. Apply this on phones, tablets, desktops and larger screens. Keyboard-focused tournament cards restore full emphasis. Reduced motion keeps the opacity treatment but removes scale and transitions.
 
 ## 9. Motion and decorative backgrounds
 

@@ -3,6 +3,7 @@ import ScoringPage from './scoring/ScoringPage.jsx';
 import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from 'react';
 import { backoffDelay } from '../../services/live.js';
 import { apiBase, apiFetch } from '../../services/api.js';
+import { recoveryObserver, reportRecovery, telemetryEnabled } from '../../services/telemetry.js';
 import StaffShell from '../staff/StaffShell.jsx';
 import ScreenState from '../staff/ScreenState.jsx';
 import { emptyQueue, nextClientSeq, nextToSend, queueReducer, restoreQueue, retryDelay } from './queue.js';
@@ -66,7 +67,16 @@ export default function ScoreConsole({ matchId, getToken, role }) {
   const held = useRef(null); // { token, deviceId } while this device holds the lease
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [takingOver, setTakingOver] = useState(false);
   const [scoringLoaded, setScoringLoaded] = useState(false);
+  const recovery = useRef(null);
+  useEffect(() => {
+    if (!telemetryEnabled || !ready || !scoringLoaded) return;
+    recovery.current ??= recoveryObserver();
+    const summary = recovery.current({ online, pending: unsynced(queue.items).length, attempt: queue.attempt,
+      paused: queue.paused, takingOver: takingOver || leaseError?.code === 'LEASE_HELD' });
+    if (summary) reportRecovery(summary, getToken);
+  }, [ready, scoringLoaded, online, queue, takingOver, leaseError, getToken]);
   useEffect(() => {
     const on = () => { setOnline(true); setLeaseError(err => (err?.status ? err : null)); }; // retry a lease lost to the network
     const off = () => setOnline(false);
@@ -165,7 +175,6 @@ export default function ScoreConsole({ matchId, getToken, role }) {
    * resends them). Then the console loads the accepted score and actions from the server and scoring continues from
    * there, so two devices' points never add up.
    */
-  const [takingOver, setTakingOver] = useState(false);
   async function takeOver() {
     if (takingOver) return;
     setTakingOver(true);

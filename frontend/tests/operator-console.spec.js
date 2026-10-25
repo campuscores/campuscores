@@ -43,6 +43,7 @@ async function mockApi(page, actions) {
     return handler(route);
   };
   await page.addInitScript(stubClerk, TOKEN);
+  await page.route(API + '/operator/metrics', route => route.fulfill({ status: 204, headers: cors }));
   await page.route('https://clerk.operator.test/**', route => route.abort()); // nothing may reach a real Clerk host
   await page.route(`${API}/me`, route => reply(route, 200, { role: 'MATCH_OPERATOR', status: 'ACTIVE' })); // the staff role gate
   await page.route(`${API}/operator/matches`, authed(route => reply(route, 200, { matches: [live, scheduled] })));
@@ -369,4 +370,31 @@ test('reload after a release resumes the stored queue in order, with no lost or 
   expect(server.actions.slice(2).map(a => [a.clientSeq, a.payload.side])).toEqual([[1, 1], [2, 0]]); // fresh lease numbers
   await expect(scoreRow(page, 'Alpha')).toHaveText(['3', '3']);
   await expect(scoreRow(page, 'Bravo')).toHaveText(['1', '1']);
+});
+
+
+test('recovery reports once per interruption and a failed telemetry request never blocks the next score', async ({ page, context }) => {
+  const server = await mockApi(page);
+  const summaries = [];
+  await page.route(API + '/operator/metrics', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    summaries.push({ body: route.request().postDataJSON(), auth: route.request().headers().authorization });
+    return route.abort('failed');
+  });
+  await openConsole(page, server);
+  await context.setOffline(true);
+  await expect(status(page)).toHaveText('Offline · 0 queued');
+  await point(page, 'Alpha').click(); await point(page, 'Bravo').click();
+  await expect(status(page)).toHaveText('Offline · 2 queued');
+  expect(summaries).toHaveLength(0);
+  await context.setOffline(false);
+  await expect(status(page)).toHaveText('Synced up to seq 5');
+  await expect.poll(() => summaries.length).toBe(1);
+  expect(summaries[0].auth).toBe('Bearer ' + TOKEN);
+  expect(summaries[0].body).toMatchObject({ outcome: 'recovered', pending: 2, retries: 0 });
+  expect(Object.keys(summaries[0].body).sort()).toEqual(['ageMs', 'durationMs', 'outcome', 'pending', 'retries']);
+  await point(page, 'Alpha').click(); await expect(status(page)).toHaveText('Synced up to seq 6');
+  expect(server.actions).toHaveLength(3);
+  expect(summaries).toHaveLength(1);
+  expect(server.actions.every(a => !('metrics' in a) && !('durationMs' in a))).toBe(true);
 });

@@ -48,6 +48,24 @@ Items marked **Open** are deferred for now. Independent backend work continues. 
 
 Superseded for the current release by Arnav on 24 October 2026. He requested the tested changes on the main website before the expected 17:30 IST traffic, with existing tournaments, scheduled matches, final results and scorer access preserved. Promote `develop` through a release pull request to `main` after its checks pass. Keep the production database and Clerk bindings. Do not seed, reset, import staging data, run test score actions or change hosted data outside the normal application flow. Inspect production records before and after deployment. The private backup, physical-device and wider staff-layout checks remain separate deferred work; this request does not start the backup workflow.
 
+## Production observability release — 25 October 2026
+
+This supersedes the earlier staging-only scope. Confirmed by Arnav: promote the tested changes and enable the equivalent production observability without compromising stored data or scorer access. Use the normal release PR and required checks. Keep production database, Clerk, roles, assignments, score history and final results. Do not seed/reset/import or run hosted test scoring. No schema change. Reuse production automatic RUM, verified to send HTTP 204 before this change; do not add a manual production beacon or change its EU exclusion setting. Use a separate production Analytics Engine dataset and keep the test engine staging-only. No paid service or plan change. Account-only dashboard/private-query validation remains separate and must not be described as complete.
+
+## Staging observability — 25 October 2026
+
+Confirmed by Arnav: implement Cloudflare-native observability and useful application measurements on staging first. Do not deploy or activate these additions on production. Keep the existing production logging configuration. Use no new paid service or SDK. Native metrics need no application changes. Staging adds Issues, source maps, 1% native tracing and a separate Analytics Engine dataset. Custom logs remain error-only with query-string redaction and no invocation logs. Application measurements exclude names, match/account/device/action IDs, tokens, bodies and SQL. Measurement failures must not change score acceptance, offline storage, leases or live delivery. Separate staging RUM needs its own public beacon token. The existing production Web Analytics selection does not authorize changing it.
+
+Acceptance: separate accepted/replayed/rejected scoring requests from post-commit publication; measure socket fanout and bounded sweep recovery; collect one best-effort browser summary per observed queue interruption. Do not equate socket attempts with people, room acceptance with viewer receipt, client reports with losslessness, or staging traffic with production usage. Preserve existing scoring and failure regressions. Exact fields and interpretation belong in [architecture.md](architecture.md#operational-measurements).
+
+## Worker error logging — 24 October 2026
+
+Confirmed by Arnav: add production error logging for the next release. Both environments in `backend/wrangler.jsonc` enable custom logs and runtime exceptions at full sampling, redact query strings, and disable invocation logs and traces. The production configuration takes effect only when its release deploys; this decision does not request an immediate production settings change. Retained metadata and possible paid-plan overage were included in the approval. Use the [log guide](local-development.md#worker-error-logs) to inspect new failures.
+
+The later [staging observability decision](#staging-observability--25-october-2026) adds staging Issues and traces. The production configuration remains log-only for the next approved release.
+
+The first production home-feed 500 has no retained exception because observability was off. A mixed-version Worker/room incompatibility and recursive smoke cleanup were reproduced and fixed; they do not establish the exact historical exception. The rollout contract is in [architecture.md](architecture.md#connection-and-public-display-hardening--24-october-2026).
+
 ## Public repository and CI — 20 October 2026
 
 Confirmed by Arnav, 20 October 2026:

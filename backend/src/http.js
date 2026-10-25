@@ -1,3 +1,5 @@
+import { metricsEnabled } from './metrics.js';
+
 const SECRET_KEY = /token|secret|password|authorization|cookie|connection/i;
 // URL schemes are case-insensitive, so match the value prefixes case-insensitively too.
 const SECRET_VALUE = /^(postgres:\/\/|postgresql:\/\/|bearer )/i;
@@ -33,11 +35,31 @@ export function onError(err, c) {
   const known = err instanceof AppError;
   const code = known ? err.code : 'INTERNAL';
   const requestId = c.get('requestId');
-  console.log(JSON.stringify(redact({ requestId, code, name: err?.name })));
+  c.set('metricCode', code);
+  if (!metricsEnabled(c.env)) console.log(JSON.stringify(redact({ requestId, code, name: err?.name })));
+  else if (!known || err.status >= 500) reportError(c.env, err, { code, requestId });
   return c.json(
     { error: { code, message: known ? err.message : 'Internal error', requestId } },
     known ? err.status : 500,
   );
+}
+
+// Keep useful origin locations without copying messages, causes, SQL or arbitrary stack text.
+export function reportError(env, err, metadata) {
+  if (!metricsEnabled(env)) {
+    console.log(JSON.stringify(redact({ ...metadata, name: err?.name })));
+    return;
+  }
+  try {
+    const safe = new Error(metadata.code);
+    const frames = typeof err?.stack === 'string' ? err.stack.split('\n').slice(1).flatMap(line => {
+      const match = line.match(/(?:^|[/\\ ])((?:index|http|rooms|outbox|actions|auth|db|leases|scoring|public|manage|admin|assignments|accounts|invites|me|scope|validate)\.m?js):(\d{1,8}):(\d{1,8})\)?$/);
+      return match ? ['    at ' + match[1] + ':' + match[2] + ':' + match[3]] : [];
+    }).slice(0, 8) : [];
+    if (frames.length) safe.stack = 'Error: ' + metadata.code + '\n' + frames.join('\n');
+    const details = { code: metadata.code, ...(metadata.requestId ? { requestId: metadata.requestId } : {}) };
+    console.error(safe, details);
+  } catch { /* Reporting cannot replace the original response. */ }
 }
 
 export function redact(value) {

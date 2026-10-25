@@ -14,17 +14,17 @@ export default function PrivacyPage() {
         <ul>
           <li>If you create an account: your email address and name. If you sign in with Google, also your basic Google profile (name, email address and profile picture).</li>
           <li>For event staff: the staff role and the audit records of staff actions, such as invitations, assignments and score changes.</li>
-          <li>We use no analytics or advertising trackers.</li>
+          <li>We use Cloudflare to measure page performance, errors and score synchronization. These measurements exclude account names, email addresses and score contents. We use no advertising trackers.</li>
         </ul>
 
         <h2>Why we use it</h2>
-        <p>We use your data only to sign you in, to give event staff the access their role needs, and to keep a record of who changed scores.</p>
+        <p>We use your data only to sign you in, to give event staff the access their role needs, to keep a record of who changed scores, and to improve reliability.</p>
 
         <h2>Who processes it</h2>
         <ul>
           <li>Clerk: sign-in and account storage.</li>
           <li>Google: sign-in with Google, if you choose it.</li>
-          <li>Cloudflare: website hosting and live scores.</li>
+          <li>Cloudflare: website hosting, live scores and technical performance measurements.</li>
           <li>Neon: the database for staff accounts, scores and audit records.</li>
         </ul>
 

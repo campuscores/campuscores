@@ -15,7 +15,7 @@ npm run dev
 
 Open [http://127.0.0.1:4174/](http://127.0.0.1:4174/) and keep the command running.
 
-[Local development](doc/local-development.md) has prerequisites, dependencies, production preview, browser setup, checks and troubleshooting. It also explains GitHub Actions and CI-only database migrations.
+[Local development](doc/local-development.md) has prerequisites, dependencies, production preview, browser setup, checks and troubleshooting. It also explains GitHub Actions and CI-only database migrations. [Staging observability](doc/local-development.md#staging-observability-and-evidence) covers the Cloudflare setup, daily metrics export, free quotas and engineering evidence.
 
 ## Work with the team
 
