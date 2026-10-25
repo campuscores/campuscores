@@ -303,7 +303,7 @@ Verified against official docs on 25 October 2026:
 - From **1 December 2026**, Cloudflare announces a shared Free logs/traces allowance of **0.5 GB/day with seven-day retention**. Free ingestion stops at the daily allowance and resets at 00:00 UTC. Paid plans can incur overage. Recheck before that date; do not apply the future allowance to today's 200k display. See [Observability pricing](https://developers.cloudflare.com/observability/pricing/).
 - Analytics Engine publishes **100,000 writes/day and 10,000 read queries/day** for Workers Free. Its current pricing page says usage is not yet billed. This is a separate allowance from logs. One point per request/broadcast, not per viewer recipient; one recovery summary per observed episode. Other applications share account usage. The app does not implement an account-wide quota counter. Collection can be incomplete because of sampling, quota or failures; scoring must continue. See [Analytics Engine pricing](https://developers.cloudflare.com/analytics/analytics-engine/pricing/).
 
-Check at the start and end of the event, and before retention expires. Export evidence daily. No background monitor, paid plan or external tracking service is installed by this task.
+Check at the start and end of the event, and before retention expires. Export evidence daily. No background monitor or paid plan was added. Browser diagnostics use the separate Sentry setup below.
 
 ### Export custom metrics
 
