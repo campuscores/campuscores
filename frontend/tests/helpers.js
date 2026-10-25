@@ -1,15 +1,15 @@
 import { expect } from '@playwright/test';
 
-/** Real touch swipe from near the right edge of `locator`. Chromium only: it uses CDP touch input. */
-export async function swipe(page, locator, distance = 224) {
+/** Native touch swipe; negative distance moves right. Chromium only: it uses CDP touch input. */
+export async function swipe(page, locator, distance = 224, intervalMs = 16) {
   const session = await page.context().newCDPSession(page);
   await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
-  const [x, y] = [box.x + box.width - 40, box.y + box.height / 2];
+  const [x, y] = [box.x + (distance < 0 ? 40 : box.width - 40), box.y + box.height / 2];
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
   for (let step = 1; step <= 8; step++) {
     await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - step * distance / 8, y }] });
-    await page.waitForTimeout(16);
+    await page.waitForTimeout(intervalMs);
   }
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await session.detach();
