@@ -15,7 +15,8 @@ export function captureReactError(error, info) {
 
 export function startMonitoring(router) {
   if (!environment || ready) return;
-  ready = import('@sentry/react').then(Sentry => {
+  ready = true;
+  const initialize = () => import('@sentry/react').then(Sentry => {
     const entry = window.location;
     const recordReplay = environment === 'staging' && replayAllowed(entry);
     const entryUrl = entry.origin + entry.pathname;
@@ -48,7 +49,7 @@ export function startMonitoring(router) {
         return { flush: timeout => transport.flush(timeout), send: envelope => transport.send(scrubReplayEnvelope(envelope, entryUrl)) };
       },
     });
-    sdk = Sentry;
+    sdk = { captureReactException: Sentry.captureReactException, logger: Sentry.logger, metrics: Sentry.metrics };
     if (recordReplay) {
       const key = router.state.location.key;
       const unsubscribe = router.subscribe(state => {
@@ -61,6 +62,8 @@ export function startMonitoring(router) {
     }
     for (const [error, info] of earlyErrors.splice(0)) Sentry.captureReactException(error, info);
   }).catch(() => { earlyErrors.length = 0; });
+  // React can mount after window.load; wait for its eager images without blocking rendering.
+  Promise.allSettled([...document.images].filter(image => image.loading !== 'lazy').map(image => image.decode())).then(initialize);
 }
 
 export function recordRecovery(summary) {

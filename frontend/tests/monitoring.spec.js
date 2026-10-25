@@ -110,7 +110,7 @@ test('a deployed-origin preview records sanitized traces and a real React render
   await page.routeWebSocket('wss://api.test/live/home', ws => { socket = ws; });
   await page.goto(STAGING_ORIGIN);
   await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible();
-  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"'))).toBe(true);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"')), { timeout: 12000 }).toBe(true);
   // A malformed snapshot exercises the app's real render path, without any hosted write.
   socket.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [null] }));
   await expect.poll(() => envelopes.some(body => body.toString().includes('Unexpected application error'))).toBe(true);
@@ -127,7 +127,7 @@ test('blocked diagnostic collection preserves public navigation and page renderi
   await page.routeWebSocket('wss://api.test/live/home', ws => ws.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [] })));
   await page.goto(STAGING_ORIGIN);
   await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible();
-  await expect.poll(() => envelopes.length).toBeGreaterThan(0);
+  await expect.poll(() => envelopes.length, { timeout: 12000 }).toBeGreaterThan(0);
   await page.locator('a[href="/tournaments"]').first().evaluate(link => link.click());
   await expect(page.getByRole('heading', { level: 1, name: 'Tournaments' })).toBeVisible();
 });
@@ -136,7 +136,7 @@ test('replay masks DOM content and attributes, then stops on client navigation',
   const envelopes = await deployedPreview(page);
   await page.routeWebSocket('wss://api.test/live/home', ws => ws.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [] })));
   await page.goto(STAGING_ORIGIN);
-  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"'))).toBe(true);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"')), { timeout: 12000 }).toBe(true);
   await page.evaluate(value => {
     const div = document.createElement('div'); div.textContent = value;
     const input = document.createElement('input'); input.value = value;
@@ -179,7 +179,7 @@ test('production collects sampled timing without creating replay recordings', as
   const envelopes = await deployedPreview(page, { origin });
   await page.routeWebSocket('wss://api.test/live/home', ws => ws.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [] })));
   await page.goto(origin);
-  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"'))).toBe(true);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"')), { timeout: 12000 }).toBe(true);
   await page.waitForTimeout(5500);
   expect(envelopes.some(body => /"type":"(?:replay_event|replay_recording|log|trace_metric)"/.test(body.toString()))).toBe(false);
 });
@@ -205,7 +205,7 @@ test('offline queue recovery emits bounded logs and metrics without auth or scor
   await page.route(api + '/operator/metrics', route => answer(route, {}));
   await page.goto(STAGING_ORIGIN + '/operator/matches/7/score');
   await expect(page.locator('.console-status')).toHaveText('Online');
-  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"'))).toBe(true);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"span"')), { timeout: 12000 }).toBe(true);
   await context.setOffline(true);
   await expect(page.locator('.console-status')).toHaveText('Offline · 0 queued');
   await page.getByRole('button', { name: 'Point to Alpha', exact: true }).click();
@@ -225,4 +225,40 @@ test('offline queue recovery emits bounded logs and metrics without auth or scor
       expect(packet.toString()).toContain('"infer_user_agent":"never"');
     }
   }
+});
+
+test('diagnostics wait for the page images and still capture an early React error', async ({ page }) => {
+  const envelopes = await deployedPreview(page);
+  let releaseImage; const imageGate = new Promise(resolve => { releaseImage = resolve; });
+  const sdkRequests = [];
+  page.on('request', request => { if (/\/assets\/esm-[\w-]+\.js$/.test(new URL(request.url()).pathname)) sdkRequests.push(request.url()); });
+  await page.route(`${STAGING_ORIGIN}/assets/football-cr7-*.webp`, async route => { await imageGate; await route.fallback(); });
+  let socket;
+  await page.routeWebSocket('wss://api.test/live/home', ws => { socket = ws; });
+  try {
+    await page.goto(STAGING_ORIGIN, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).toBeVisible();
+    await expect.poll(() => Boolean(socket)).toBe(true);
+    expect(sdkRequests).toHaveLength(0);
+    socket.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [null] }));
+    await expect(page.getByRole('heading', { name: 'Live Matches', exact: true })).not.toBeVisible();
+  } finally { releaseImage(); }
+  await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('Unexpected application error'))).toBe(true);
+});
+
+
+test('a failure before the first React commit still initializes sanitized diagnostics', async ({ page }) => {
+  const envelopes = await deployedPreview(page);
+  await page.routeWebSocket('wss://api.test/live/home', ws => ws.send(JSON.stringify({ type: 'snapshot', seq: 1, data: [] })));
+  await page.addInitScript(() => {
+    const append = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(child) {
+      if (this instanceof HTMLElement && this.id === 'root') throw new Error('private-first-commit-value');
+      return append.call(this, child);
+    };
+  });
+  await page.goto(STAGING_ORIGIN);
+  await expect.poll(() => envelopes.some(body => body.toString().includes('Unexpected application error'))).toBe(true);
+  expect(Buffer.concat(envelopes).toString()).not.toContain('private-first-commit-value');
 });

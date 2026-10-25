@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -13,10 +13,19 @@ if (telemetryEnabled) startRum(import.meta.env.VITE_CLOUDFLARE_WEB_ANALYTICS_TOK
 // so there is no <ScrollRestoration> here.
 const router = createBrowserRouter([{ path: '*', element: <App /> }]);
 
-startMonitoring(router);
+export default function Root() {
+  useEffect(() => { startMonitoring(router); }, []);
+  return <RouterProvider router={router} />;
+}
 
-createRoot(document.getElementById('root'), { onUncaughtError: captureReactError, onCaughtError: captureReactError, onRecoverableError: captureReactError }).render(
+function captureRootError(error, info) {
+  captureReactError(error, info);
+  // A failed first render must still initialize diagnostics without a mounted Root effect.
+  startMonitoring(router);
+}
+
+createRoot(document.getElementById('root'), { onUncaughtError: captureRootError, onCaughtError: captureRootError, onRecoverableError: captureRootError }).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <Root />
   </StrictMode>,
 );
