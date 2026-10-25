@@ -173,3 +173,7 @@ The [early completion contract](architecture.md#early-match-completion-contract-
 ## Staging observability integration — 25 October 2026
 
 Environment gating, isolated datasets, the application metric schema and the staff recovery-summary endpoint are in [architecture.md](architecture.md#operational-measurements). The [runbook](local-development.md#staging-observability-and-evidence) owns setup and collection. The 25 October production rollout preserves database/Clerk bindings and existing automatic RUM. No score payload, idempotency hash, queue record, public DTO, room RPC or schema changes. Keep native metrics separate from client-reported observations and fault-test results.
+
+## Browser diagnostics integration
+
+The [browser diagnostics contract](architecture.md#browser-diagnostics) owns Sentry initialization, environment boundaries, privacy filtering and CI source-map upload. The [runbook](local-development.md#sentry-browser-diagnostics) owns project views, variables/secrets and interpretation. Preserve native Cloudflare RUM and backend measurements. Sentry browser timing is sampled and does not replace server metrics. Status and unfinished checks remain in [tasks.md](tasks.md#current-task-claims) and [deferred-tests.md](deferred-tests.md).

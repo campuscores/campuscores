@@ -15,6 +15,7 @@ export default function PrivacyPage() {
           <li>If you create an account: your email address and name. If you sign in with Google, also your basic Google profile (name, email address and profile picture).</li>
           <li>For event staff: the staff role and the audit records of staff actions, such as invitations, assignments and score changes.</li>
           <li>We use Cloudflare to measure page performance, errors and score synchronization. These measurements exclude account names, email addresses and score contents. We use no advertising trackers.</li>
+          <li>Sentry receives technical error reports and sampled browser timings. Our staging site also sends bounded scoring-recovery summaries and may record a short, masked replay of a public page. Replay stops on navigation and is off in production. We exclude account details, score contents, request bodies and headers from these diagnostics.</li>
         </ul>
 
         <h2>Why we use it</h2>
@@ -25,6 +26,7 @@ export default function PrivacyPage() {
           <li>Clerk: sign-in and account storage.</li>
           <li>Google: sign-in with Google, if you choose it.</li>
           <li>Cloudflare: website hosting, live scores and technical performance measurements.</li>
+          <li>Sentry: application error reports and diagnostic measurements.</li>
           <li>Neon: the database for staff accounts, scores and audit records.</li>
         </ul>
 
