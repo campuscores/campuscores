@@ -255,7 +255,7 @@ For Neon staging inspection, select the project named `Campuscores-staging`, the
 
 ## Staging observability and evidence
 
-The configuration and field contract are in [architecture.md](architecture.md#staging-operational-measurements). The 25 October additions apply only to `thaparlympics-staging`. Production remains on its approved release. Do not copy staging tokens, dataset bindings or tracing settings to production without the next release decision.
+The configuration and field contract are in [architecture.md](architecture.md#staging-operational-measurements). Current deployment evidence and remaining account-only checks are in [tasks.md](tasks.md#current-task-claims). The 25 October additions apply only to `thaparlympics-staging`. Production remains on its approved release. Do not copy staging tokens, dataset bindings or tracing settings to production without the next release decision.
 
 ### What deploys automatically
 
@@ -264,6 +264,8 @@ The configuration and field contract are in [architecture.md](architecture.md#st
 - `deploy.yml` enables the browser recovery summary only for staging. A separate public RUM token is optional. Without it, the app adds no beacon. The beacon also rejects the production and local origins, and avoids an existing Cloudflare script. No production dashboard setting changes.
 
 ### Finish the account setup
+
+Before the first deployment, complete account onboarding in [Analytics Engine](https://dash.cloudflare.com/?to=/:account/workers/analytics-engine). If it shows **Create Blank Dataset**, enter Dataset Name `campuscores_staging_metrics` and Dataset Binding `APP_METRICS`, then Create. Its Create Binding JSON must match the existing staging Wrangler entry. The dataset can stay hidden until the Worker writes its first point. Cloudflare rejects deployment with `10089` until account onboarding is complete. This does not add a production Worker binding. If the dashboard requests a paid upgrade, keep the existing Free budget and resolve that requirement before deployment.
 
 1. **Separate browser measurements.** In Cloudflare **Web Analytics**, add `thaparlympics-staging.bhatiaarnav05.workers.dev`. Select manual JS installation. Copy only the public `token` from its `data-cf-beacon` snippet into GitHub repository **Settings → Environments → staging → Environment variables**, named `CLOUDFLARE_WEB_ANALYTICS_TOKEN`. Do not copy the API token or the Web Analytics site's dashboard ID. The next staging build installs it. Open staging in a normal browser, check one beacon script and `/cdn-cgi/rum` requests, then check the staging site in Web Analytics. Blocking extensions can prevent collection. Do not count automated test traffic as actual use. See [Web Analytics setup](https://developers.cloudflare.com/web-analytics/get-started/).
 2. **The supplied production screenshots.** They show `campuscores.live` with “Enable, excluding visitor data in the EU” selected. A screenshot does not prove the Update was saved or the beacon ran. Leave it unchanged for this staging task. The Upgrade message is for **Web Analytics Rules**; Free has zero such rules. Basic RUM does not require that upgrade. Do not install a second production snippet. See [RUM beacon](https://developers.cloudflare.com/speed/observatory/rum-beacon/) and [rules limits](https://developers.cloudflare.com/web-analytics/limits/).
@@ -286,10 +288,18 @@ Check at the start and end of the event, and before retention expires. Export ev
 
 ### Export custom metrics
 
-Create a Cloudflare API token with **Account Analytics Read**, scoped to this account. Store it only in a local environment variable or secret manager, never Vite, source, chat, a screenshot or public CI artifact. Wrangler login is separate from this read token. From the designated checkout in PowerShell, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_ANALYTICS_READ_TOKEN` already set locally:
+In Cloudflare, open **My Profile → API Tokens → Create Token → Create Custom Token**. Give it **Account → Account Analytics → Read**, scoped to this account. Copy the account ID from the Workers account overview. Store the token only locally, never Vite, source, chat, a screenshot or public CI artifact. Wrangler login is separate from this read token. From the designated checkout in PowerShell, use a masked prompt:
 
 ```powershell
-node backend/scripts/export-metrics.js 2026-10-25T00:00:00Z 2026-10-26T00:00:00Z > output/staging-metrics-2026-10-25.json
+$env:CLOUDFLARE_ACCOUNT_ID = Read-Host "Cloudflare account ID"
+$metricsReadToken = Read-Host "Account Analytics Read token" -AsSecureString
+$env:CLOUDFLARE_ANALYTICS_READ_TOKEN = [Net.NetworkCredential]::new("", $metricsReadToken).Password
+try {
+  node backend/scripts/export-metrics.js 2026-10-25T00:00:00Z 2026-10-26T00:00:00Z > output/staging-metrics-2026-10-25.json
+} finally {
+  $env:CLOUDFLARE_ANALYTICS_READ_TOKEN = $null
+  $metricsReadToken = $null
+}
 ```
 
 Use an explicit interval of at most 24 hours. The script makes two read-only queries, returns aggregate groups and five-minute counts, and rejects missing access, invalid periods and truncated results. It never queries production or changes scores. Empty arrays mean no recorded evidence in that window. Sampling weights apply to counts, means and p95/p99; do not replace them with raw `COUNT(*)`, or average daily percentiles to make a weekly percentile. Re-run an appropriate aggregate query for a longer percentile window. Reference: [SQL API](https://developers.cloudflare.com/analytics/analytics-engine/sql-api/) and [weighted aggregate functions](https://developers.cloudflare.com/analytics/analytics-engine/sql-reference/aggregate-functions/).

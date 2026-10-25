@@ -58,6 +58,8 @@ Acceptance: separate accepted/replayed/rejected scoring requests from post-commi
 
 Confirmed by Arnav: add production error logging for the next release. Both environments in `backend/wrangler.jsonc` enable custom logs and runtime exceptions at full sampling, redact query strings, and disable invocation logs and traces. The production configuration takes effect only when its release deploys; this decision does not request an immediate production settings change. Retained metadata and possible paid-plan overage were included in the approval. Use the [log guide](local-development.md#worker-error-logs) to inspect new failures.
 
+The later [staging observability decision](#staging-observability--25-october-2026) adds staging Issues and traces. The production configuration remains log-only for the next approved release.
+
 The first production home-feed 500 has no retained exception because observability was off. A mixed-version Worker/room incompatibility and recursive smoke cleanup were reproduced and fixed; they do not establish the exact historical exception. The rollout contract is in [architecture.md](architecture.md#connection-and-public-display-hardening--24-october-2026).
 
 ## Public repository and CI — 20 October 2026
