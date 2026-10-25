@@ -196,7 +196,7 @@ Hosting must serve `frontend/dist/` and return `index.html` for app routes such 
 
 ## Worker error logs
 
-`backend/wrangler.jsonc` enables custom application logs and runtime exceptions separately for staging and production. It redacts query strings and disables invocation logs and traces. Each environment applies this configuration when deployed; production receives it with the next approved release ([decision](memory.md#worker-error-logging--24-october-2026)). Log events use full sampling. Existing application errors emit fixed metadata; never add tokens, request bodies, email addresses or connection strings to logs. Retention and quotas depend on the Cloudflare plan; paid overage can add charges ([Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)).
+`backend/wrangler.jsonc` enables custom application logs and runtime exceptions separately for staging and production. It redacts query strings and disables invocation logs. Production traces remain disabled. The staging additions are in [Staging observability and evidence](#staging-observability-and-evidence). Each environment applies this configuration when deployed; production receives it with the next approved release ([decision](memory.md#worker-error-logging--24-october-2026)). Log events use full sampling. Existing application errors emit fixed metadata; never add tokens, request bodies, email addresses or connection strings to logs. Retention and quotas depend on the Cloudflare plan; paid overage can add charges ([Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)).
 
 After deployment, open Cloudflare **Workers & Pages**, select the correct environment's Worker, then open **Observability → Logs**. Filter to the failure time and, when available, the response's `X-Request-Id`. A live-feed failure needs the `/live/home` exception and time. Share the error text and request ID without credentials. Logs start after enabling them; the earlier production failure has no retained exception. CLI access requires a separate Cloudflare sign-in and is optional.
 
@@ -252,3 +252,60 @@ Backend database tests can use an isolated local Postgres 18 container with the 
 Neon, Clerk and Cloudflare skills are development aids. A skill does not grant account access. Read-only live inspection needs a separately authorized connection. Do not install global tools or change personal connector settings as part of a repository-only task.
 
 For Neon staging inspection, select the project named `Campuscores-staging`, then verify its branch and database. Its current default branch is named `production`; that branch name does not identify the production application. The staging and production applications use separate projects. Pass the verified project and branch IDs explicitly. The connected Neon tools expose write operations; this handoff permits diagnostic reads and SELECT statements only. Hosted changes still use CI.
+
+## Staging observability and evidence
+
+The configuration and field contract are in [architecture.md](architecture.md#staging-operational-measurements). The 25 October additions apply only to `thaparlympics-staging`. Production remains on its approved release. Do not copy staging tokens, dataset bindings or tracing settings to production without the next release decision.
+
+### What deploys automatically
+
+- Staging: custom error logs, Issues, uploaded source maps and native traces at **1%**. Invocation logs stay off. Handled unexpected errors pass a safe Error object to `console.error`, so Issues can group them. Expected authorization/validation conflicts become metrics, without persistent staging log lines. See [Issues](https://developers.cloudflare.com/workers/observability/issues/) and [native tracing](https://developers.cloudflare.com/workers/observability/traces/).
+- `APP_METRICS` writes to `campuscores_staging_metrics`. Cloudflare creates the dataset on its first write. It records API status/duration, scoring accepted/replay outcomes, post-commit publication, room broadcasts, active sweeps and observed queue recovery. No new database storage or analytics SDK. See [Analytics Engine setup](https://developers.cloudflare.com/analytics/analytics-engine/get-started/).
+- `deploy.yml` enables the browser recovery summary only for staging. A separate public RUM token is optional. Without it, the app adds no beacon. The beacon also rejects the production and local origins, and avoids an existing Cloudflare script. No production dashboard setting changes.
+
+### Finish the account setup
+
+1. **Separate browser measurements.** In Cloudflare **Web Analytics**, add `thaparlympics-staging.bhatiaarnav05.workers.dev`. Select manual JS installation. Copy only the public `token` from its `data-cf-beacon` snippet into GitHub repository **Settings → Environments → staging → Environment variables**, named `CLOUDFLARE_WEB_ANALYTICS_TOKEN`. Do not copy the API token or the Web Analytics site's dashboard ID. The next staging build installs it. Open staging in a normal browser, check one beacon script and `/cdn-cgi/rum` requests, then check the staging site in Web Analytics. Blocking extensions can prevent collection. Do not count automated test traffic as actual use. See [Web Analytics setup](https://developers.cloudflare.com/web-analytics/get-started/).
+2. **The supplied production screenshots.** They show `campuscores.live` with “Enable, excluding visitor data in the EU” selected. A screenshot does not prove the Update was saved or the beacon ran. Leave it unchanged for this staging task. The Upgrade message is for **Web Analytics Rules**; Free has zero such rules. Basic RUM does not require that upgrade. Do not install a second production snippet. See [RUM beacon](https://developers.cloudflare.com/speed/observatory/rum-beacon/) and [rules limits](https://developers.cloudflare.com/web-analytics/limits/).
+3. **Backend inspection.** In Workers & Pages select **thaparlympics-staging**, then Metrics and Observability. Confirm Logs, Issues and Traces after deployment. Filter to the exact UTC test window. No Issues entry is expected without an error; do not deliberately crash an event match to populate it. A short run may produce no traces at 1% sampling. Automated tests check safe handled-error reporting; dashboard grouping needs account access.
+4. **Database connection measurements.** Open each staging Hyperdrive configuration from `backend/wrangler.jsonc`, then Metrics. Keep cached public reads separate from uncached staff/writes. Export query count, cache hits/misses, query/connection latency and waiting clients for the same window. Cache ratio is hits / (hits + misses) for that configuration, not a percentage of all database work. See [Hyperdrive metrics](https://developers.cloudflare.com/hyperdrive/observability/metrics/).
+5. **Live room measurements.** Inspect the staging Worker's Durable Objects metrics: requests, WebSocket messages and resource usage. Connection metrics can appear after sockets close. Use the custom broadcast event for send attempts, bytes and failures, not unique people or confirmed receipt. See [Durable Object metrics](https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/).
+6. **Central view.** Open Analytics → Custom Dashboards; create **Campuscores staging** from API Performance or a blank dashboard. Filter every applicable chart to `thaparlympics-staging` and staging Hyperdrive configurations. Add request volume, runtime errors, CPU/wall duration, connection/cache metrics and logs/traces. Check each chart's service filter; account totals can mix production. Use supported datasets offered by the editor. Keep the custom SQL export below alongside the dashboard if its dataset is unavailable there. Dashboard creation is an account operation, not a Wrangler setting. See [Custom Dashboards](https://developers.cloudflare.com/analytics/custom-dashboards/).
+
+Worker Metrics, Hyperdrive Metrics and Durable Object Metrics need no application SDK or enable switch. Custom durations use the Worker clock across I/O; synchronous broadcast CPU is not timed with that clock. CPU/wall duration is not browser latency; a handled HTTP 500 can still count as a successful Worker invocation. See [Worker metric definitions](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/). RUM measures real browser LCP/INP/CLS; Observatory adds synthetic tests. Keep those evidence types separate.
+
+### Free quotas and event-day checks
+
+Verified against official docs on 25 October 2026:
+
+- Workers Logs Free: **200,000 events/day, three-day retention** until 30 November 2026. This is a log-event allowance, not 200,000 visitors or total API requests. Routine requests and broadcasts create no custom log line. Error storms can still exhaust it; 1% tracing is sampling, not a hard spending cap. Check the account usage page before and after a test. See [Workers Logs pricing](https://developers.cloudflare.com/workers/observability/logs/workers-logs/).
+- From **1 December 2026**, Cloudflare announces a shared Free logs/traces allowance of **0.5 GB/day with seven-day retention**. Free ingestion stops at the daily allowance and resets at 00:00 UTC. Paid plans can incur overage. Recheck before that date; do not apply the future allowance to today's 200k display. See [Observability pricing](https://developers.cloudflare.com/observability/pricing/).
+- Analytics Engine publishes **100,000 writes/day and 10,000 read queries/day** for Workers Free. Its current pricing page says usage is not yet billed. This is a separate allowance from logs. One point per request/broadcast, not per viewer recipient; one recovery summary per observed episode. Other applications share account usage. The app does not implement an account-wide quota counter. Collection can be incomplete because of sampling, quota or failures; scoring must continue. See [Analytics Engine pricing](https://developers.cloudflare.com/analytics/analytics-engine/pricing/).
+
+Check at the start and end of the event, and before retention expires. Export evidence daily. No background monitor, paid plan or external tracking service is installed by this task.
+
+### Export custom metrics
+
+Create a Cloudflare API token with **Account Analytics Read**, scoped to this account. Store it only in a local environment variable or secret manager, never Vite, source, chat, a screenshot or public CI artifact. Wrangler login is separate from this read token. From the designated checkout in PowerShell, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_ANALYTICS_READ_TOKEN` already set locally:
+
+```powershell
+node backend/scripts/export-metrics.js 2026-10-25T00:00:00Z 2026-10-26T00:00:00Z > output/staging-metrics-2026-10-25.json
+```
+
+Use an explicit interval of at most 24 hours. The script makes two read-only queries, returns aggregate groups and five-minute counts, and rejects missing access, invalid periods and truncated results. It never queries production or changes scores. Empty arrays mean no recorded evidence in that window. Sampling weights apply to counts, means and p95/p99; do not replace them with raw `COUNT(*)`, or average daily percentiles to make a weekly percentile. Re-run an appropriate aggregate query for a longer percentile window. Reference: [SQL API](https://developers.cloudflare.com/analytics/analytics-engine/sql-api/) and [weighted aggregate functions](https://developers.cloudflare.com/analytics/analytics-engine/sql-reference/aggregate-functions/).
+
+### Select credible project results
+
+Keep date/window, environment, deployed revision, sample count, device/network or simulated load, source and remaining limits with every result. Store raw exports/captures in ignored `output/` or private storage. Never commit them or attach staff data to this public repository.
+
+| Engineering claim | Evidence to gather | Required distinction |
+| --- | --- | --- |
+| Responsive scoring API | Action-route accepted/replay counts, p95/p99 duration and 4xx/5xx breakdown | Server duration through transaction, not tap-to-screen latency; separate retries and intended refusals from errors |
+| Cache effectiveness | Cached Hyperdrive hit ratio and latency, measured over a comparable workload | Do not claim a speedup without a controlled before/after comparison; uncached authorization remains current |
+| Live fanout efficiency | Broadcast attempts, payload bytes, send failures; native DO usage | Sockets can include multiple tabs; bytes exclude framing/compression; enqueue success is not receipt |
+| Recoverable live delivery | Publication failures and later sweep deliveries, batch age/pending | Batch has at most 200 rows, not total backlog; recovery is not a second accepted score |
+| Offline recovery | Recovered/paused summaries, peak pending, retries and p95 drain time | Client-reported, page-local, incomplete; verify reload/order/idempotency with fault tests and physical devices |
+| Phone experience | RUM p75 LCP/INP/CLS split by phone/desktop and page; Observatory synthetic results | Staging synthetic traffic is not real production use; sample size and slow networks matter |
+| Reliability and cost | Runtime errors, HTTP 5xx, usage/quota exports and fault-test results | No-error samples do not prove uptime; current test counts do not prove hosted concurrency capacity |
+
+For a résumé, select two or three strong measured results that explain a design tradeoff: cached public reads with uncached authorization, atomic score/outbox persistence, hibernating fanout, or idempotent queue replay. State actual measured numbers and the test environment. Keep the 3,000-client goal marked unmeasured until its authorized load test runs. Staging results must stay labelled staging; production requires a separate approved rollout and collection window.

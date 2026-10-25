@@ -3,9 +3,10 @@ import { Hono } from 'hono';
 import { clerkAuth } from '../auth.js';
 import { withClient, withTx } from '../db.js';
 import { engineFor } from '../engines/index.js';
-import { AppError, jsonBody, redact, toPublic } from '../http.js';
+import { AppError, jsonBody, reportError, toPublic } from '../http.js';
 import { markDelivered, publishEvent, room } from '../outbox.js';
 import { decideAction, evaluateChain, loadScoringContext, payloadHash } from '../scoring.js';
+import { metric, stagingMetrics } from '../metrics.js';
 import { idParam } from './public.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,11 +35,16 @@ export function parseAction(body) {
 
 // After commit: publish to both rooms, then mark the outbox row delivered. Any failure leaves it for the Outbox_Sweep.
 async function deliver(c, { outboxId, ...event }) {
+  const start = performance.now();
+  let failures = 0;
   try {
     await publishEvent(c.env, event);
     await withClient(c.env.HYPERDRIVE_UNCACHED, c.executionCtx, (client) => markDelivered(client, outboxId));
   } catch (err) {
-    console.log(JSON.stringify(redact({ requestId: c.get('requestId'), code: 'PUBLISH_FAILED', name: err?.name })));
+    failures = 1;
+    reportError(c.env, err, { requestId: c.get('requestId'), code: 'PUBLISH_FAILED' });
+  } finally {
+    metric(c.env, 'publish', { durationMs: performance.now() - start, outcome: failures ? 'failed' : event.private ? 'private' : 'ok', failures });
   }
 }
 
@@ -48,6 +54,7 @@ export const actionRoutes = new Hono();
 actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
   const matchId = idParam(c);
   const action = parseAction(await jsonBody(c));
+  if (stagingMetrics(c.env)) c.set('metricAction', action.type);
   const hash = await payloadHash(action);
   await room(c.env, 'home').noteWrite(); // Write_Signal before BEGIN, so the sweep covers every committed write
 
@@ -118,6 +125,7 @@ actionRoutes.post('/matches/:id/actions', clerkAuth, async (c) => {
       return { seq, snapshot, delivery: { outboxId: outbox.id, matchId: match.id, seq, snapshot, card, private: privateMatch } };
     }),
   );
+  if (stagingMetrics(c.env)) c.set('metricOutcome', out.delivery ? 'accepted' : 'replay');
   if (out.delivery) c.executionCtx.waitUntil(deliver(c, out.delivery));
   return c.json({ actionId: action.actionId, seq: out.seq, snapshot: out.snapshot });
 });

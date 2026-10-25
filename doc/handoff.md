@@ -168,3 +168,8 @@ A new home viewer also triggers the shared, one-minute deleted-card presence che
 ### Scoring finish and public stage integration — 24 October 2026
 
 The [early completion contract](architecture.md#early-match-completion-contract--24-october-2026) adds `END_MATCH` and public `endedEarly`, `kind` and `stage` fields without a schema change. Use the shared scorer for both pending and accepted results. Completed units alone count after an early finish; retained action history allows Undo before the separate permanent lock. Public cards show the stage in the centre and a separate winner sentence. Older home cards without stage metadata fall back to Match until a new scoring publication. UI rules are in [design section 14](design.md#14-scoring-finish-and-card-stage--24-october-2026).
+
+
+## Staging observability integration — 25 October 2026
+
+Staging-only gating, the application metric schema and the staff recovery-summary endpoint are in [architecture.md](architecture.md#staging-operational-measurements). The [runbook](local-development.md#staging-observability-and-evidence) owns setup and collection. Keep the production environment unchanged. No score payload, idempotency hash, queue record, public DTO, room RPC or schema changes. Keep native metrics separate from client-reported observations and fault-test results.

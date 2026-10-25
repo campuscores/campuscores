@@ -629,3 +629,21 @@ The Worker forwards the validated live request with `stub.fetch` only. Do not re
 ### Early match completion contract — 24 October 2026
 
 `END_MATCH` accepts `{ winner: 0 | 1 }` for an undecided match with play still open. Replay retains completed units only, does not award the unfinished unit, and derives period totals from completed periods. The snapshot and home card carry `endedEarly: true`. The command remains reversible until `FINALIZE`. Finalization, idempotency, assignment, lease and transaction gates are unchanged. Home cards also carry public `kind` and `stage` from the match row. Older cards without stage metadata display Match. Public adapters omit unplayed columns and hide unfinished units after early completion. No schema change is needed. Product authority: [decision](memory.md#early-match-finish-and-result-clarity--24-october-2026).
+
+## Staging operational measurements
+
+The 25 October additions are gated by `STAGING_OBSERVABILITY=true` and a staging-only `APP_METRICS` Analytics Engine binding. Production has neither. No database table, score command, hash, response or room RPC contract changes. Writes are best-effort and never awaited. No extra timer prevents room hibernation.
+
+Dataset `campuscores_staging_metrics`, schema version `v1`: index1 is the event name. blob1=event, blob2=registered route pattern (never the requested URL), blob3=outcome, blob4=allowlisted action type, blob5=room kind (home/match), blob6=error code, blob7=method, blob8=v1. double1=duration milliseconds, double2=socket send attempts, double3=UTF-8 snapshot bytes (one copy), double4=pending count, double5=age milliseconds, double6=failures, double7=observed retries, double8=HTTP status. Unused fields are zero or empty. Analytics Engine can sample; queries weight by `_sample_interval`. Counts and percentiles are estimates under sampling.
+
+| Event | Meaning and limits |
+| --- | --- |
+| http | One API/live/health completion; registered route, status, code, duration. Scoring also records allowlisted action and accepted/replay outcome. Includes auth and transaction time; excludes later outbox delivery. Static assets bypass it. |
+| publish | One initial post-commit attempt; duration and success/failure. Success includes room publication and delivered-marker update; private matches have a separate private outcome and do not enter public rooms. It does not prove viewer receipt. |
+| broadcast | One room broadcast; socket attempts, payload bytes and send failures. Use native DO CPU metrics for synchronous work. Bytes exclude framing/compression; attempts are sockets, not people. No event per recipient. |
+| sweep | One active sweep; selected pending rows (maximum 200), oldest selected age, delivered-marker count in double2 and failures. Idle sweeps emit nothing and query no database. The batch is not total backlog. |
+| recovery | One authenticated staff browser summary after an observed interruption ends or pauses. Duration is drain time after latest reconnect (or observed retry/restore); age is total observed episode time; pending is peak queue size. Browser-reported, page-local and best-effort; navigation may lose it. Takeover discards an episode and cannot count as recovery. |
+
+Only staging exposes `POST /api/operator/metrics`, behind Clerk, active staff authorization and a 1 KiB body limit. It accepts only the recovery numeric summary and recovered/paused outcome, returns 204, writes no domain data and never retries telemetry. Production returns 404 before auth. No per-person identifier is stored. This endpoint does not authorize scoring.
+
+Unexpected handled failures emit an Error with a fixed safe code and only recognized source file/line/column frames for Issues grouping. Original messages, causes, arbitrary error names and stack text are excluded. Expected 4xx responses are counted, without persistent staging log lines. Legacy production error reporting stays unchanged. Native runtime failures and platform spans are governed by Cloudflare's own collection policy; application redaction does not filter platform metadata.

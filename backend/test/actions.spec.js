@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { room, sweep } from '../src/outbox.js';
 import { parseAction } from '../src/routes/actions.js';
 import { canonicalJson, decideAction, payloadHash } from '../src/scoring.js';
@@ -164,6 +164,36 @@ const EMPTY = { actions: 0, snapshots: 0, outbox: 0, undelivered: 0, audits: 0, 
 describe.skipIf(!env.HYPERDRIVE_UNCACHED)('POST /api/matches/:id/actions against Postgres', () => {
   const f = fixtures();
   afterAll(() => f.cleanup());
+
+  it('separates accepted/replayed requests from delayed publication, and survives a failed metrics sink', async () => {
+    const s = await f.scorer();
+    const points = [];
+    const e = { STAGING_OBSERVABILITY: 'true', APP_METRICS: { writeDataPoint: p => points.push(p) }, ROOMS: failingRooms() };
+    const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const command = { actionId: crypto.randomUUID(), clientSeq: 1 };
+      expect((await s.post(command, e)).status).toBe(200);
+      expect(points.find(p => p.blobs[0] === 'http').blobs.slice(0, 4)).toEqual(['http', '/api/matches/:id/actions', 'accepted', 'POINT']);
+      expect(points.find(p => p.blobs[0] === 'publish').blobs[2]).toBe('failed');
+      expect(await s.rows()).toMatchObject({ actions: 1, outbox: 1, undelivered: 1 });
+      points.length = 0;
+      expect((await s.post(command, e)).status).toBe(200);
+      expect(points.filter(p => p.blobs[0] === 'publish')).toHaveLength(0);
+      expect(points.find(p => p.blobs[0] === 'http').blobs[2]).toBe('replay');
+      expect((await s.post({ clientSeq: 9 }, e)).status).toBe(409);
+      expect(points.find(p => p.blobs[5] === 'SEQUENCE_CONFLICT').doubles[7]).toBe(409);
+      await room(env, 'home').noteWrite();
+      await runSweep({ ...env, ...e, ROOMS: env.ROOMS });
+      expect(await s.rows()).toMatchObject({ actions: 1, undelivered: 0 });
+      const sweepPoint = points.find(p => p.blobs[0] === 'sweep');
+      expect(sweepPoint.doubles[3]).toBeGreaterThanOrEqual(1);
+      expect(sweepPoint.doubles[1]).toBeGreaterThanOrEqual(1);
+      expect(sweepPoint.doubles[4]).toBeGreaterThanOrEqual(0);
+      e.APP_METRICS.writeDataPoint = () => { throw Error('sink down'); };
+      expect((await s.post({ clientSeq: 2 }, e)).status).toBe(200);
+      expect(await s.rows()).toMatchObject({ actions: 2, outbox: 2, last_seq: 2 });
+    } finally { logger.mockRestore(); }
+  });
 
   it('one shared scorer account scores two different matches on different devices without sharing leases or sequences', async () => {
     const first = await f.scorer();

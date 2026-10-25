@@ -7,7 +7,7 @@ const desktop = { testIgnore: /mobile\.spec\.js/ };
 const otherDesktop = { testIgnore: /(mobile|staff-layout)\.spec\.js/ };
 // sign-in-choice, staff-shell and the manager and Super Admin screen specs also run on phones, the main staff device.
 // public-tournaments also runs on phones, the main viewer device.
-const phone = { testMatch: /(mobile|sign-in-choice|staff-shell|manage-setup|manage-matches|manage-assign|admin|public-tournaments|scoring-flow|operator-console)\.spec\.js/ };
+const phone = { testMatch: /(mobile|sign-in-choice|staff-shell|manage-setup|manage-matches|manage-assign|admin|public-tournaments|scoring-flow|operator-console|telemetry)\.spec\.js/ };
 
 export default defineConfig({
   testDir: './tests',
@@ -42,7 +42,7 @@ export default defineConfig({
       // never resolves. The fake Clerk key points at an unresolvable host; operator-console.spec.js injects a stub Clerk.
       command: 'npx vite build --outDir ../output/live-dist --emptyOutDir && npx vite preview --outDir ../output/live-dist --host 127.0.0.1 --port 4176 --strictPort',
       url: 'http://127.0.0.1:4176',
-      env: { VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
+      env: { VITE_STAGING_OBSERVABILITY: 'true', VITE_API_BASE: 'http://api.test', VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2xlcmsub3BlcmF0b3IudGVzdCQ=' }, // clerk.operator.test
       reuseExistingServer: false,
       timeout: 120000,
     },
