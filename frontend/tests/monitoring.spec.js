@@ -72,6 +72,7 @@ test('replay transport strips metadata while preserving the encoded, already mas
   const scrubbed = scrubReplayEnvelope(envelope, STAGING_ORIGIN + '/');
   expect(JSON.stringify(scrubbed)).not.toContain(secret);
   expect(scrubbed[1][0][1].urls).toEqual([STAGING_ORIGIN + '/']);
+  expect(scrubbed[1][0][1].sdk.settings).toEqual({ infer_ip: 'never' });
   expect(scrubbed[1][1][1]).toBe(recording);
 });
 
@@ -118,6 +119,7 @@ test('a deployed-origin preview records sanitized traces and a real React render
   expect(event).not.toContain('reading');
   expect(event).not.toContain('"request":');
   expect(event).not.toContain('"user":');
+  expect(event).toContain('"infer_ip":"never"');
 });
 
 test('blocked diagnostic collection preserves public navigation and page rendering', async ({ page }) => {
@@ -143,6 +145,7 @@ test('replay masks DOM content and attributes, then stops on client navigation',
   }, secret);
   await expect.poll(() => envelopes.some(body => body.toString().includes('"type":"replay_recording"')), { timeout: 12000 }).toBe(true);
   const recordings = envelopes.filter(body => body.toString().includes('"type":"replay_recording"'));
+  expect(recordings.every(body => body.toString().includes('"infer_ip":"never"'))).toBe(true);
   for (const body of recordings) {
     const header = body.indexOf('"type":"replay_recording"');
     const content = body.subarray(body.indexOf('\n', header) + 1);
@@ -214,4 +217,12 @@ test('offline queue recovery emits bounded logs and metrics without auth or scor
   const data = Buffer.concat(envelopes).toString();
   for (const privateValue of ['staff-token', 'Alpha', 'Bravo', 'user_operator', 'sess_operator']) expect(data).not.toContain(privateValue);
   expect(data).not.toContain('"type":"replay_event"');
+  for (const type of ['span', 'log', 'trace_metric']) {
+    const packets = envelopes.filter(body => body.toString().includes('"type":"' + type + '"'));
+    expect(packets.length).toBeGreaterThan(0);
+    for (const packet of packets) {
+      expect(packet.toString()).toContain('"infer_ip":"never"');
+      expect(packet.toString()).toContain('"infer_user_agent":"never"');
+    }
+  }
 });

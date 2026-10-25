@@ -34,6 +34,8 @@ export function startMonitoring(router) {
     Sentry.init({
       dsn, environment, release: import.meta.env.VITE_SENTRY_RELEASE,
       sendDefaultPii: false, sendClientReports: false, autoSessionTracking: false,
+      dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false, stackFrameVariables: false },
+      enhanceFetchErrorMessages: false,
       enableLogs: environment === 'staging',
       tracesSampleRate: environment === 'staging' ? 0.1 : 0.01,
       tracePropagationTargets: [], replaysSessionSampleRate: recordReplay ? 0.01 : 0,

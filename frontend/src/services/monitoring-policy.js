@@ -100,6 +100,7 @@ export function scrubReplayEnvelope(envelope, entryUrl) {
     type: 'replay_event', replay_id: payload.replay_id, segment_id: payload.segment_id,
     replay_start_timestamp: payload.replay_start_timestamp, timestamp: payload.timestamp, replay_type: payload.replay_type,
     release: payload.release, environment: payload.environment, platform: 'javascript',
+    sdk: { name: 'sentry.javascript.react', version: payload.sdk?.version, settings: { infer_ip: 'never' } },
     urls: [entryUrl], error_ids: [], trace_ids: [],
   }] : [header, payload])];
 }
