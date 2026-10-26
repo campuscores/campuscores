@@ -295,6 +295,10 @@ Before the first deployment, complete account onboarding in [Analytics Engine](h
 
 Worker Metrics, Hyperdrive Metrics and Durable Object Metrics need no application SDK or enable switch. Custom durations use the Worker clock across I/O; synchronous broadcast CPU is not timed with that clock. CPU/wall duration is not browser latency; a handled HTTP 500 can still count as a successful Worker invocation. See [Worker metric definitions](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/). RUM measures real browser LCP/INP/CLS; Observatory adds synthetic tests. Keep those evidence types separate.
 
+Origin response time measures the round trip from Cloudflare to a separate HTTP origin, through receipt of response headers. Campuscores serves assets and API responses in Workers and reaches Neon through Hyperdrive. An empty zone origin-response chart is therefore expected for these requests; it does not mean that API or database latency is zero. Use Worker duration, application API p95/p99, Hyperdrive latency and browser RUM for this architecture. See [Origin Analytics](https://developers.cloudflare.com/speed/origin-analytics/) and [analytics with Workers](https://developers.cloudflare.com/analytics/account-and-zone-analytics/analytics-with-workers/).
+
+Cloudflare zone Unique Visitors uses unique IP addresses and can include bots or partial-content requests. Shared campus Wi-Fi can put several people behind one public IP. Keep the dashboard label and exact time window with this estimate; do not call it an exact count of people or sum daily unique counts into event-wide unique visitors. Cloudflare Web Analytics visits and page views are separate browser measurements. See [Cloudflare count differences](https://developers.cloudflare.com/analytics/faq/about-analytics/) and [Web Analytics metric definitions](https://developers.cloudflare.com/web-analytics/data-metrics/high-level-metrics/). Sentry location settings do not control either Cloudflare measurement.
+
 ### Free quotas and event-day checks
 
 Verified against official docs on 25 October 2026:
