@@ -1,4 +1,4 @@
-# Thaparlympics
+# Campuscores
 
 A mobile-first sports homepage built with React, Vite and JavaScript. It includes the header, responsive athlete gallery and dot animation, live-match sport filters, native horizontal scorecards and tournament cards. All artwork is local.
 
